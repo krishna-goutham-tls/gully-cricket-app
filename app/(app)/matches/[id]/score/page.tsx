@@ -3,6 +3,7 @@
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { CoinToss } from "@/components/match/CoinToss";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -366,42 +367,18 @@ export default function ScorePage() {
   // ── Who bats first ──
   if (state.phase === "need_batting_side") {
     return (
-      <div className="flex min-h-dvh flex-col bg-bg px-5 pb-8 pt-[calc(var(--safe-top)+1rem)]">
-        <Link
-          href="/home"
-          className="-ml-3 flex h-11 w-11 items-center justify-center rounded-xl text-muted"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <div className="flex flex-1 flex-col justify-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-ink">
-            Who bats first?
-          </h1>
-          <p className="mt-1.5 text-sm text-muted">
-            Do the toss out there, then tap the batting team.
-          </p>
-          {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
-          <div className="mt-8 space-y-3">
-            {([state.sideA, state.sideB] as const).map((s) => (
-              <button
-                key={s.side}
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  tap("side", async () => {
-                    if (!token) return;
-                    await setBattingFirst({ token, matchId, side: s.side });
-                  })
-                }
-                className="flex min-h-16 w-full items-center justify-between rounded-3xl border border-line bg-surface px-5 text-left transition active:scale-[0.98] active:border-accent"
-              >
-                <span className="text-lg font-semibold text-ink">{s.name}</span>
-                <span className="text-sm text-faint">{s.players.length} players</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+      <CoinToss
+        sideA={state.sideA}
+        sideB={state.sideB}
+        busy={busy}
+        error={error}
+        onPickBatting={(side) =>
+          tap("side", async () => {
+            if (!token) return;
+            await setBattingFirst({ token, matchId, side });
+          })
+        }
+      />
     );
   }
 
