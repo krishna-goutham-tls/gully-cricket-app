@@ -5,7 +5,7 @@ import { InviteForm } from "@/components/landing/InviteForm";
 import { RULES, RuleCard } from "@/components/landing/ruleCards";
 import { Logo } from "@/components/ui/Logo";
 import { cn } from "@/lib/utils";
-import { Github, Home, Trophy, User, Users } from "lucide-react";
+import { Home, Trophy, User, Users } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -735,7 +735,14 @@ function Closer() {
             rel="noreferrer"
             className="inline-flex items-center gap-1.5 text-sm text-bg/60 transition hover:text-bg"
           >
-            <Github className="h-4 w-4" aria-hidden />
+            <svg
+              className="h-4 w-4"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              aria-hidden
+            >
+              <path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.3.5-2.4 1.2-3.3-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.9.1 3.2.8.9 1.2 2 1.2 3.3 0 4.7-2.8 5.7-5.5 6 .4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .3Z" />
+            </svg>
             Open source. Feel free to contribute.
           </a>
         </footer>
