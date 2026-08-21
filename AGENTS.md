@@ -16,6 +16,28 @@ requires a pull request — do not push it directly.
 
 ---
 
+## This repo is public
+
+Treat every file as if a stranger will read it tomorrow. That is the rule.
+
+**Never commit**
+
+- `.env.local`, Convex deploy keys, `PIN_PEPPER`
+- Phone numbers, PINs, player dumps, `backups/`
+- Anything copied from the live Convex or Netlify dashboards
+
+**If you are not sure it is a secret, it is.** Leave it out. Say so in the PR.
+A warning in chat is better than a key on GitHub.
+
+Forks start empty. Do **not** point a fork at the live Convex deployments
+(`posh-mastiff-400`, `dusty-jellyfish-63`) unless you maintain
+gullycricket.space. Those names in this file are for *this* product, not
+for your copy.
+
+Workflow: branch → pull request → merge. Never `git push origin main`.
+
+---
+
 ## Router — where to look
 
 Read the file for what you're doing. Don't read them all.
@@ -53,8 +75,8 @@ values are NOT interchangeable. **Netlify does not push Convex.** A push to
 | **Prod** | `dusty-jellyfish-63` | `npx convex deploy --yes` with the **prod** key |
 
 1. After any `convex/` change, push DEV first (`npx convex dev --once`).
-2. When the work is ready to go live, push PROD **yourself**, then push `main`
-   so Netlify rebuilds the app against the new functions.
+2. When the work is ready to go live, push PROD **yourself**, then merge a
+   PR to `main` so Netlify rebuilds the app against the new functions.
 3. **`npx convex deploy` always means prod.** Never run it to "sync dev".
 4. Local `.env.local` has `CONVEX_DEPLOYMENT=dev:posh-mastiff-400` and a **dev**
    `CONVEX_DEPLOY_KEY`. That key would send `npx convex deploy` to the wrong
