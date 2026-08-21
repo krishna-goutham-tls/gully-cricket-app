@@ -34,10 +34,19 @@ Forks start empty. Do **not** point a fork at the live Convex deployments
 gullycricket.space. Those names in this file are for *this* product, not
 for your copy.
 
-Workflow: branch → commit **locally**. Do **not** `git push`, open a PR, or
-merge to `main` unless Krishna explicitly says to ship. A push to GitHub
-(even a PR branch) can trigger a Netlify deploy and burns build credits.
-Batch the work; wait until he is convinced there is enough to go out.
+Git line for *this* product (Krishna / agents):
+
+`dev` (local) → `origin/dev` → `staging` → `main`
+
+- All work lands on local **`dev`**. No extra feature branches unless he asks.
+- Commit locally. Do **not** `git push` until he says the batch is ready.
+- First push is **`dev`** (remote). Then promote **`dev` → `staging`**, then
+  **`staging` → `main`**. `main` is live; Netlify builds it. `main` requires
+  a PR.
+- Strangers fork and open a PR. We do not invent a new branch per tiny fix.
+
+A GitHub push can fire Netlify and burn credits. Wait until he is convinced
+there is enough to go out.
 
 ---
 
