@@ -5,7 +5,7 @@ import { InviteForm } from "@/components/landing/InviteForm";
 import { RULES, RuleCard } from "@/components/landing/ruleCards";
 import { Logo } from "@/components/ui/Logo";
 import { cn } from "@/lib/utils";
-import { Home, Trophy, User, Users } from "lucide-react";
+import { Github, Home, Trophy, User, Users } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -729,6 +729,15 @@ function Closer() {
             Gully Cricket — made by gully cricketers, with{" "}
             <span className="text-accent">♥</span>
           </p>
+          <a
+            href="https://github.com/krishna-goutham-tls/gully-cricket-app"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm text-bg/60 transition hover:text-bg"
+          >
+            <Github className="h-4 w-4" aria-hidden />
+            Open source. Feel free to contribute.
+          </a>
         </footer>
       </div>
     </section>
