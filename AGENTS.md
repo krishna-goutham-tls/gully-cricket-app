@@ -34,7 +34,10 @@ Forks start empty. Do **not** point a fork at the live Convex deployments
 gullycricket.space. Those names in this file are for *this* product, not
 for your copy.
 
-Workflow: branch → pull request → merge. Never `git push origin main`.
+Workflow: branch → commit **locally**. Do **not** `git push`, open a PR, or
+merge to `main` unless Krishna explicitly says to ship. A push to GitHub
+(even a PR branch) can trigger a Netlify deploy and burns build credits.
+Batch the work; wait until he is convinced there is enough to go out.
 
 ---
 
