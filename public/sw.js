@@ -10,8 +10,11 @@
  *     origin; this worker bails on anything cross-origin, and service workers
  *     don't intercept WebSockets at all. Live scoring is unaffected by design.
  *  2. Only content-hashed files are served cache-first (`/_next/static/...`,
- *     icons). A hashed filename can't go stale — a new build means new names —
- *     so there is no version of this cache that can serve the wrong code.
+ *     icons), plus the two coin faces (`/heads.jpg`, `/tails.jpg`) so a toss
+ *     still has pictures on a dead signal at the ground. Hashed files can't
+ *     go stale — a new build means new names — so there is no version of
+ *     this cache that can serve the wrong code. Coin art is bumped with
+ *     VERSION if the files change.
  *  3. Pages are network-first. The freshest HTML always wins when there is a
  *     signal, and the cache is a fallback for when there isn't. That is what
  *     stops anyone getting pinned to an old build.
@@ -23,12 +26,14 @@
  * with `return;` and bump VERSION. Clients pick it up on their next launch,
  * and the app falls back to plain network behaviour.
  */
-const VERSION = "v1";
+const VERSION = "v2";
 const STATIC_CACHE = `boundary-static-${VERSION}`;
 const PAGE_CACHE = `boundary-pages-${VERSION}`;
+const COIN_ART = ["/heads.jpg", "/tails.jpg"];
 
-self.addEventListener("install", () => {
+self.addEventListener("install", (event) => {
   // Never leave someone stuck on an old worker waiting for every tab to close.
+  event.waitUntil(caches.open(STATIC_CACHE).then((cache) => cache.addAll(COIN_ART)));
   self.skipWaiting();
 });
 
@@ -54,6 +59,10 @@ function isImmutable(url) {
   );
 }
 
+function isCoinArt(url) {
+  return url.pathname === "/heads.jpg" || url.pathname === "/tails.jpg";
+}
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
 
@@ -69,7 +78,7 @@ self.addEventListener("fetch", (event) => {
   // so they are never cached.
   if (url.searchParams.has("_rsc")) return;
 
-  if (isImmutable(url)) {
+  if (isImmutable(url) || isCoinArt(url)) {
     event.respondWith(cacheFirst(req));
     return;
   }
