@@ -1,5 +1,9 @@
 # Gully Cricket
 
+<p align="center">
+  <img src="public/icons/icon-192.png" alt="Gully Cricket" width="96" height="96">
+</p>
+
 Tap what happened. The scoreboard keeps up.
 
 You are at the crease with one free thumb. Four, six, wide, out — tap it, it is in the book. Sit-outs see the live score. When the match ends, the story, the leaderboard, and the roast are already there.
