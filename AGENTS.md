@@ -11,6 +11,8 @@ requests and PIN resets.
 
 **Stack:** Next.js 14 (App Router) · TypeScript · Tailwind · Convex · Netlify
 **Live:** https://gullycricket.space
+**GitHub:** `krishna-goutham-tls/gully-cricket-app` (public, MIT). `main`
+requires a pull request — do not push it directly.
 
 ---
 
