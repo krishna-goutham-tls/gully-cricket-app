@@ -46,7 +46,7 @@ export function SandboxChrome() {
                   setLeaving(false);
                 }
               }}
-              className="shrink-0 rounded-full bg-ink/15 px-3 py-1 text-[12px] font-semibold active:bg-ink/25 disabled:opacity-50"
+              className="flex min-h-11 shrink-0 items-center rounded-full bg-ink/15 px-4 text-[13px] font-semibold active:bg-ink/25 disabled:opacity-50"
             >
               Exit
             </button>

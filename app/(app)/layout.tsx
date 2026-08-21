@@ -30,7 +30,12 @@ export default function AppSectionLayout({ children }: { children: React.ReactNo
       <SandboxChrome />
       {/* With the stripe up top it owns the notch, so screens below stop
           paying the top inset themselves and don't double up. */}
-      <div className={cn(showNav && "pb-24", isSandbox && "safe-top-owned")}>
+      <div
+        className={cn(
+          showNav && "pb-[calc(5.5rem+env(safe-area-inset-bottom))]",
+          isSandbox && "safe-top-owned",
+        )}
+      >
         {children}
       </div>
       {showNav ? <BottomNav /> : null}

@@ -328,10 +328,10 @@ export default function ScorePage() {
     !spectatorOverride
   ) {
     return (
-      <div className="flex min-h-dvh flex-col bg-bg px-5 pb-8 pt-[calc(var(--safe-top)+1rem)]">
+      <div className="flex min-h-dvh flex-col bg-bg px-5 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-[calc(var(--safe-top)+1rem)]">
         <Link
           href="/home"
-          className="-ml-3 flex h-11 w-11 items-center justify-center rounded-xl text-muted"
+          className="-ml-3 flex h-11 w-11 items-center justify-center rounded-xl text-muted active:bg-ink/[0.04]"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
@@ -400,10 +400,10 @@ export default function ScorePage() {
     const ready = pickStriker && (solo || pickNon) && pickBowler;
 
     return (
-      <div className="min-h-dvh bg-bg px-5 pb-8 pt-[calc(var(--safe-top)+1rem)]">
+      <div className="min-h-dvh bg-bg px-5 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-[calc(var(--safe-top)+1rem)]">
         <Link
           href="/home"
-          className="-ml-3 flex h-11 w-11 items-center justify-center rounded-xl text-muted"
+          className="-ml-3 flex h-11 w-11 items-center justify-center rounded-xl text-muted active:bg-ink/[0.04]"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
@@ -447,7 +447,7 @@ export default function ScorePage() {
                       setPickBowler(null);
                     }}
                     className={cn(
-                      "rounded-2xl border px-3 py-3 text-left text-sm font-medium",
+                      "min-h-11 rounded-2xl border px-3 py-3 text-left text-[15px] font-medium active:scale-[0.98]",
                       battingSide === opt.side
                         ? "border-accent bg-accent-soft text-accent-deep"
                         : "border-line text-ink",
@@ -523,7 +523,7 @@ export default function ScorePage() {
 
   if (state.status === "completed" || state.status === "abandoned") {
     return (
-      <div className="flex min-h-dvh flex-col bg-bg px-5 pb-8 pt-[calc(var(--safe-top)+1rem)]">
+      <div className="flex min-h-dvh flex-col bg-bg px-5 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-[calc(var(--safe-top)+1rem)]">
         <div className="flex flex-1 flex-col justify-center text-center">
           <p className="text-sm font-medium uppercase tracking-wide text-faint">
             {state.status === "abandoned" ? "Abandoned" : "Match complete"}
@@ -718,7 +718,7 @@ export default function ScorePage() {
           {/* Negative margins keep the 44px hit areas from growing the header. */}
           <Link
             href="/home"
-            className="-my-1 -ml-3 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-bg/60 hover:bg-white/10"
+            className="-my-1 -ml-3 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-bg/70 active:bg-white/10 hover:bg-white/10"
           >
             <ArrowLeft className="h-5 w-5" />
           </Link>
@@ -736,7 +736,7 @@ export default function ScorePage() {
                 setSquadError(null);
                 setSheet({ kind: "squad" });
               }}
-              className="-my-1 inline-flex h-11 w-11 items-center justify-center rounded-xl text-bg/60 hover:bg-white/10"
+              className="-my-1 inline-flex h-11 w-11 items-center justify-center rounded-xl text-bg/70 active:bg-white/10 hover:bg-white/10"
             >
               <UserPlus className="h-5 w-5" />
             </button>
@@ -744,7 +744,7 @@ export default function ScorePage() {
               type="button"
               disabled={busy}
               onClick={() => setConfirmEndInnings(true)}
-              className="-my-1 -mr-1 inline-flex min-h-11 items-center rounded-xl px-2 text-xs font-semibold uppercase tracking-wide text-bg/55 hover:bg-white/10"
+              className="-my-1 -mr-1 inline-flex min-h-11 items-center rounded-xl px-2 text-xs font-semibold uppercase tracking-wide text-bg/70 active:bg-white/10 hover:bg-white/10"
             >
               {declareMode ? "Declare" : "End"}
             </button>
@@ -765,20 +765,20 @@ export default function ScorePage() {
               )}
             >
               {live.totalRuns}
-              <span className="text-bg/35">/</span>
+              <span className="text-bg/70">/</span>
               {live.wickets}
             </p>
             <div className="pb-1 text-left">
               <p className="tabular text-[2.25rem] font-bold leading-none text-bg">
                 {live.oversText}
               </p>
-              <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-bg/50">
+              <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-bg/70">
                 Overs
               </p>
             </div>
           </div>
           {live.runRate > 0 || live.potBalls > 0 ? (
-            <p className="tabular mt-2 text-sm text-bg/65">
+            <p className="tabular mt-2 text-sm text-bg/70">
               {live.runRate > 0 ? `RR ${live.runRate.toFixed(1)}` : null}
               {/* Spare balls left behind by batters out inside their quota —
                   the thing that decides whether anyone has to retire. */}
@@ -838,12 +838,12 @@ export default function ScorePage() {
           </div>
           {solo ? null : (
             <div className="rounded-2xl bg-white/[0.05] px-2 py-2">
-              <p className="uppercase tracking-wide text-bg/45">Non-striker</p>
+              <p className="uppercase tracking-wide text-bg/70">Non-striker</p>
               <p className="mt-0.5 truncate font-medium text-bg/75">
                 {live.nonStriker?.displayName ?? "—"}
               </p>
               {live.figures.nonStriker ? (
-                <p className="tabular mt-0.5 text-xs text-bg/55">
+                <p className="tabular mt-0.5 text-xs text-bg/70">
                   {live.figures.nonStriker.runs}({live.figures.nonStriker.balls})
                   {live.nonStrikerQuota &&
                   live.nonStrikerQuota.faced >= live.nonStrikerQuota.cap ? (
@@ -857,12 +857,12 @@ export default function ScorePage() {
             </div>
           )}
           <div className="rounded-2xl bg-white/[0.05] px-2 py-2">
-            <p className="uppercase tracking-wide text-bg/45">Bowling</p>
+            <p className="uppercase tracking-wide text-bg/70">Bowling</p>
             <p className="mt-0.5 truncate font-medium text-bg/90">
               {live.bowler?.displayName ?? "—"}
             </p>
             {live.figures.bowler ? (
-              <p className="tabular mt-0.5 text-xs text-bg/55">
+              <p className="tabular mt-0.5 text-xs text-bg/70">
                 {live.figures.bowler.wickets}-{live.figures.bowler.runs}
               </p>
             ) : null}
@@ -882,7 +882,7 @@ export default function ScorePage() {
         </div>
       ) : null}
 
-      <div className="flex flex-1 flex-col justify-end px-3 pb-6 pt-3">
+      <div className="flex flex-1 flex-col justify-end px-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-3">
         <div className="mb-1 flex items-center justify-end">
           <button
             type="button"
@@ -978,7 +978,7 @@ export default function ScorePage() {
       </div>
 
       {activeSheet ? (
-        <div className="fixed inset-0 z-50 flex items-end bg-black/30">
+        <div className="fixed inset-0 z-50 flex items-end bg-ink/30">
           <div className="max-h-[80dvh] w-full overflow-y-auto rounded-t-3xl bg-surface p-5 shadow-2xl safe-bottom">
             {activeSheet.kind === "extra" ? (
               <>
@@ -1038,7 +1038,7 @@ export default function ScorePage() {
                         type="button"
                         onClick={() => setPlayerOutId(String(p.userId))}
                         className={cn(
-                          "rounded-2xl border px-3 py-3 text-sm font-medium",
+                          "min-h-11 rounded-2xl border px-3 py-3 text-[15px] font-medium active:scale-[0.98]",
                           playerOutId === String(p.userId)
                             ? "border-danger bg-danger-soft text-danger"
                             : "border-line text-ink",
@@ -1071,7 +1071,7 @@ export default function ScorePage() {
                             type="button"
                             onClick={() => setFielderId(String(p.userId))}
                             className={cn(
-                              "rounded-2xl border px-3 py-3 text-sm font-medium",
+                              "min-h-11 rounded-2xl border px-3 py-3 text-[15px] font-medium active:scale-[0.98]",
                               selected
                                 ? "border-accent bg-accent-soft text-accent-deep"
                                 : p.fromBattingSide
@@ -1132,7 +1132,7 @@ export default function ScorePage() {
                             setSheet(null);
                           })
                         }
-                        className="rounded-2xl border border-line px-3 py-3.5 text-left text-sm font-medium text-ink active:border-accent active:bg-accent-soft"
+                        className="min-h-11 rounded-2xl border border-line px-3 py-3.5 text-left text-[15px] font-medium text-ink active:scale-[0.98] active:border-accent active:bg-accent-soft"
                       >
                         {p.displayName}
                         <span className="tabular block text-xs font-normal text-faint">
@@ -1201,7 +1201,7 @@ export default function ScorePage() {
                           })
                         }
                         className={cn(
-                          "rounded-2xl border px-3 py-3.5 text-left text-sm font-medium",
+                          "min-h-11 rounded-2xl border px-3 py-3.5 text-left text-[15px] font-medium active:scale-[0.98]",
                           // Not selectable = own quota spent and no spare balls.
                           // Shown anyway so the squad reads whole, but visibly
                           // out of play rather than a tap that gets bounced.
@@ -1303,7 +1303,7 @@ export default function ScorePage() {
                           type="button"
                           onClick={() => setRetireTarget(String(p.userId))}
                           className={cn(
-                            "rounded-2xl border px-3 py-3 text-sm font-medium",
+                            "min-h-11 rounded-2xl border px-3 py-3 text-[15px] font-medium active:scale-[0.98]",
                             retireTarget === String(p.userId)
                               ? "border-accent bg-accent-soft text-accent-deep"
                               : "border-line text-ink",
@@ -1386,7 +1386,7 @@ export default function ScorePage() {
                           });
                         }}
                         className={cn(
-                          "rounded-2xl border px-3 py-3 text-sm font-medium",
+                          "min-h-11 rounded-2xl border px-3 py-3 text-[15px] font-medium active:scale-[0.98]",
                           selected
                             ? "border-accent bg-accent-soft text-accent-deep"
                             : p.fromBattingSide
@@ -1505,7 +1505,7 @@ export default function ScorePage() {
                     value={guestName}
                     onChange={(e) => setGuestName(e.target.value)}
                     placeholder="Add a guest by name"
-                    className="min-h-11 min-w-0 flex-1 rounded-xl border border-line bg-bg px-3 py-2.5 text-sm text-ink outline-none placeholder:text-muted focus:border-ink"
+                    className="min-h-12 min-w-0 flex-1 rounded-2xl border border-line bg-bg px-3 text-[16px] text-ink outline-none placeholder:text-muted focus:border-ink"
                   />
                   <Button
                     variant="ghost"
@@ -1643,7 +1643,7 @@ function Picker({
               disabled={disabledIds.includes(id)}
               onClick={() => onSelect(id)}
               className={cn(
-                "rounded-2xl border px-3 py-3 text-left text-sm font-medium disabled:opacity-30",
+                "min-h-11 rounded-2xl border px-3 py-3 text-left text-[15px] font-medium active:scale-[0.98] disabled:opacity-30",
                 selected === id
                   ? "border-accent bg-accent-soft text-accent-deep"
                   : "border-line text-ink",

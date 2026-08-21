@@ -8,6 +8,7 @@ import {
 } from "@/components/home/HomeCards";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { AppHeader } from "@/components/shell/AppHeader";
+import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
@@ -25,7 +26,7 @@ type PendingAction =
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-1 pb-1.5 pt-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-faint">
+    <p className="px-1 pb-1.5 pt-4 text-[11px] font-semibold uppercase tracking-wide text-faint">
       {children}
     </p>
   );
@@ -50,13 +51,13 @@ function ExploreCard({
   return (
     <Link
       href={href}
-      className="flex min-w-0 flex-1 items-center gap-2.5 rounded-2xl border border-line bg-surface px-3 py-2.5 active:bg-bg"
+      className="flex min-h-12 min-w-0 flex-1 items-center gap-2.5 rounded-2xl border border-line bg-surface px-3 py-2.5 active:bg-bg"
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-deep">
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[14px] font-semibold text-ink">
+        <span className="block truncate text-[15px] font-semibold text-ink">
           {title}
         </span>
         <span className="tabular block truncate text-[11px] text-muted">
@@ -159,7 +160,7 @@ export default function HomePage() {
   return (
     <div>
       <AppHeader />
-      <main className="mx-auto max-w-md px-4 py-4">
+      <main className="mx-auto max-w-md px-5 py-4">
         {error ? (
           <p className="mb-3 rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-sm text-danger">
             {error}
@@ -174,18 +175,16 @@ export default function HomePage() {
           </div>
         ) : null}
 
-        <Link
+        <Button
           href="/matches/new"
-          className={cn(
-            "flex min-h-14 items-center justify-center gap-2 rounded-2xl text-[15px] font-semibold transition active:scale-[0.98]",
-            hero || series
-              ? "mt-3 border border-line bg-surface text-ink"
-              : "bg-ink text-bg shadow-card",
-          )}
+          size="lg"
+          fullWidth
+          variant={hero || series ? "secondary" : "primary"}
+          className={cn((hero || series) && "mt-3")}
         >
           <Plus className="h-5 w-5" strokeWidth={2.4} />
           Start match
-        </Link>
+        </Button>
 
         {/* The doorways: full history and the record book. Two thin cards on
             one line — visible without scrolling, never competing with the
@@ -225,7 +224,7 @@ export default function HomePage() {
         {matches === undefined ? (
           <div className="mt-6 space-y-2">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="h-20 animate-pulse rounded-2xl bg-ink/[0.04]" />
+              <div key={i} className="h-20 animate-pulse rounded-3xl bg-ink/[0.04]" />
             ))}
           </div>
         ) : matches.length === 0 ? (

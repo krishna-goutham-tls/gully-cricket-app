@@ -39,7 +39,7 @@ export function StatTile({
 }) {
   return (
     <div className="min-w-0">
-      <p className="truncate text-[10px] font-medium uppercase tracking-[0.1em] text-faint">
+      <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-faint">
         {label}
       </p>
       {/* Proportional figures — these are standalone values, not a column. */}
@@ -103,7 +103,7 @@ export function FormStrip({
   if (entries.length === 0) return null;
   return (
     <div className="mt-2 flex items-center gap-1.5">
-      <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.1em] text-faint">
+      <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-faint">
         Last {entries.length}
       </span>
       <span className="flex min-w-0 flex-wrap gap-1">
@@ -147,7 +147,7 @@ const TROPHY_ICON: Record<string, LucideIcon> = {
 export function TrophyShelf({ trophies }: { trophies: Trophy[] }) {
   if (trophies.length === 0) return null;
   return (
-    <div className="-mx-4 overflow-x-auto px-4">
+    <div className="-mx-5 overflow-x-auto px-5">
       <div className="no-scrollbar flex w-max gap-2">
         {trophies.map((t) => {
           const Icon = TROPHY_ICON[t.icon] ?? Award;
@@ -299,7 +299,7 @@ function Situation({
 }) {
   return (
     <div>
-      <p className="px-1 text-[11px] font-medium text-muted">{title}</p>
+      <p className="px-1 text-[11px] font-semibold text-muted">{title}</p>
       <div className="mt-1.5 flex gap-2">
         {tough ? <Cell label={toughLabel} who={tough} tone="tough" /> : null}
         {easy ? <Cell label={easyLabel} who={easy} tone="easy" /> : null}
@@ -325,7 +325,7 @@ function Cell({
     <Link
       href={`/players/${who.userId}`}
       className={cn(
-        "min-w-0 flex-1 rounded-2xl px-3 py-2.5 active:opacity-70",
+        "min-h-12 min-w-0 flex-1 rounded-2xl px-3 py-2.5 active:opacity-70",
         tone === "easy" ? "bg-accent-soft" : "bg-ink/[0.05]",
       )}
     >
@@ -337,7 +337,7 @@ function Cell({
         )}
         <span
           className={cn(
-            "min-w-0 truncate text-[10px] font-semibold uppercase tracking-[0.08em]",
+            "min-w-0 truncate text-[11px] font-semibold uppercase tracking-wide",
             tone === "easy" ? "text-accent-deep" : "text-muted",
           )}
         >
@@ -381,7 +381,7 @@ const MATCHUP_PREVIEW = 5;
 function MatchupStat({ label, value }: { label: string; value: string }) {
   return (
     <span className="flex items-baseline gap-1">
-      <span className="text-[10px] uppercase tracking-wide text-faint">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-faint">
         {label}
       </span>
       <span className="tabular text-[13px] font-semibold text-ink">{value}</span>
@@ -427,14 +427,14 @@ export function MatchupTable({
   return (
     <div className={bare ? undefined : "mt-4 border-t border-line pt-3.5"}>
       {bare ? null : (
-        <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-faint">
+        <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-faint">
           {title}
         </p>
       )}
-      <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+      <div className="overflow-hidden rounded-3xl border border-line bg-surface">
         {/* Column labels for the collapsed rows below. Rows expand for the full
             texture (4s, 6s, dot%) so the top line stays thumb-scannable. */}
-        <div className="flex items-center gap-2 border-b border-line px-3.5 py-2 text-[10px] uppercase tracking-wide text-faint">
+        <div className="flex items-center gap-2 border-b border-line px-3.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-faint">
           <span className="flex-1">{bat ? "Bowler" : "Batter"}</span>
           <span className="w-14 text-right">R (B)</span>
           <span className="w-11 text-right">{bat ? "SR" : "Econ"}</span>
@@ -454,9 +454,9 @@ export function MatchupTable({
                 type="button"
                 onClick={() => toggle(id)}
                 aria-expanded={isOpen}
-                className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-[12px] active:bg-bg"
+                className="flex min-h-12 w-full items-center gap-2 px-3.5 py-2.5 text-left text-[13px] active:bg-bg"
               >
-                <span className="min-w-0 flex-1 truncate font-medium text-ink">
+                <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
                   {r.displayName}
                 </span>
                 <span className="tabular w-14 text-right text-muted">
@@ -516,7 +516,7 @@ export function MatchupTable({
         <button
           type="button"
           onClick={() => setAll((v) => !v)}
-          className="mt-2 flex min-h-9 w-full items-center justify-center gap-1 rounded-xl border border-line bg-surface text-[12px] font-semibold text-muted active:bg-bg"
+          className="mt-2 flex min-h-11 w-full items-center justify-center gap-1 rounded-2xl border border-line bg-surface text-[13px] font-semibold text-muted active:bg-bg"
         >
           {all ? "Show fewer" : `Show all ${rows.length}`}
           <ChevronDown
@@ -550,7 +550,7 @@ export function bowlFigure(row: LogRow) {
  */
 export function InningsLog({ rows }: { rows: LogRow[] }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+    <div className="overflow-hidden rounded-3xl border border-line bg-surface">
       {rows.map((row) => {
         const bat = batFigure(row);
         const bowl = bowlFigure(row);
@@ -558,10 +558,10 @@ export function InningsLog({ rows }: { rows: LogRow[] }) {
           <Link
             key={String(row.matchId)}
             href={`/matches/${row.matchId}`}
-            className="block border-b border-line/60 px-4 py-2.5 last:border-b-0 active:bg-bg"
+            className="block min-h-12 border-b border-line/60 px-4 py-2.5 last:border-b-0 active:bg-bg"
           >
             <div className="flex items-baseline gap-2">
-              <p className="min-w-0 flex-1 truncate text-[14px] font-medium text-ink">
+              <p className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
                 {row.bothSides ? row.opponent : `v ${row.opponent}`}
               </p>
               {row.contributionPct != null ? (

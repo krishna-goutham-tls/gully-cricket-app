@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -10,7 +11,7 @@ type Face = "heads" | "tails";
 
 const SPIN_MS = 2100;
 const SHELL =
-  "flex h-dvh flex-col overflow-x-hidden bg-bg px-5 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-[calc(var(--safe-top)+1rem)]";
+  "flex min-h-dvh flex-col overflow-x-hidden bg-bg px-5 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-[calc(var(--safe-top)+1rem)]";
 
 function other(side: Side): Side {
   return side === "A" ? "B" : "A";
@@ -100,7 +101,7 @@ export function CoinToss({
       <div className={SHELL}>
         <Link
           href="/home"
-          className="-ml-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted"
+          className="-ml-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted active:bg-ink/[0.04]"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
@@ -272,14 +273,15 @@ export function CoinToss({
         </div>
       ) : picking ? (
         <div className="shrink-0">
-          <button
+          <Button
             type="button"
+            fullWidth
+            size="lg"
             disabled={busy}
             onClick={toss}
-            className="flex min-h-14 w-full items-center justify-center rounded-2xl bg-ink text-[15px] font-semibold text-bg shadow-card transition active:scale-[0.98]"
           >
             Toss
-          </button>
+          </Button>
           <button
             type="button"
             onClick={() => setOutside(true)}

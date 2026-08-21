@@ -30,9 +30,10 @@ export function ConfirmDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/40 p-4 sm:items-center">
-      <div className="w-full max-w-sm rounded-3xl bg-surface p-5 shadow-card">
-        <p className="text-[16px] font-semibold text-ink">{title}</p>
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/40 sm:items-center">
+      <div className="safe-bottom w-full max-w-sm px-4 sm:px-0">
+        <div className="mb-4 rounded-3xl bg-surface p-5 shadow-card sm:mb-0">
+        <p className="text-[15px] font-semibold text-ink">{title}</p>
         {description ? (
           <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
             {description}
@@ -49,6 +50,7 @@ export function ConfirmDialog({
           >
             {confirmLabel}
           </Button>
+        </div>
         </div>
       </div>
     </div>

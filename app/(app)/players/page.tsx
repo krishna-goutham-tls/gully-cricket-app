@@ -2,6 +2,8 @@
 
 import { AppHeader } from "@/components/shell/AppHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { api } from "@/convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
@@ -207,14 +209,14 @@ export default function PlayersPage() {
                     <button
                       type="button"
                       onClick={() => void decide("approve", req.membershipId)}
-                      className="min-h-11 rounded-xl bg-ink text-sm font-semibold text-bg active:scale-[0.98]"
+                      className="min-h-11 rounded-2xl bg-ink text-[15px] font-semibold text-bg active:scale-[0.98]"
                     >
                       Approve
                     </button>
                     <button
                       type="button"
                       onClick={() => void decide("reject", req.membershipId)}
-                      className="min-h-11 rounded-xl border border-line bg-surface text-sm font-semibold text-muted active:scale-[0.98]"
+                      className="min-h-11 rounded-2xl border border-line bg-surface text-[15px] font-semibold text-muted active:scale-[0.98]"
                     >
                       Not now
                     </button>
@@ -240,14 +242,14 @@ export default function PlayersPage() {
                       <button
                         type="button"
                         onClick={() => void decidePinReset("approve", r.resetId)}
-                        className="min-h-11 rounded-xl bg-ink text-sm font-semibold text-bg active:scale-[0.98]"
+                        className="min-h-11 rounded-2xl bg-ink text-[15px] font-semibold text-bg active:scale-[0.98]"
                       >
                         Reset PIN
                       </button>
                       <button
                         type="button"
                         onClick={() => void decidePinReset("reject", r.resetId)}
-                        className="min-h-11 rounded-xl border border-line bg-surface text-sm font-semibold text-muted active:scale-[0.98]"
+                        className="min-h-11 rounded-2xl border border-line bg-surface text-[15px] font-semibold text-muted active:scale-[0.98]"
                       >
                         Ignore
                       </button>
@@ -276,60 +278,61 @@ export default function PlayersPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search players"
-              className="min-h-12 w-full rounded-2xl border border-line bg-surface pl-4 pr-12 text-[15px] text-ink outline-none placeholder:text-faint focus:border-accent"
+              className="min-h-12 w-full rounded-2xl border border-line bg-surface pl-4 pr-12 text-[16px] text-ink outline-none placeholder:text-faint focus:border-accent"
             />
             {search ? (
               <button
                 type="button"
                 aria-label="Clear search"
                 onClick={() => setSearch("")}
-                className="absolute right-0 top-0 flex h-12 w-12 items-center justify-center text-muted"
+                className="absolute right-0 top-0 flex h-12 w-12 items-center justify-center rounded-xl text-muted active:bg-ink/[0.04]"
               >
                 <X className="h-4 w-4" />
               </button>
             ) : null}
           </div>
-          <button
+          <Button
             type="button"
+            variant="secondary"
             onClick={() => setGuestOpen((v) => !v)}
-            className="flex min-h-12 shrink-0 items-center gap-1.5 rounded-2xl border border-line bg-surface px-4 text-sm font-semibold text-accent-deep"
+            className="shrink-0 text-accent-deep"
           >
             <Plus className="h-4 w-4" />
             Guest
-          </button>
+          </Button>
         </div>
 
         {guestOpen ? (
           <div className="space-y-2 rounded-3xl border border-line bg-surface p-4">
-            <input
+            <Input
               value={guestName}
               onChange={(e) => setGuestName(e.target.value)}
               placeholder="Guest name"
               autoFocus
-              className="min-h-12 w-full rounded-2xl border border-line bg-bg px-4 text-[15px] text-ink outline-none placeholder:text-faint focus:border-accent"
+              className="bg-bg"
             />
-            <input
+            <Input
               value={guestPhone}
               onChange={(e) => setGuestPhone(e.target.value)}
               placeholder="Phone (optional — lets them claim stats later)"
               inputMode="tel"
-              className="min-h-12 w-full rounded-2xl border border-line bg-bg px-4 text-[15px] text-ink outline-none placeholder:text-faint focus:border-accent"
+              className="bg-bg"
             />
-            <button
+            <Button
               type="button"
+              fullWidth
               disabled={busy || guestName.trim().length < 2}
               onClick={() => void submitGuest()}
-              className="min-h-12 w-full rounded-2xl bg-ink text-sm font-semibold text-bg disabled:opacity-40"
             >
               {busy ? "Adding…" : "Add guest player"}
-            </button>
+            </Button>
           </div>
         ) : null}
 
         {players === undefined ? (
           <div className="space-y-2">
             {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="h-14 animate-pulse rounded-2xl bg-line/60" />
+              <div key={i} className="h-14 animate-pulse rounded-3xl bg-line/60" />
             ))}
           </div>
         ) : filtered.length === 0 ? (
@@ -341,14 +344,13 @@ export default function PlayersPage() {
                 : "Add the players you turn up with. Anyone without the app goes in as a guest."
             }
             action={
-              <button
+              <Button
                 type="button"
                 onClick={() => openGuestForm(search.trim())}
-                className="inline-flex min-h-11 items-center gap-1.5 rounded-2xl bg-ink px-5 text-sm font-semibold text-bg"
               >
                 <Plus className="h-4 w-4" />
                 {search.trim() ? `Add ${search.trim()}` : "Add a guest player"}
-              </button>
+              </Button>
             }
           />
         ) : (
@@ -363,7 +365,7 @@ export default function PlayersPage() {
               {filtered.map((p) => (
                 <div
                   key={String(p.userId)}
-                  className="flex min-h-14 items-center gap-3 border-b border-line/60 px-3.5 py-2.5 last:border-b-0"
+                  className="flex min-h-12 items-center gap-3 border-b border-line/60 px-3.5 py-2.5 last:border-b-0"
                 >
                   <Link
                     href={`/players/${p.userId}`}
@@ -376,7 +378,7 @@ export default function PlayersPage() {
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="flex min-w-0 items-center gap-2">
-                        <span className="truncate text-[15px] font-medium text-ink">
+                        <span className="truncate text-[15px] font-semibold text-ink">
                           {p.displayName}
                         </span>
                         {p.isAdmin ? (
@@ -402,7 +404,7 @@ export default function PlayersPage() {
                   <Link
                     href={`/players/${p.userId}`}
                     aria-label={`Open ${p.displayName}`}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center text-faint active:opacity-70"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-faint active:bg-ink/[0.04]"
                   >
                     <ChevronRight className="h-4 w-4" />
                   </Link>

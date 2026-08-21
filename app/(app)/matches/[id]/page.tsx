@@ -9,6 +9,7 @@ import { MatchStory } from "@/components/match/MatchStory";
 import { useAuth } from "@/components/providers/AuthProvider";
 import type { MatchShareData } from "@/components/share/ShareCard";
 import { ShareButton } from "@/components/share/ShareButton";
+import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -143,7 +144,7 @@ export default function MatchDetailPage() {
             <Link
               href="/home"
               aria-label="Back"
-              className="-ml-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-bg/60 active:bg-white/10"
+              className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-bg/70 active:bg-white/10"
             >
               <ArrowLeft className="h-5 w-5" />
             </Link>
@@ -191,7 +192,7 @@ export default function MatchDetailPage() {
                   <span
                     className={cn(
                       "flex min-w-0 items-center gap-1.5 text-[17px] font-semibold",
-                      lost ? "text-bg/50" : "text-bg",
+                      lost ? "text-bg/70" : "text-bg",
                     )}
                   >
                     {won ? (
@@ -202,16 +203,12 @@ export default function MatchDetailPage() {
                   <span
                     className={cn(
                       "tabular shrink-0 text-[17px] font-semibold",
-                      score === null
-                        ? "text-bg/35"
-                        : lost
-                          ? "text-bg/50"
-                          : "text-bg",
+                      score === null || lost ? "text-bg/70" : "text-bg",
                     )}
                   >
                     {score ?? "—"}
                     {overs ? (
-                      <span className="ml-1 text-[11px] font-normal text-bg/45">
+                      <span className="ml-1 text-[11px] font-normal text-bg/70">
                         ({overs})
                       </span>
                     ) : null}
@@ -241,13 +238,10 @@ export default function MatchDetailPage() {
       <main className="py-3">
         {inPlay ? (
           <div className="mx-auto mb-3 max-w-md px-4">
-            <Link
-              href={`/matches/${matchId}/score`}
-              className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-ink text-[15px] font-semibold text-bg shadow-card active:scale-[0.98]"
-            >
+            <Button href={`/matches/${matchId}/score`} fullWidth>
               <Pencil className="h-[18px] w-[18px]" strokeWidth={2.4} />
               {card.status === "live" ? "Continue scoring" : "Start match"}
-            </Link>
+            </Button>
           </div>
         ) : null}
 
@@ -263,7 +257,7 @@ export default function MatchDetailPage() {
                   onClick={() => setView(tab)}
                   aria-current={view === tab}
                   className={cn(
-                    "flex-1 rounded-xl py-2 text-[12.5px] font-semibold capitalize transition",
+                    "flex min-h-11 flex-1 items-center justify-center rounded-xl px-2 text-[13px] font-semibold capitalize transition",
                     view === tab
                       ? "bg-ink text-bg"
                       : "text-muted active:bg-line/60",
@@ -350,11 +344,11 @@ function InningsRail({ card }: { card: Scorecard }) {
                 onClick={() => goTo(i)}
                 aria-current={active === i}
                 className={cn(
-                  "min-w-0 flex-1 rounded-xl px-1 py-1.5 text-center transition",
+                  "flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center rounded-xl px-1 text-center transition",
                   active === i ? "bg-ink text-bg" : "text-muted active:bg-line/60",
                 )}
               >
-                <span className="block truncate text-[10px] font-medium uppercase tracking-wide opacity-70">
+                <span className="block truncate text-[11px] font-semibold uppercase tracking-wide opacity-70">
                   {shortSide(inn.battingTeamName)} {nth === 2 ? "2nd" : "1st"}
                 </span>
                 <span className="tabular block truncate text-[13px] font-semibold">

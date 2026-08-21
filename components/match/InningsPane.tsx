@@ -159,13 +159,13 @@ export function InningsPane({
       <div className="border-b border-line px-4 pb-2.5 pt-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-faint">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">
               {label}
             </p>
             <p className="mt-0.5 flex items-baseline gap-2 truncate text-[15px] font-semibold text-ink">
               {inn.battingTeamName}
               {chasing ? (
-                <span className="tabular shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-semibold text-accent-deep">
+                <span className="tabular shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent-deep">
                   {liveChase
                     ? `Need ${Math.max(inn.target! - inn.totalRuns, 0)} off ${Math.max(ballsLeft, 0)}`
                     : `Target ${inn.target}`}
@@ -203,7 +203,7 @@ export function InningsPane({
             type="button"
             onClick={() => setFull((v) => !v)}
             aria-expanded={full}
-            className="-my-2 flex shrink-0 items-center gap-0.5 py-2 text-[11px] font-semibold text-muted"
+            className="-my-2 flex min-h-11 shrink-0 items-center gap-0.5 text-[11px] font-semibold text-muted"
           >
             {full ? "Less" : "Full card"}
             <ChevronDown
@@ -217,7 +217,7 @@ export function InningsPane({
           the right — the innings' actual contest, side by side. */}
       <div className="grid grid-cols-2">
         <div className="min-w-0 px-4 py-2.5">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-faint">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">
             Batting
           </p>
           <ul className="mt-1.5 space-y-1">
@@ -273,7 +273,7 @@ export function InningsPane({
         </div>
 
         <div className="min-w-0 border-l border-line px-4 py-2.5">
-          <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-faint">
+          <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-faint">
             Bowling · {bowlingTeamName}
           </p>
           {/* Deliberately the same shape as a batting row — name, figure,

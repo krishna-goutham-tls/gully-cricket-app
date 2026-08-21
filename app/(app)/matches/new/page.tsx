@@ -16,6 +16,7 @@ import {
 } from "@/lib/session";
 import { balanceTeams } from "@/lib/autoTeams";
 import { cn, errorMessage } from "@/lib/utils";
+import { Button } from "@/components/ui/Button";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -367,11 +368,11 @@ export default function NewMatchPage() {
   }
 
   const header = (
-    <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-line bg-bg/95 px-4 pb-3 pt-[calc(var(--safe-top)+1rem)] backdrop-blur">
+    <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-line bg-bg/95 px-5 pb-3 pt-[calc(var(--safe-top)+1rem)] backdrop-blur">
       {step === "who" ? (
         <Link
           href="/home"
-          className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted hover:bg-line/70 active:bg-line"
+          className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted active:bg-ink/[0.04]"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
@@ -379,12 +380,12 @@ export default function NewMatchPage() {
         <button
           type="button"
           onClick={goBack}
-          className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted hover:bg-line/70 active:bg-line"
+          className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted active:bg-ink/[0.04]"
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
       )}
-      <h1 className="text-lg font-semibold text-ink">
+      <h1 className="text-xl font-semibold tracking-tight text-ink">
         {step === "who" ? "Who’s playing today?" : "Build the teams"}
       </h1>
     </header>
@@ -401,7 +402,7 @@ export default function NewMatchPage() {
     return (
       <div className="flex min-h-dvh flex-col bg-bg">
         {header}
-        <main className="mx-auto w-full max-w-md flex-1 space-y-4 px-4 py-4 pb-32">
+        <main className="mx-auto w-full max-w-md flex-1 space-y-4 px-5 py-4 pb-32">
           {lastMatch ? (
             <button
               type="button"
@@ -441,20 +442,21 @@ export default function NewMatchPage() {
           </section>
           {errorBanner}
         </main>
-        <div className="safe-bottom fixed inset-x-0 bottom-0 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur">
-          <div className="mx-auto max-w-md space-y-2">
-            <button
+        <div className="safe-bottom fixed inset-x-0 bottom-0 border-t border-line bg-surface/95 px-5 pt-3 backdrop-blur">
+          <div className="mx-auto max-w-md space-y-2 pb-3">
+            <Button
               type="button"
+              variant="secondary"
+              fullWidth
               disabled={available.length < 4 || !levelsReady}
               onClick={() => autoFormTeams({ enter: true })}
-              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-line bg-bg px-4 text-left transition active:scale-[0.98] disabled:opacity-40"
             >
               <Scale className="h-4 w-4 shrink-0 text-accent-deep" />
-              <span className="min-w-0">
-                <span className="block text-[14px] font-semibold text-ink">
+              <span className="min-w-0 text-left">
+                <span className="block text-[15px] font-semibold text-ink">
                   Auto form teams
                 </span>
-                <span className="block truncate text-[12px] text-muted">
+                <span className="block truncate text-[13px] font-normal text-muted">
                   {!levelsReady
                     ? "Reading the leaderboard…"
                     : hasForm
@@ -462,17 +464,18 @@ export default function NewMatchPage() {
                       : "No stats yet — splits evenly"}
                 </span>
               </span>
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              fullWidth
+              size="lg"
               disabled={available.length < 4}
               onClick={goToDraft}
-              className="flex min-h-14 w-full items-center justify-center rounded-2xl bg-ink text-[15px] font-semibold text-bg shadow-card transition active:scale-[0.98] disabled:opacity-40"
             >
               {available.length < 4
                 ? "Pick at least 4 players"
                 : `Next — build the teams (${available.length} playing)`}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -483,7 +486,7 @@ export default function NewMatchPage() {
   return (
     <div className="flex min-h-dvh flex-col bg-bg">
       {header}
-      <main className="mx-auto w-full max-w-md flex-1 space-y-4 px-4 py-4 pb-32">
+      <main className="mx-auto w-full max-w-md flex-1 space-y-4 px-5 py-4 pb-32">
         {draftPool.length > 0 ? (
           <p className="text-sm text-muted">
             Tap a player to add them to the highlighted team.
@@ -664,7 +667,7 @@ export default function NewMatchPage() {
         <div className="rounded-3xl border border-line bg-surface p-4">
           <div className="flex items-center justify-between gap-3">
             <p className="text-[15px] font-medium text-ink">Format</p>
-            <div className="flex rounded-xl border border-line p-1">
+            <div className="flex rounded-2xl border border-line p-1">
               {(
                 [
                   { id: "limited", label: "ODI" },
@@ -677,8 +680,8 @@ export default function NewMatchPage() {
                   onClick={() => setFormat(opt.id)}
                   className={
                     format === opt.id
-                      ? "min-h-11 rounded-lg bg-ink px-4 text-sm font-semibold text-bg"
-                      : "min-h-11 rounded-lg px-4 text-sm font-medium text-muted"
+                      ? "min-h-11 rounded-xl bg-ink px-4 text-[13px] font-semibold text-bg"
+                      : "min-h-11 rounded-xl px-4 text-[13px] font-semibold text-muted"
                   }
                 >
                   {opt.label}
@@ -755,7 +758,7 @@ export default function NewMatchPage() {
         <div className="rounded-3xl border border-line bg-surface p-4">
           <div className="flex items-center justify-between gap-3">
             <p className="text-[15px] font-medium text-ink">Batters at a time</p>
-            <div className="flex rounded-xl border border-line p-1">
+            <div className="flex rounded-2xl border border-line p-1">
               {(
                 [
                   { mode: "double", label: "Two" },
@@ -768,8 +771,8 @@ export default function NewMatchPage() {
                   onClick={() => setBattingMode(opt.mode)}
                   className={
                     battingMode === opt.mode
-                      ? "min-h-11 rounded-lg bg-ink px-4 text-sm font-semibold text-bg"
-                      : "min-h-11 rounded-lg px-4 text-sm font-medium text-muted"
+                      ? "min-h-11 rounded-xl bg-ink px-4 text-[13px] font-semibold text-bg"
+                      : "min-h-11 rounded-xl px-4 text-[13px] font-semibold text-muted"
                   }
                 >
                   {opt.label}
@@ -793,7 +796,7 @@ export default function NewMatchPage() {
               <p className="text-[15px] font-medium text-ink">
                 Last man stands
               </p>
-              <div className="flex rounded-xl border border-line p-1">
+              <div className="flex rounded-2xl border border-line p-1">
                 {(
                   [
                     { value: true, label: "Yes" },
@@ -806,8 +809,8 @@ export default function NewMatchPage() {
                     onClick={() => setLastBatsmanAlone(opt.value)}
                     className={
                       lastBatsmanAlone === opt.value
-                        ? "min-h-11 rounded-lg bg-ink px-4 text-sm font-semibold text-bg"
-                        : "min-h-11 rounded-lg px-4 text-sm font-medium text-muted"
+                        ? "min-h-11 rounded-xl bg-ink px-4 text-[13px] font-semibold text-bg"
+                        : "min-h-11 rounded-xl px-4 text-[13px] font-semibold text-muted"
                     }
                   >
                     {opt.label}
@@ -826,20 +829,21 @@ export default function NewMatchPage() {
         {errorBanner}
       </main>
 
-      <div className="safe-bottom fixed inset-x-0 bottom-0 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur">
-        <div className="mx-auto max-w-md">
-          <button
+      <div className="safe-bottom fixed inset-x-0 bottom-0 border-t border-line bg-surface/95 px-5 pt-3 backdrop-blur">
+        <div className="mx-auto max-w-md pb-3">
+          <Button
             type="button"
+            fullWidth
+            size="lg"
             disabled={!ready || busy}
             onClick={() => void onStart()}
-            className="flex min-h-14 w-full items-center justify-center rounded-2xl bg-ink text-[15px] font-semibold text-bg shadow-card transition active:scale-[0.98] disabled:opacity-40"
           >
             {busy
               ? "Starting…"
               : ready
                 ? `Start match — ${countA} v ${countB}`
                 : "Each team needs at least 2"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

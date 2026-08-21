@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
 import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import type { FunctionReturnType } from "convex/server";
@@ -117,7 +118,7 @@ export function MatchMenu({
         onClick={onToggleMenu}
         className={cn(
           "absolute right-0.5 top-0.5 flex h-11 w-11 items-center justify-center rounded-xl",
-          dark ? "text-bg/60 active:bg-white/10" : "text-faint active:bg-bg",
+          dark ? "text-bg/70 active:bg-white/10" : "text-faint active:bg-bg",
         )}
       >
         <MoreVertical className="h-5 w-5" />
@@ -136,7 +137,7 @@ export function MatchMenu({
               <button
                 type="button"
                 onClick={() => onEnd(match._id, label)}
-                className="block min-h-11 w-full px-4 py-3 text-left text-sm font-medium text-ink hover:bg-bg"
+                className="block min-h-11 w-full px-4 py-3 text-left text-sm font-medium text-ink active:bg-bg hover:bg-bg"
               >
                 End without result
               </button>
@@ -144,7 +145,7 @@ export function MatchMenu({
             <button
               type="button"
               onClick={() => onDelete(match._id, label)}
-              className="block min-h-11 w-full border-t border-line px-4 py-3 text-left text-sm font-medium text-danger hover:bg-danger-soft"
+              className="block min-h-11 w-full border-t border-line px-4 py-3 text-left text-sm font-medium text-danger active:bg-danger-soft hover:bg-danger-soft"
             >
               Delete match
             </button>
@@ -205,13 +206,13 @@ export function LiveHero({
             </p>
             <p className="tabular mt-0.5 flex items-baseline gap-2 text-[2.5rem] font-semibold leading-none tracking-tight text-bg">
               {match.live!.totalRuns}
-              <span className="text-bg/35">/</span>
+              <span className="text-bg/70">/</span>
               {match.live!.wickets}
-              <span className="text-[13px] font-normal text-bg/55">
+              <span className="text-[13px] font-normal text-bg/70">
                 {match.live!.oversText} ov
               </span>
             </p>
-            <p className="mt-2 truncate text-[13px] text-bg/60">
+            <p className="mt-2 truncate text-[13px] text-bg/70">
               v {otherName}
             </p>
             {match.live!.target ? (
@@ -228,7 +229,7 @@ export function LiveHero({
             <p className="mt-0.5 truncate text-[15px] font-semibold text-bg/70">
               {match.sideBName}
             </p>
-            <p className="mt-2 text-[13px] text-bg/60">
+            <p className="mt-2 text-[13px] text-bg/70">
               {match.live?.inBreak ? "Innings break" : "Match in progress"}
             </p>
           </>
@@ -236,13 +237,14 @@ export function LiveHero({
       </Link>
 
       <div className="px-4 pb-4">
-        <Link
+        <Button
           href={`/matches/${match._id}/score`}
-          className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-bg text-[15px] font-semibold text-ink transition active:scale-[0.98]"
+          fullWidth
+          className="bg-bg text-ink shadow-none active:bg-bg/90"
         >
           <Pencil className="h-[18px] w-[18px]" strokeWidth={2.4} />
           Resume scoring
-        </Link>
+        </Button>
       </div>
 
       <MatchMenu
@@ -320,14 +322,14 @@ export function MatchCard({
   return (
     <div
       className={cn(
-        "relative rounded-2xl border bg-surface transition",
+        "relative rounded-3xl border bg-surface transition",
         isLive ? "border-accent/50 shadow-card" : "border-line",
       )}
     >
       {/* One left edge per card, and the same one on every card: the trophy
           gets a reserved gutter rather than indenting the winner's name past
           everybody else's. */}
-      <Link href={href} className="block px-4 py-3 pr-11 active:opacity-70">
+      <Link href={href} className="block min-h-12 px-4 py-3 pr-11 active:opacity-70">
         {match.tournamentName ? (
           <div className="mb-1.5">
             <TournamentChip name={match.tournamentName} />
@@ -338,7 +340,7 @@ export function MatchCard({
               starts here rather than above the tournament tag. */}
           <span className="w-4 shrink-0">
             {decided ? (
-              <Trophy className="mt-1 h-3.5 w-3.5 text-accent" />
+              <Trophy className="mt-1 h-3.5 w-3.5 text-accent-deep" />
             ) : null}
           </span>
           <div className="min-w-0 flex-1">
@@ -403,10 +405,10 @@ export function SeriesCard({ series }: { series: SeriesRow }) {
   return (
     <Link
       href={`/tournaments/${series._id}`}
-      className="block rounded-2xl border border-line bg-surface px-4 py-3 transition active:opacity-70"
+      className="block min-h-12 rounded-3xl border border-line bg-surface px-4 py-3 transition active:opacity-70"
     >
       <div className="flex items-center gap-2">
-        <Trophy className="h-4 w-4 shrink-0 text-accent" />
+        <Trophy className="h-4 w-4 shrink-0 text-accent-deep" />
         <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
           {series.name}
         </span>

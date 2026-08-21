@@ -51,7 +51,7 @@ export default function JoinPage() {
   }
 
   return (
-    <main className="mx-auto max-w-md px-6 pb-10 pt-[calc(var(--safe-top)+1.5rem)]">
+    <main className="mx-auto max-w-md px-5 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-[calc(var(--safe-top)+1.5rem)]">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight text-ink">
           {waiting ? "You’re in the queue" : "Join your group"}

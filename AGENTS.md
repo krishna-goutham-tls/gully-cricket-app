@@ -59,6 +59,7 @@ Read the file for what you're doing. Don't read them all.
 | Scoring engine, rules, schema | `convex/lib/scoring.ts`, `convex/lib/rules.ts`, `convex/schema.ts`, `convex/scoring.ts` |
 | Convex + Netlify deploy wiring | the Convex rules below |
 | How to run a copy | `README.md` |
+| Colour, type, buttons, PWA spacing | `design-bible.md` — **read it before any UI change** |
 
 ---
 
@@ -122,6 +123,11 @@ so the live bundle talks to `dusty-jellyfish-63`. Do not set
 ---
 
 ## UI and UX — how to decide where something goes
+
+**Read `design-bible.md` first.** Tokens, type, control sizes, and PWA
+padding live there. Do not invent a new height, radius, or colour. If
+the bible and this section disagree, the bible wins on look; this
+section still wins on *where* a number goes.
 
 This app is used one-handed, on a phone, often in sun, between overs. New
 numbers do not get a new tab by default.

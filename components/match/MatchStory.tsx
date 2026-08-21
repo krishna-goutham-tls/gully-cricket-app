@@ -87,7 +87,7 @@ function MetaLine({ story }: { story: Story }) {
     `${story.totalWickets} wickets`,
   ];
   return (
-    <p className="flex flex-wrap gap-x-1.5 gap-y-0.5 text-[11.5px] text-faint">
+    <p className="flex flex-wrap gap-x-1.5 gap-y-0.5 text-[11px] text-faint">
       {parts.map((p, i) => (
         <span key={p}>
           {i > 0 ? <span className="mr-1.5 text-line">·</span> : null}
@@ -102,7 +102,7 @@ function BadgeShelf({ badges }: { badges: Story["badges"] }) {
   const [open, setOpen] = useState<string | null>(null);
   return (
     <section>
-      <h2 className="mb-2.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-faint">
+      <h2 className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-faint">
         Badges
       </h2>
       <div className="grid grid-cols-2 gap-2.5">
@@ -116,7 +116,7 @@ function BadgeShelf({ badges }: { badges: Story["badges"] }) {
             <span className="text-[22px] leading-none">
               {BADGE_EMOJI[b.key] ?? "🏅"}
             </span>
-            <span className="mt-2 block text-[12.5px] font-bold leading-snug">
+            <span className="mt-2 block text-[13px] font-semibold leading-snug">
               {b.name}
             </span>
             <span
@@ -138,7 +138,7 @@ function BadgeShelf({ badges }: { badges: Story["badges"] }) {
           </button>
         ))}
       </div>
-      <p className="mt-2 text-center text-[10.5px] text-faint">
+      <p className="mt-2 text-center text-[11px] text-faint">
         Tap a badge for the receipt
       </p>
     </section>
@@ -251,13 +251,13 @@ function WormCard({ story }: { story: Story }) {
 
   return (
     <section>
-      <h2 className="mb-2.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-faint">
+      <h2 className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-faint">
         The match, ball by ball
       </h2>
       <div className="rounded-2xl border border-line bg-surface px-2.5 pb-3 pt-3.5 shadow-card">
         <div className="flex items-baseline justify-between px-1.5 pb-1">
           <span className="text-[13px] font-semibold">{leader}&apos;s lead</span>
-          <span className="text-[10.5px] text-faint">drag to replay ↔</span>
+          <span className="text-[11px] text-faint">drag to replay ↔</span>
         </div>
         <svg
           ref={svgRef}
@@ -287,7 +287,7 @@ function WormCard({ story }: { story: Story }) {
               <text
                 x={band.x0 + 5}
                 y={PAD.t - 9}
-                fontSize={10.5}
+                fontSize={11}
                 fontWeight={600}
                 fill="#767066"
               >
@@ -306,7 +306,7 @@ function WormCard({ story }: { story: Story }) {
           <text
             x={W - PAD.r}
             y={geom.y(0) + 14}
-            fontSize={9.5}
+            fontSize={11}
             fill="#767066"
             textAnchor="end"
           >
@@ -405,21 +405,21 @@ function WormCard({ story }: { story: Story }) {
         >
           {ball ? (
             <>
-              <p className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-faint">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">
                 {ordinalWord(ball.inn)} innings · Over {ball.over}.
                 {ball.ballInOver} · {clockTime(ball.at)}
               </p>
-              <p className="mt-0.5 text-[14.5px] font-semibold">
+              <p className="mt-0.5 text-[15px] font-semibold">
                 {describeBall(ball)}
               </p>
-              <p className="mt-0.5 text-[11.5px] text-muted">
+              <p className="mt-0.5 text-[11px] text-muted">
                 {leader}{" "}
                 {ball.lead >= 0
                   ? `lead by ${ball.lead}`
                   : `trail by ${-ball.lead}`}
               </p>
               {ball.nemesisCount ? (
-                <p className="mt-1.5 flex items-center gap-1.5 text-[11.5px] font-semibold text-danger">
+                <p className="mt-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-danger">
                   👀 That&apos;s the {ordinalWord(ball.nemesisCount)} time{" "}
                   {ball.bowlerName} has got {ball.outName}
                 </p>
@@ -427,13 +427,13 @@ function WormCard({ story }: { story: Story }) {
             </>
           ) : (
             <>
-              <p className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-faint">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">
                 The whole match
               </p>
-              <p className="mt-0.5 text-[14.5px] font-semibold">
+              <p className="mt-0.5 text-[15px] font-semibold">
                 Drag along the line to replay it
               </p>
-              <p className="mt-0.5 text-[11.5px] text-muted">
+              <p className="mt-0.5 text-[11px] text-muted">
                 Every wicket, six and milestone is a dot you can touch
               </p>
             </>
@@ -451,7 +451,7 @@ function WormCard({ story }: { story: Story }) {
                   setActiveChip(k);
                 }}
                 className={cn(
-                  "shrink-0 rounded-full border px-3.5 py-2 text-[11.5px] font-semibold",
+                  "flex min-h-11 shrink-0 items-center rounded-full border px-3.5 text-[13px] font-semibold",
                   activeChip === k
                     ? "border-ink bg-ink text-bg"
                     : "border-line bg-surface text-ink active:bg-line/60",
@@ -472,16 +472,16 @@ function TurningPoint({ story }: { story: Story }) {
   const at = story.timeline[tp.ballIndex]?.at;
   return (
     <section>
-      <h2 className="mb-2.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-faint">
+      <h2 className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-faint">
         Turning point
       </h2>
       <div className="rounded-2xl bg-ink p-4 text-bg shadow-card">
-        <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-accent">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-accent">
           {at ? `${clockTime(at)} · ` : ""}
           {tp.title}
         </p>
         <p className="mt-1.5 text-[14px] leading-relaxed">{tp.text}</p>
-        <p className="mt-2 text-[11px] text-bg/50">{tp.meta}</p>
+        <p className="mt-2 text-[11px] text-bg/70">{tp.meta}</p>
       </div>
     </section>
   );
@@ -501,7 +501,7 @@ function NumbersStrip({ story }: { story: Story }) {
   ];
   return (
     <section>
-      <h2 className="mb-2.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-faint">
+      <h2 className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-faint">
         The numbers
       </h2>
       <div className="grid grid-cols-4 gap-2">
@@ -518,7 +518,7 @@ function NumbersStrip({ story }: { story: Story }) {
             >
               {t.v}
             </p>
-            <p className="mt-0.5 text-[9.5px] font-semibold uppercase leading-snug tracking-[0.05em] text-faint">
+            <p className="mt-0.5 text-[11px] font-semibold uppercase leading-snug tracking-wide text-faint">
               {t.k}
             </p>
           </div>
