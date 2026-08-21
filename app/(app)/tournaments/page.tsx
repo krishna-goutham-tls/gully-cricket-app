@@ -1,12 +1,13 @@
 "use client";
 
 import { AppHeader } from "@/components/shell/AppHeader";
+import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { api } from "@/convex/_generated/api";
 import { useQuery } from "convex/react";
 import Link from "next/link";
-import { ArrowLeft, Plus, Trophy } from "lucide-react";
+import { Plus, Trophy } from "lucide-react";
 import { cn, TOURNAMENT_STATUS_LABEL as STATUS_LABEL } from "@/lib/utils";
 
 export default function TournamentsPage() {
@@ -20,26 +21,14 @@ export default function TournamentsPage() {
     <div>
       <AppHeader title="Tournaments" />
       <main className="mx-auto max-w-md px-5 py-5">
-        <div className="mb-4 flex items-center gap-2">
-          <Link
-            href="/home"
-            className="-ml-2 flex min-h-11 min-w-11 items-center justify-center rounded-xl text-muted hover:bg-black/[0.04]"
-            aria-label="Back to home"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-          <p className="text-[13px] text-muted">
-            Fixed two-team series with core squads.
-          </p>
-        </div>
+        <p className="mb-4 text-[13px] text-muted">
+          Fixed two-team series with core squads.
+        </p>
 
-        <Link
-          href="/tournaments/new"
-          className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-ink text-[15px] font-semibold text-bg shadow-card transition active:scale-[0.98]"
-        >
+        <Button href="/tournaments/new" fullWidth size="lg">
           <Plus className="h-5 w-5" strokeWidth={2.4} />
           New tournament
-        </Link>
+        </Button>
 
         <div className="mt-7 space-y-3">
           {tournaments === undefined ? (

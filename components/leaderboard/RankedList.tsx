@@ -129,13 +129,13 @@ export function RankedList({
         return (
           <Fragment key={String(row.userId)}>
             {!row.qualified && (i === 0 || rows[i - 1].qualified) ? (
-              <p className="border-y border-line bg-bg px-4 py-1.5 text-[11px] font-medium text-faint">
+              <p className="border-y border-line bg-bg px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-faint">
                 {cutLabel}
               </p>
             ) : null}
             <Link
               href={`/players/${row.userId}`}
-              className="block border-b border-line/60 px-4 py-2 last:border-b-0 active:bg-bg"
+              className="block min-h-12 border-b border-line/60 px-4 py-2 last:border-b-0 active:bg-bg"
             >
               <div className="flex items-baseline gap-2 leading-tight">
                 <span
@@ -146,7 +146,7 @@ export function RankedList({
                 >
                   {row.qualified ? i + 1 : "–"}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-ink">
+                <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
                   {row.displayName}
                 </span>
                 {row.tags && row.tags.length > 0

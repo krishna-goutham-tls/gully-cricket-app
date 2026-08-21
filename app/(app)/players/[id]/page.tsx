@@ -15,6 +15,7 @@ import {
 import { useAuth } from "@/components/providers/AuthProvider";
 import type { PlayerShareData, ShareStat } from "@/components/share/ShareCard";
 import { ShareButton } from "@/components/share/ShareButton";
+import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -97,7 +98,7 @@ function Section({
 }) {
   return (
     <section>
-      <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-faint">
+      <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-faint">
         {title}
       </p>
       {children}
@@ -396,7 +397,7 @@ export default function PlayerDetailPage() {
 
   if (stats === undefined) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-bg">
+      <div className="flex items-center justify-center bg-bg py-24">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-line border-t-accent" />
       </div>
     );
@@ -408,12 +409,7 @@ export default function PlayerDetailPage() {
           title="Player not found"
           body="They may have been removed from this group, or you followed an old link."
           action={
-            <Link
-              href="/players"
-              className="inline-flex min-h-11 items-center rounded-2xl bg-ink px-5 text-sm font-semibold text-bg"
-            >
-              Back to players
-            </Link>
+            <Button href="/players">Back to players</Button>
           }
         />
       </div>
@@ -443,14 +439,14 @@ export default function PlayerDetailPage() {
     .replace(/^-+|-+$/g, "");
 
   return (
-    <div className="min-h-dvh bg-bg pb-4">
-      <header className="bg-ink px-4 pb-4 pt-[calc(var(--safe-top)+0.5rem)] text-bg">
+    <div className="bg-bg pb-4">
+      <header className="bg-ink px-5 pb-4 pt-[calc(var(--safe-top)+0.5rem)] text-bg">
         <div className="mx-auto max-w-md">
           <div className="flex items-center justify-between">
             <Link
               href="/players"
               aria-label="Back to players"
-              className="-ml-2 flex h-10 w-10 items-center justify-center rounded-xl text-bg/60 active:bg-white/10"
+              className="-ml-2 flex h-11 w-11 items-center justify-center rounded-xl text-bg/70 active:bg-white/10"
             >
               <ArrowLeft className="h-5 w-5" />
             </Link>
@@ -458,7 +454,7 @@ export default function PlayerDetailPage() {
               <Link
                 href={`/hero?playerId=${stats.userId}`}
                 aria-label="Hero — one day's flex"
-                className="flex h-10 w-10 items-center justify-center rounded-xl text-bg/60 active:bg-white/10"
+                className="flex h-11 w-11 items-center justify-center rounded-xl text-bg/70 active:bg-white/10"
               >
                 <Sparkles className="h-5 w-5" />
               </Link>
@@ -474,7 +470,7 @@ export default function PlayerDetailPage() {
               {initials(stats.displayName)}
             </span>
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-[20px] font-semibold text-bg">
+              <h1 className="truncate text-xl font-semibold tracking-tight text-bg">
                 {stats.displayName}
               </h1>
               <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
@@ -521,11 +517,11 @@ export default function PlayerDetailPage() {
                 <p className="text-[22px] font-semibold leading-none text-bg">
                   {s.value}
                 </p>
-                <p className="mt-1 text-[11px] uppercase tracking-wide text-bg/50">
+                <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-bg/70">
                   {s.label}
                 </p>
                 {s.hint ? (
-                  <p className="mt-0.5 whitespace-nowrap text-[11px] leading-tight text-bg/40">
+                  <p className="mt-0.5 whitespace-nowrap text-[11px] leading-tight text-bg/70">
                     {s.hint}
                   </p>
                 ) : null}
@@ -534,7 +530,7 @@ export default function PlayerDetailPage() {
           </div>
 
           {stats.record.winPct != null || stats.record.contributionPct != null ? (
-            <p className="mt-2.5 text-[13px] leading-snug text-bg/55">
+            <p className="mt-2.5 text-[13px] leading-snug text-bg/70">
               {stats.record.winPct != null ? (
                 <>
                   <span className="font-semibold text-bg">
@@ -565,17 +561,17 @@ export default function PlayerDetailPage() {
           ) : null}
 
           {stats.bio ? (
-            <p className="mt-2 text-[13px] leading-snug text-bg/60">
+            <p className="mt-2 text-[13px] leading-snug text-bg/70">
               {stats.bio}
             </p>
           ) : null}
         </div>
       </header>
 
-      <main className="mx-auto max-w-md space-y-6 px-4 py-4">
+      <main className="mx-auto max-w-md space-y-6 px-5 py-4">
         {isAdmin && token && activeOrgId ? (
           <section>
-            <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-faint">
+            <p className="px-1 text-[11px] font-semibold uppercase tracking-wide text-faint">
               Tags
             </p>
             <div className="mt-1.5 rounded-2xl border border-line bg-surface px-3.5 py-3">
@@ -635,7 +631,7 @@ export default function PlayerDetailPage() {
                   onClick={() => setDiscipline("bat")}
                   aria-current={activeDiscipline === "bat"}
                   className={cn(
-                    "min-w-0 flex-1 rounded-xl py-1.5 text-center text-[13px] font-semibold transition",
+                    "min-h-11 min-w-0 flex-1 rounded-xl text-center text-[13px] font-semibold transition",
                     activeDiscipline === "bat"
                       ? "bg-ink text-bg"
                       : "text-muted active:bg-line/60",
@@ -648,7 +644,7 @@ export default function PlayerDetailPage() {
                   onClick={() => setDiscipline("bowl")}
                   aria-current={activeDiscipline === "bowl"}
                   className={cn(
-                    "min-w-0 flex-1 rounded-xl py-1.5 text-center text-[13px] font-semibold transition",
+                    "min-h-11 min-w-0 flex-1 rounded-xl text-center text-[13px] font-semibold transition",
                     activeDiscipline === "bowl"
                       ? "bg-ink text-bg"
                       : "text-muted active:bg-line/60",

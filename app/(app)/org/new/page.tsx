@@ -50,7 +50,7 @@ export default function NewOrgPage() {
 
   if (allowance === undefined) {
     return (
-      <main className="mx-auto max-w-md px-6 pt-[calc(var(--safe-top)+1.5rem)]">
+      <main className="mx-auto max-w-md px-5 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-[calc(var(--safe-top)+1.5rem)]">
         <div className="h-40 animate-pulse rounded-3xl bg-line/60" />
       </main>
     );
@@ -74,10 +74,10 @@ export default function NewOrgPage() {
             };
 
     return (
-      <main className="mx-auto max-w-md px-6 pb-10 pt-[calc(var(--safe-top)+1.5rem)]">
+      <main className="mx-auto max-w-md px-5 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-[calc(var(--safe-top)+1.5rem)]">
         <div className="rounded-3xl border border-line bg-surface p-6 text-center">
           <p className="text-3xl">🏏</p>
-          <h1 className="mt-3 text-xl font-semibold tracking-tight text-ink">
+          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink">
             {copy.title}
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-muted">{copy.body}</p>
@@ -95,7 +95,7 @@ export default function NewOrgPage() {
   }
 
   return (
-    <main className="mx-auto max-w-md px-6 pb-10 pt-[calc(var(--safe-top)+1.5rem)]">
+    <main className="mx-auto max-w-md px-5 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-[calc(var(--safe-top)+1.5rem)]">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight text-ink">
           Create your community

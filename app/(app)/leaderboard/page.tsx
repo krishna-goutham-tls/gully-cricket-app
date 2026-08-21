@@ -416,7 +416,7 @@ export default function LeaderboardPage() {
   return (
     <div>
       <AppHeader title="Leaders" />
-      <main className="mx-auto max-w-md px-4 py-4">
+      <main className="mx-auto max-w-md px-5 py-4">
         <div className="flex rounded-2xl border border-line bg-surface p-1">
           {TABS.map((t) => (
             <button
@@ -425,7 +425,7 @@ export default function LeaderboardPage() {
               onClick={() => selectTab(t)}
               aria-current={tab === t}
               className={cn(
-                "min-h-10 flex-1 rounded-xl text-[14px] font-semibold transition",
+                "min-h-11 flex-1 rounded-xl text-[13px] font-semibold transition",
                 tab === t ? "bg-ink text-bg" : "text-muted active:bg-line/60",
               )}
             >
@@ -453,7 +453,7 @@ export default function LeaderboardPage() {
                 aria-selected={on}
                 onClick={() => setMeasureKey(m.key)}
                 className={cn(
-                  "min-h-9 flex-1 rounded-lg border-b-2 px-1 text-[12.5px] font-semibold leading-tight transition",
+                  "min-h-11 flex-1 rounded-xl border-b-2 px-1 text-[13px] font-semibold leading-tight transition",
                   on
                     ? "border-accent text-ink"
                     : "border-transparent text-faint active:bg-line/50",
@@ -467,7 +467,7 @@ export default function LeaderboardPage() {
 
         <div className="mt-2.5 flex items-center justify-between gap-2">
           <div
-            className="flex min-w-0 flex-1 rounded-xl border border-line bg-surface p-0.5"
+            className="flex min-w-0 flex-1 rounded-2xl border border-line bg-surface p-1"
             role="group"
             aria-label="Who appears on the board"
           >
@@ -476,7 +476,7 @@ export default function LeaderboardPage() {
               aria-pressed={!includeExtras}
               onClick={() => setIncludeExtras(false)}
               className={cn(
-                "min-h-8 flex-1 rounded-[10px] px-2 text-[12px] font-semibold transition",
+                "min-h-11 flex-1 rounded-xl px-2 text-[13px] font-semibold transition",
                 !includeExtras
                   ? "bg-ink text-bg"
                   : "text-muted active:bg-line/60",
@@ -489,7 +489,7 @@ export default function LeaderboardPage() {
               aria-pressed={includeExtras}
               onClick={() => setIncludeExtras(true)}
               className={cn(
-                "min-h-8 flex-1 rounded-[10px] px-2 text-[12px] font-semibold transition",
+                "min-h-11 flex-1 rounded-xl px-2 text-[13px] font-semibold transition",
                 includeExtras
                   ? "bg-ink text-bg"
                   : "text-muted active:bg-line/60",
@@ -527,7 +527,7 @@ export default function LeaderboardPage() {
         {data === undefined ? (
           <div className="mt-3 space-y-2">
             {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="h-12 animate-pulse rounded-2xl bg-line" />
+              <div key={i} className="h-12 animate-pulse rounded-3xl bg-line" />
             ))}
           </div>
         ) : !hasData ? (

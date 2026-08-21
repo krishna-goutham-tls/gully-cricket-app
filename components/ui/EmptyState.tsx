@@ -16,7 +16,7 @@ export function EmptyState({
         </p>
       ) : null}
       {action ? (
-        <div className="mt-5 flex justify-center [&>*]:min-h-11">{action}</div>
+        <div className="mt-5 flex justify-center [&>*]:min-h-12">{action}</div>
       ) : null}
     </div>
   );

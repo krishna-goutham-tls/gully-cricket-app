@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/components/providers/AuthProvider";
+import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -202,10 +203,10 @@ export default function WatchPage() {
             <div className="mt-2 text-center">
               <p className="tabular text-[4.75rem] font-semibold leading-none tracking-tight text-bg">
                 {live.totalRuns}
-                <span className="text-bg/35">/</span>
+                <span className="text-bg/70">/</span>
                 {live.wickets}
               </p>
-              <p className="tabular mt-2 text-sm text-bg/65">
+              <p className="tabular mt-2 text-sm text-bg/70">
                 {live.oversText} ov
                 {live.runRate > 0 ? ` · RR ${live.runRate.toFixed(1)}` : ""}
               </p>
@@ -249,14 +250,14 @@ export default function WatchPage() {
               </div>
               {solo ? null : (
                 <div className="rounded-2xl bg-white/[0.05] px-2 py-2">
-                  <p className="uppercase tracking-wide text-bg/45">
+                  <p className="uppercase tracking-wide text-bg/70">
                     Non-striker
                   </p>
                   <p className="mt-0.5 truncate font-medium text-bg/75">
                     {live.nonStriker?.displayName ?? "—"}
                   </p>
                   {live.figures.nonStriker ? (
-                    <p className="tabular mt-0.5 text-xs text-bg/55">
+                    <p className="tabular mt-0.5 text-xs text-bg/70">
                       {live.figures.nonStriker.runs}(
                       {live.figures.nonStriker.balls})
                     </p>
@@ -264,12 +265,12 @@ export default function WatchPage() {
                 </div>
               )}
               <div className="rounded-2xl bg-white/[0.05] px-2 py-2">
-                <p className="uppercase tracking-wide text-bg/45">Bowling</p>
+                <p className="uppercase tracking-wide text-bg/70">Bowling</p>
                 <p className="mt-0.5 truncate font-medium text-bg/90">
                   {live.bowler?.displayName ?? "—"}
                 </p>
                 {live.figures.bowler ? (
-                  <p className="tabular mt-0.5 text-xs text-bg/55">
+                  <p className="tabular mt-0.5 text-xs text-bg/70">
                     {live.figures.bowler.wickets}-{live.figures.bowler.runs}
                   </p>
                 ) : null}
@@ -307,33 +308,29 @@ export default function WatchPage() {
 
         {done ? null : (
           <>
-            <Link
-              href={scoreHref}
-              className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-ink text-[15px] font-semibold text-bg shadow-card transition active:scale-[0.98]"
-            >
+            <Button href={scoreHref} fullWidth size="lg">
               <Pencil className="h-5 w-5" strokeWidth={2.4} />
               Resume scoring
-            </Link>
+            </Button>
             <p className="mt-2 text-center text-xs text-faint">
               You&apos;re watching — nothing here changes the score.
             </p>
           </>
         )}
 
-        <Link
+        <Button
           href={cardHref}
-          className={cn(
-            "flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-line bg-surface text-[14px] font-semibold text-ink transition active:scale-[0.98]",
-            done ? "mt-0" : "mt-4",
-          )}
+          variant="secondary"
+          fullWidth
+          className={done ? undefined : "mt-4"}
         >
           <ClipboardList className="h-[18px] w-[18px]" strokeWidth={2.2} />
           Full scorecard
-        </Link>
+        </Button>
 
         {state.innings.length > 1 ? (
           <div className="mt-6 rounded-3xl border border-line bg-surface p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">
               Innings
             </p>
             <div className="mt-3 space-y-2">

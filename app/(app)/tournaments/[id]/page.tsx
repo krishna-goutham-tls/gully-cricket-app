@@ -8,6 +8,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Input } from "@/components/ui/Input";
 import {
   cn,
   errorMessage,
@@ -297,17 +298,19 @@ export default function TournamentDetailPage() {
 
   return (
     <div>
-      <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-line bg-bg/95 px-4 pb-3 pt-[calc(var(--safe-top)+1rem)] backdrop-blur">
+      <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-line bg-bg/95 px-5 pb-3 pt-[calc(var(--safe-top)+1rem)] backdrop-blur">
         <Link
           href="/tournaments"
-          className="-ml-2 flex min-h-11 min-w-11 items-center justify-center rounded-xl text-muted hover:bg-black/[0.04]"
+          className="-ml-2 flex h-11 w-11 items-center justify-center rounded-xl text-muted active:bg-ink/[0.04]"
           aria-label="Back to tournaments"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <span className="flex min-w-0 items-center gap-1.5">
           <Trophy className="h-4 w-4 shrink-0 text-muted" />
-          <h1 className="truncate text-[17px] font-semibold text-ink">{t.name}</h1>
+          <h1 className="truncate text-xl font-semibold tracking-tight text-ink">
+            {t.name}
+          </h1>
         </span>
       </header>
 
@@ -365,11 +368,11 @@ export default function TournamentDetailPage() {
         </div>
 
         {t.status === "active" ? (
-          <Button fullWidth onClick={openPanel}>
+          <Button fullWidth size="lg" onClick={openPanel}>
             Start match
           </Button>
         ) : t.status === "paused" && isAdmin ? (
-          <Button fullWidth variant="secondary" onClick={() => changeStatus("active")}>
+          <Button fullWidth size="lg" onClick={() => changeStatus("active")}>
             Resume tournament
           </Button>
         ) : t.status === "paused" ? (
@@ -384,9 +387,10 @@ export default function TournamentDetailPage() {
             Matches
           </p>
           {t.matches.length === 0 ? (
-            <p className="rounded-2xl border border-line bg-surface px-4 py-3 text-sm text-muted">
-              No matches yet. Start the first one.
-            </p>
+            <EmptyState
+              title="No matches yet"
+              body="Start the first one."
+            />
           ) : (
             <div className="space-y-2">
               {t.matches.map((m, i) => {
@@ -511,19 +515,17 @@ export default function TournamentDetailPage() {
                     Fixes a mislabelled side. Matches already played keep their
                     old name; new matches use the new one.
                   </p>
-                  <input
+                  <Input
                     value={renA}
                     onChange={(e) => setRenA(e.target.value)}
                     maxLength={40}
-                    aria-label="Team A name"
-                    className="min-h-11 w-full rounded-xl border border-line bg-bg px-3 text-[15px] text-ink outline-none focus:border-accent"
+                    label="Team A name"
                   />
-                  <input
+                  <Input
                     value={renB}
                     onChange={(e) => setRenB(e.target.value)}
                     maxLength={40}
-                    aria-label="Team B name"
-                    className="min-h-11 w-full rounded-xl border border-line bg-bg px-3 text-[15px] text-ink outline-none focus:border-accent"
+                    label="Team B name"
                   />
                   <div className="grid grid-cols-2 gap-2">
                     <Button variant="ghost" onClick={() => setRenameOpen(false)}>

@@ -15,7 +15,7 @@ export const metadata = {
  */
 export default function PrivacyPage() {
   return (
-    <main className="min-h-dvh bg-bg px-5 py-10">
+    <main className="min-h-dvh bg-bg px-5 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-[calc(var(--safe-top)+1rem)]">
       <div className="mx-auto max-w-md">
         <Link href="/" className="flex items-center gap-2.5">
           <Logo size={32} />

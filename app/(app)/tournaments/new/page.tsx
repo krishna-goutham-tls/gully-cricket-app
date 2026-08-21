@@ -6,6 +6,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { cn, errorMessage } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -161,18 +162,20 @@ export default function NewTournamentPage() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-bg">
-      <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-line bg-bg/95 px-4 pb-3 pt-[calc(var(--safe-top)+1rem)] backdrop-blur">
+      <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-line bg-bg/95 px-5 pb-3 pt-[calc(var(--safe-top)+1rem)] backdrop-blur">
         <Link
           href="/tournaments"
-          className="-ml-2 flex min-h-11 min-w-11 items-center justify-center rounded-xl text-muted hover:bg-black/[0.04]"
+          className="-ml-2 flex h-11 w-11 items-center justify-center rounded-xl text-muted active:bg-ink/[0.04]"
           aria-label="Back to tournaments"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
-        <h1 className="text-[17px] font-semibold text-ink">New tournament</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-ink">
+          New tournament
+        </h1>
       </header>
 
-      <main className="mx-auto w-full max-w-md flex-1 space-y-4 px-4 py-4 pb-32">
+      <main className="mx-auto w-full max-w-md flex-1 space-y-4 px-5 py-4 pb-32">
         {error ? (
           <p className="rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-sm text-danger">
             {error}
@@ -180,10 +183,8 @@ export default function NewTournamentPage() {
         ) : null}
 
         <div className="rounded-3xl border border-line bg-surface p-4">
-          <label className="text-[13px] font-medium text-muted">
-            Tournament name
-          </label>
-          <input
+          <Input
+            label="Tournament name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
@@ -191,14 +192,13 @@ export default function NewTournamentPage() {
             }}
             autoCapitalize="words"
             placeholder="Gully Series"
-            className="mt-1.5 min-h-11 w-full rounded-xl border border-line bg-bg px-3.5 py-2.5 text-[15px] text-ink outline-none placeholder:text-faint focus:border-accent"
           />
         </div>
 
         <div className="rounded-3xl border border-line bg-surface p-4">
           <div className="flex items-center justify-between">
             <p className="text-[15px] font-medium text-ink">Format</p>
-            <div className="flex rounded-xl border border-line p-1">
+            <div className="flex rounded-2xl border border-line p-1">
               {(
                 [
                   { id: "test", label: "Test" },
@@ -212,8 +212,8 @@ export default function NewTournamentPage() {
                   aria-pressed={format === opt.id}
                   className={
                     format === opt.id
-                      ? "min-h-11 rounded-lg bg-ink px-4 text-sm font-semibold text-bg"
-                      : "min-h-11 rounded-lg px-4 text-sm font-medium text-muted"
+                      ? "min-h-11 rounded-xl bg-ink px-4 text-[13px] font-semibold text-bg"
+                      : "min-h-11 rounded-xl px-4 text-[13px] font-semibold text-muted"
                   }
                 >
                   {opt.label}
@@ -263,7 +263,7 @@ export default function NewTournamentPage() {
         <div className="rounded-3xl border border-line bg-surface p-4">
           <div className="flex items-center justify-between gap-3">
             <p className="text-[15px] font-medium text-ink">Batters at a time</p>
-            <div className="flex rounded-xl border border-line p-1">
+            <div className="flex rounded-2xl border border-line p-1">
               {(
                 [
                   { mode: "double", label: "Two" },
@@ -277,8 +277,8 @@ export default function NewTournamentPage() {
                   aria-pressed={battingMode === opt.mode}
                   className={
                     battingMode === opt.mode
-                      ? "min-h-11 rounded-lg bg-ink px-4 text-sm font-semibold text-bg"
-                      : "min-h-11 rounded-lg px-4 text-sm font-medium text-muted"
+                      ? "min-h-11 rounded-xl bg-ink px-4 text-[13px] font-semibold text-bg"
+                      : "min-h-11 rounded-xl px-4 text-[13px] font-semibold text-muted"
                   }
                 >
                   {opt.label}
@@ -480,7 +480,7 @@ export default function NewTournamentPage() {
               autoCapitalize="words"
               aria-label="Add a guest by name"
               placeholder="Add a guest by name"
-              className="min-h-11 min-w-0 flex-1 rounded-xl border border-line bg-surface px-3 text-[15px] text-ink outline-none placeholder:text-muted focus:border-ink"
+              className="min-h-12 min-w-0 flex-1 rounded-2xl border border-line bg-surface px-3 text-[16px] text-ink outline-none placeholder:text-faint focus:border-ink"
             />
             <Button
               variant="ghost"
@@ -495,20 +495,21 @@ export default function NewTournamentPage() {
 
       {/* .safe-bottom sets padding-bottom, so the visual gap lives on the inner
           wrapper — a py-* utility here would be overridden. */}
-      <div className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 px-4 pt-3 backdrop-blur">
+      <div className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 px-5 pt-3 backdrop-blur">
         <div className="mx-auto max-w-md pb-3">
-          <button
+          <Button
             type="button"
+            fullWidth
+            size="lg"
             disabled={!ready || busy}
             onClick={() => void onCreate()}
-            className="flex min-h-14 w-full items-center justify-center rounded-2xl bg-ink text-[15px] font-semibold text-bg shadow-card transition active:scale-[0.98] disabled:opacity-40"
           >
             {busy
               ? "Creating…"
               : ready
                 ? `Create — ${squadA.length} v ${squadB.length}`
                 : "Each squad needs at least 2"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -566,7 +567,7 @@ function PlayerChip({
           aria-pressed={captain}
           aria-label={`Make ${name} captain`}
           className={cn(
-            "flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border transition",
+            "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition",
             captain
               ? "border-ink bg-ink text-bg"
               : "border-line bg-surface text-muted",
@@ -579,7 +580,7 @@ function PlayerChip({
           onClick={onToggleCore}
           aria-pressed={core}
           className={cn(
-            "flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg border text-xs font-semibold transition",
+            "flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1 rounded-xl border text-[13px] font-semibold transition",
             core
               ? "border-accent bg-accent-soft text-accent-deep"
               : "border-line bg-surface text-muted",
@@ -595,7 +596,7 @@ function PlayerChip({
           type="button"
           onClick={onRemove}
           aria-label={`Remove ${name}`}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-line bg-surface text-muted active:bg-bg"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line bg-surface text-muted active:bg-bg"
         >
           <X className="h-4 w-4" />
         </button>

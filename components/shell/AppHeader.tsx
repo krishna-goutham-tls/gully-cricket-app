@@ -32,7 +32,7 @@ export function AppHeader({ title }: { title?: string }) {
         <div className="flex min-w-0 items-center gap-2.5">
           <Logo size={30} />
           <div className="min-w-0">
-            <h1 className="truncate text-[19px] font-semibold tracking-tight text-ink">
+            <h1 className="truncate text-xl font-semibold tracking-tight text-ink">
               {title ?? activeOrg?.orgName ?? "Gully"}
             </h1>
             {/* When a page title displaces the org name from the heading,

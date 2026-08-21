@@ -139,7 +139,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-dvh flex-col justify-center px-6 pb-10 pt-[calc(var(--safe-top)+2rem)]">
+    <main className="flex min-h-dvh flex-col justify-center px-5 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-[calc(var(--safe-top)+2rem)]">
       <div className="rise-in mb-9 flex flex-col items-center text-center">
         <Logo size={68} className="shadow-lift" />
         <h1 className="mt-5 text-[2rem] font-semibold leading-none tracking-tight text-ink">

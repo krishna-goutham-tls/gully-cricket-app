@@ -667,7 +667,7 @@ function ChatBubble({
       <p
         className={cn(
           "mt-0.5 text-right text-[10px]",
-          gold ? "text-ink/50" : "text-bg/40",
+          gold ? "text-ink/50" : "text-bg/70",
         )}
       >
         {time}
@@ -694,7 +694,7 @@ function Closer() {
 
             {/* The organiser, identified by his own messages — not a paragraph */}
             <div className="mx-auto mt-9 w-fit space-y-2.5 text-left lg:mx-0">
-              <p className="text-[12px] font-bold uppercase tracking-[0.16em] text-bg/50">
+              <p className="text-[12px] font-bold uppercase tracking-[0.16em] text-bg/70">
                 Every community has this guy
               </p>
               <ChatBubble time="6:02 am" tilt="l">

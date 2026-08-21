@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { AppHeader } from "@/components/shell/AppHeader";
+import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Id } from "@/convex/_generated/dataModel";
 import { shortDate } from "@/lib/dates";
@@ -105,22 +106,19 @@ export default function AccessRequestsPage() {
                     Asked {shortDate(r.requestedAt)}
                   </p>
                   <div className="mt-3 grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
+                    <Button
                       disabled={busyId === r.requestId}
                       onClick={() => void decide("approve", r.requestId)}
-                      className="min-h-11 rounded-xl bg-ink text-sm font-semibold text-bg active:scale-[0.98] disabled:opacity-50"
                     >
                       Approve
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
+                      variant="secondary"
                       disabled={busyId === r.requestId}
                       onClick={() => void decide("dismiss", r.requestId)}
-                      className="min-h-11 rounded-xl border border-line bg-surface text-sm font-semibold text-muted active:scale-[0.98] disabled:opacity-50"
                     >
                       Not now
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ))}

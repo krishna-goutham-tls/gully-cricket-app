@@ -196,25 +196,25 @@ function HeroPageInner() {
 
   return (
     <div className="min-h-dvh bg-ink pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
-      <header className="flex items-center justify-between px-4 pb-2 pt-[calc(var(--safe-top)+0.5rem)]">
+      <header className="flex items-center justify-between px-5 pb-2 pt-[calc(var(--safe-top)+0.5rem)]">
         <button
           type="button"
           aria-label="Back"
           onClick={() => router.back()}
-          className="-ml-2 flex h-10 w-10 items-center justify-center rounded-xl text-bg/60 active:bg-white/10"
+          className="-ml-2 flex h-11 w-11 items-center justify-center rounded-xl text-bg/70 active:bg-white/10"
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-bg/50">
+        <p className="text-[13px] font-semibold uppercase tracking-wide text-bg/70">
           Hero
         </p>
-        <span className="w-10" />
+        <span className="w-11" />
       </header>
 
-      <main className="mx-auto max-w-md px-4 pb-8 pt-2">
+      <main className="mx-auto max-w-md px-5 pb-8 pt-2">
         {/* Day chips */}
         {dayGroups.length > 0 ? (
-          <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1">
+          <div className="-mx-5 mb-4 flex gap-2 overflow-x-auto px-5 pb-1">
             {dayGroups.map((d) => (
               <button
                 key={d.key}
@@ -224,10 +224,10 @@ function HeroPageInner() {
                   if (!d.players.some((p) => String(p.id) === playerId)) setPlayerId(null);
                 }}
                 className={cn(
-                  "shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[13px] font-semibold",
+                  "min-h-11 shrink-0 whitespace-nowrap rounded-full px-4 text-[13px] font-semibold",
                   d.key === dayKey
                     ? "bg-accent text-ink"
-                    : "border border-white/10 text-bg/60 active:bg-white/10",
+                    : "border border-white/10 text-bg/70 active:bg-white/10",
                 )}
               >
                 {d.label}
@@ -251,7 +251,7 @@ function HeroPageInner() {
           </div>
         ) : !activeDay ? null : !playerId || !heroData ? (
           <>
-            <p className="mb-3 px-1 text-[13px] text-bg/50">
+            <p className="mb-3 px-1 text-[13px] text-bg/70">
               Who had the day? {activeDay.matchCount} match
               {activeDay.matchCount === 1 ? "" : "es"} on {activeDay.label.toLowerCase()}.
             </p>
@@ -273,7 +273,7 @@ function HeroPageInner() {
               ))}
             </div>
             {hero === null ? (
-              <p className="mt-4 text-center text-[13px] text-bg/50">
+              <p className="mt-4 text-center text-[13px] text-bg/70">
                 Nothing to show for that pick — try another player.
               </p>
             ) : null}

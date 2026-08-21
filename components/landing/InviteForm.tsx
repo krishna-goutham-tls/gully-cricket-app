@@ -1,6 +1,8 @@
 "use client";
 
 import { cn, errorMessage } from "@/lib/utils";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { useEffect, useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -118,31 +120,21 @@ export function InviteForm() {
       </p>
 
       <div className="mt-5 space-y-4">
-        <div>
-          <label className="text-[13px] font-semibold text-ink">
-            Your name
-          </label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="The name on your WhatsApp"
-            className="mt-1.5 w-full rounded-2xl border border-line bg-bg px-4 py-3 text-[15px] text-ink placeholder:text-faint/70 focus:border-accent focus:outline-none"
-          />
-        </div>
-        <div>
-          <label className="text-[13px] font-semibold text-ink">
-            WhatsApp number
-          </label>
-          <input
-            type="tel"
-            inputMode="numeric"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="This is where I'll message you"
-            className="mt-1.5 w-full rounded-2xl border border-line bg-bg px-4 py-3 text-[15px] text-ink placeholder:text-faint/70 focus:border-accent focus:outline-none"
-          />
-        </div>
+        <Input
+          label="Your name"
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="The name on your WhatsApp"
+        />
+        <Input
+          label="WhatsApp number"
+          type="tel"
+          inputMode="numeric"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="This is where I'll message you"
+        />
         <div>
           <p className="text-[13px] font-semibold text-ink">
             What kind of community?
@@ -181,14 +173,16 @@ export function InviteForm() {
         </p>
       ) : null}
 
-      <button
+      <Button
         type="button"
+        fullWidth
+        size="lg"
         disabled={busy}
         onClick={() => void submit()}
-        className="mt-5 inline-flex min-h-14 w-full items-center justify-center rounded-2xl bg-ink px-8 text-base font-semibold text-bg shadow-lift transition hover:bg-ink/90 active:scale-[0.98] disabled:opacity-60"
+        className="mt-5"
       >
         {busy ? "Sending…" : "Register your community"}
-      </button>
+      </Button>
     </div>
   );
 }

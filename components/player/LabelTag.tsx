@@ -27,7 +27,7 @@ function Chip({
   // Slack-like: small type, slight rounding, solid fill when on.
   const className = cn(
     "shrink-0 rounded-[4px] px-1.5 py-0.5 text-[10px] font-semibold leading-none tracking-wide",
-    interactive && "min-h-6",
+    interactive && "min-h-11 px-2.5",
     dark
       ? on
         ? "bg-bg text-ink"

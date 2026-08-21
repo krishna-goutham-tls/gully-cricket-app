@@ -96,13 +96,13 @@ export default function ProfilePage() {
         {user?._id ? (
           <Link
             href={`/players/${user._id}`}
-            className="flex items-center gap-3 rounded-2xl border border-line bg-surface px-4 py-3 active:bg-bg"
+            className="flex min-h-12 items-center gap-3 rounded-3xl border border-line bg-surface px-4 py-3 active:bg-bg"
           >
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-deep">
               <BarChart3 className="h-4 w-4" strokeWidth={2.2} />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-semibold text-ink">
+              <span className="block text-[15px] font-semibold text-ink">
                 My stats
               </span>
               <span className="block text-[12px] text-muted">
@@ -156,7 +156,7 @@ export default function ProfilePage() {
                       type="button"
                       onClick={() => setPrimaryRole(primaryRole === r ? "" : r)}
                       className={cn(
-                        "min-h-11 rounded-2xl border px-3 py-3 text-sm font-medium capitalize",
+                        "min-h-11 rounded-2xl border px-3 py-3 text-[15px] font-semibold capitalize",
                         primaryRole === r
                           ? "border-accent bg-accent-soft text-accent-deep"
                           : "border-line text-muted",
@@ -263,7 +263,7 @@ function Row({
       type="button"
       onClick={onClick}
       aria-expanded={open}
-      className="flex min-h-[52px] w-full items-center justify-between border-t border-line px-4 text-[15px] font-medium text-ink active:bg-bg"
+      className="flex min-h-12 w-full items-center justify-between border-t border-line px-4 text-[15px] font-semibold text-ink active:bg-bg"
     >
       {label}
       <span className="flex items-center gap-2 text-[13px] text-muted">
@@ -314,7 +314,7 @@ function AccessRequestsRow() {
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {waiting > 0 ? (
-          <span className="tabular flex h-6 min-w-6 items-center justify-center rounded-full bg-danger px-1.5 text-xs font-bold text-white">
+          <span className="tabular flex h-6 min-w-6 items-center justify-center rounded-full bg-danger px-1.5 text-xs font-bold text-bg">
             {waiting}
           </span>
         ) : null}
@@ -372,7 +372,7 @@ function SandboxRow() {
 
   return (
     <div className="border-t border-line">
-      <div className="flex min-h-[52px] items-center gap-3 px-4 py-2.5">
+      <div className="flex min-h-12 items-center gap-3 px-4 py-2.5">
         <div className="min-w-0 flex-1">
           <p className="text-[15px] font-medium text-ink">Sandbox mode</p>
           <p className="text-[12px] leading-snug text-muted">
@@ -405,7 +405,7 @@ function SandboxRow() {
           type="button"
           disabled={busy}
           onClick={() => setConfirmReset(true)}
-          className="flex min-h-11 w-full items-center px-4 pb-3 text-[13px] font-semibold text-muted active:text-ink"
+          className="flex min-h-11 w-full items-center px-4 pb-3 text-[13px] font-semibold text-muted active:bg-bg active:text-ink"
         >
           {cleared === null
             ? "Clear sandbox now"

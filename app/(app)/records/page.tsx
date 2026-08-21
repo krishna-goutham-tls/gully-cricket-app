@@ -27,18 +27,18 @@ export default function RecordsPage() {
   const groups = data ? buildRecords(data) : [];
 
   return (
-    <div className="min-h-dvh bg-bg pb-6">
-      <header className="sticky top-0 z-30 border-b border-line bg-bg/90 px-4 pb-3 pt-[calc(var(--safe-top)+0.75rem)] backdrop-blur-md">
+    <div className="bg-bg pb-6">
+      <header className="sticky top-0 z-30 border-b border-line bg-bg/90 px-5 pb-3 pt-[calc(var(--safe-top)+0.75rem)] backdrop-blur-md">
         <div className="mx-auto flex max-w-md items-center gap-1">
           <Link
             href="/home"
             aria-label="Back to home"
-            className="-ml-2 flex h-10 w-10 items-center justify-center rounded-xl text-muted active:bg-line/60"
+            className="-ml-2 flex h-11 w-11 items-center justify-center rounded-xl text-muted active:bg-line/60"
           >
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="min-w-0">
-            <h1 className="text-[19px] font-semibold leading-tight tracking-tight text-ink">
+            <h1 className="text-xl font-semibold leading-tight tracking-tight text-ink">
               Records
             </h1>
             <p className="text-[11px] text-muted">The org record book</p>
@@ -46,11 +46,11 @@ export default function RecordsPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-md space-y-6 px-4 py-4">
+      <main className="mx-auto max-w-md space-y-6 px-5 py-4">
         {data === undefined ? (
           <div className="space-y-2">
             {[0, 1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-16 animate-pulse rounded-2xl bg-line" />
+              <div key={i} className="h-16 animate-pulse rounded-3xl bg-line" />
             ))}
           </div>
         ) : groups.length === 0 ? (
@@ -71,13 +71,13 @@ export default function RecordsPage() {
                   ) : (
                     <Trophy className="h-4 w-4 text-accent-deep" />
                   )}
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-faint">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">
                     {g.title}
                   </p>
                 </div>
                 <div
                   className={cn(
-                    "overflow-hidden rounded-2xl border",
+                    "overflow-hidden rounded-3xl border",
                     roast
                       ? "border-danger/20 bg-danger-soft/40"
                       : "border-line bg-surface",
@@ -88,7 +88,7 @@ export default function RecordsPage() {
                       key={it.label}
                       href={`/players/${it.holderId}`}
                       className={cn(
-                        "flex items-center gap-3 border-b px-3.5 py-3 last:border-b-0",
+                        "flex min-h-12 items-center gap-3 border-b px-3.5 py-3 last:border-b-0",
                         roast
                           ? "border-danger/10 active:bg-danger-soft"
                           : "border-line/60 active:bg-bg",
@@ -107,7 +107,7 @@ export default function RecordsPage() {
                         {initials(it.holder)}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[13px] font-medium leading-tight text-ink">
+                        <p className="text-[15px] font-semibold leading-tight text-ink">
                           {it.label}
                         </p>
                         <p className="truncate text-[12px] leading-tight text-muted">

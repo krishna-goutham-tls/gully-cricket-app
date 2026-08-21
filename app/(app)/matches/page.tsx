@@ -19,7 +19,7 @@ type PendingAction =
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-1 pb-1.5 pt-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-faint">
+    <p className="px-1 pb-1.5 pt-4 text-[11px] font-semibold uppercase tracking-wide text-faint">
       {children}
     </p>
   );
@@ -110,18 +110,18 @@ export default function MatchesPage() {
   });
 
   return (
-    <div className="min-h-dvh bg-bg">
-      <header className="sticky top-0 z-30 border-b border-line bg-bg/90 px-4 pb-3 pt-[calc(var(--safe-top)+0.75rem)] backdrop-blur-md">
+    <div className="bg-bg">
+      <header className="sticky top-0 z-30 border-b border-line bg-bg/90 px-5 pb-3 pt-[calc(var(--safe-top)+0.75rem)] backdrop-blur-md">
         <div className="mx-auto flex max-w-md items-center gap-1">
           <Link
             href="/home"
             aria-label="Back to home"
-            className="-ml-2 flex h-10 w-10 items-center justify-center rounded-xl text-muted active:bg-line/60"
+            className="-ml-2 flex h-11 w-11 items-center justify-center rounded-xl text-muted active:bg-line/60"
           >
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="min-w-0">
-            <h1 className="text-[19px] font-semibold leading-tight tracking-tight text-ink">
+            <h1 className="text-xl font-semibold leading-tight tracking-tight text-ink">
               Matches
             </h1>
             <p className="tabular text-[11px] text-muted">
@@ -133,7 +133,7 @@ export default function MatchesPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-md px-4 pb-4">
+      <main className="mx-auto max-w-md px-5 pb-4">
         {error ? (
           <p className="mt-3 rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-sm text-danger">
             {error}
@@ -143,7 +143,7 @@ export default function MatchesPage() {
         {matches === undefined ? (
           <div className="mt-4 space-y-2">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="h-20 animate-pulse rounded-2xl bg-ink/[0.04]" />
+              <div key={i} className="h-20 animate-pulse rounded-3xl bg-ink/[0.04]" />
             ))}
           </div>
         ) : matches.length === 0 ? (
