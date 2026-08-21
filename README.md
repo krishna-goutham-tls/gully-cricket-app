@@ -1,46 +1,55 @@
 # Gully Cricket
 
-Scorebook for gully cricket. Tap what happened, ball by ball.
+Tap what happened. The scoreboard keeps up.
 
-Live product: [gullycricket.space](https://gullycricket.space) — **invite-only**. An organiser registers on the landing page; access is vetted before a community is provisioned. Forking this repo does not get you into that site, or its data.
+You are at the crease with one free thumb. Four, six, wide, out — tap it, it is in the book. Sit-outs see the live score. When the match ends, the story, the leaderboard, and the roast are already there.
 
-The user-facing word for a group is **Community**. The database still says `orgs` / `orgId` — do not rename those.
+**[Play it live](https://gullycricket.space)** · **[Read the rules](https://gullycricket.space/gully-rules)**
 
-Home-screen label: **Gully**. Package/repo may still say `cricket-scoring`.
+The live site is invite-only (a community organiser registers, then gets vetted). Forking this repo does **not** log you into that site or its data. It gives you the scorebook, empty, for your own group.
 
-## Stack
+## Why this exists
 
-Next.js 14 · TypeScript · Tailwind · Convex · Netlify
+Most cricket apps assume a scorer at a desk. Gully cricket does not have a desk. This one is built so whoever has the phone can score an over without looking down for long.
 
-## Run a copy
+- One-thumb score pad
+- Last man stands (toggle it off if you play proper cricket)
+- Common players (same person on both sides)
+- Live watch link for whoever is sitting out
+- Community leaderboards, records, match stories
 
-You need your own Convex project. This repo does not include anyone else's database, players, or matches.
+In the app, a group is a **Community**. The database still says `orgs` — leave that name alone.
 
-1. Create a Convex project and copy its deployment URL.
-2. Copy `.env.local.example` to `.env.local` and fill in **your** URLs.
-3. Set `PIN_PEPPER` in **your** Convex dashboard (a long random string). Do not put it in git.
-4. From this folder:
+## Run it yourself
+
+You need your **own** [Convex](https://convex.dev) project. This repo is the recipe, not someone else's club.
 
 ```bash
+cp .env.local.example .env.local   # paste YOUR Convex URLs
+# Set PIN_PEPPER in your Convex dashboard (long random string). Never git it.
 npm install
-npx convex dev --once    # push functions to your Convex
+npx convex dev --once
 npm run dev
 ```
 
-App: `http://localhost:3000`.
+Open [http://localhost:3000](http://localhost:3000). After any change under `convex/`, run `npx convex dev --once` again.
+
+If you fork, point `netlify.toml` at **your** Convex URL too. The one in this repo is for [gullycricket.space](https://gullycricket.space).
 
 ```bash
-npm run build
 npm run lint
 npm run typecheck
+npm run build
 ```
 
-After any `convex/` change: `npx convex dev --once`. Production Convex is `npx convex deploy --yes` with **your** prod key, never a key from someone else's project.
+## Contribute
 
-## Contributions
+PRs welcome. `main` is protected — open a pull request, do not push it directly.
 
-Open a **pull request**. Do not push to `main`.
+Good places to help: scoring edge cases, mobile UI, copy, and making the pad even faster. Read [AGENTS.md](AGENTS.md) before you touch `convex/` (the ball log is append-only; the score pad stays thin).
+
+If a change might leak a secret, a phone number, or live-player data — stop and say so in the PR. We would rather you ask.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+[MIT](LICENSE). Take it, run a community, send a PR back.
