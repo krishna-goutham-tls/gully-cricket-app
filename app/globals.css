@@ -138,3 +138,109 @@ body:has(.full-bleed) {
     animation: none;
   }
 }
+
+/* Coin toss — 3D flip. Used once, on the who-bats-first screen. */
+.coin-toss-stage {
+  appearance: none;
+  display: block;
+  width: min(9.5rem, 44vw);
+  height: min(9.5rem, 44vw);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  perspective: 1100px;
+  perspective-origin: 50% 42%;
+}
+
+.coin-toss-arc {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 10px 14px rgba(24, 24, 27, 0.28));
+}
+
+.coin-toss-arc[data-tossing="true"] {
+  animation: coin-toss-arc 2.1s cubic-bezier(0.15, 0.72, 0.18, 1) both;
+}
+
+.coin-toss-body {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  -webkit-transform-style: preserve-3d;
+  transform-style: preserve-3d;
+  transition: transform 2.1s cubic-bezier(0.12, 0.52, 0.16, 1);
+  will-change: transform;
+}
+
+.coin-toss-nudge {
+  animation: coin-toss-nudge 0.35s ease;
+}
+
+.coin-toss-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background-position: center;
+  background-size: cover;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.coin-toss-heads {
+  background-image: url("/heads.jpg");
+  transform: translateZ(1px);
+}
+
+.coin-toss-tails {
+  background-image: url("/tails.jpg");
+  transform: rotateY(180deg);
+}
+
+@keyframes coin-toss-arc {
+  0% {
+    transform: translateY(0) scale(1);
+    filter: drop-shadow(0 8px 10px rgba(24, 24, 27, 0.24));
+  }
+  38% {
+    transform: translateY(-3.25rem) scale(1.06);
+    filter: drop-shadow(0 28px 22px rgba(24, 24, 27, 0.16));
+  }
+  72% {
+    transform: translateY(-0.7rem) scale(1.01);
+  }
+  86% {
+    transform: translateY(-0.35rem) scale(1.02);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    filter: drop-shadow(0 12px 16px rgba(24, 24, 27, 0.3));
+  }
+}
+
+@keyframes coin-toss-nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-5px);
+  }
+  75% {
+    transform: translateX(5px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coin-toss-body {
+    transition: none;
+  }
+  .coin-toss-arc[data-tossing="true"] {
+    animation: none;
+  }
+  .coin-toss-nudge {
+    animation: none;
+  }
+}
