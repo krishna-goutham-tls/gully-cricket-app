@@ -1,0 +1,12 @@
+[build]
+  # Next.js only. Convex is deployed by hand — see AGENTS.md.
+  command = "npm run build"
+  publish = ".next"
+
+  [build.environment]
+    # Baked into the browser bundle. Public URL, not a secret.
+    NEXT_PUBLIC_CONVEX_URL = "https://dusty-jellyfish-63.convex.cloud"
+    NEXT_PUBLIC_CONVEX_SITE_URL = "https://dusty-jellyfish-63.convex.site"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

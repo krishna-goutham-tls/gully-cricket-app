@@ -1,0 +1,140 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  background: #faf8f4;
+  color: #18181b;
+  color-scheme: light;
+
+  /*
+   * Screens pad their own top inset via var(--safe-top) rather than calling
+   * env() directly, so a full-bleed bar above them (the practice stripe) can
+   * take the notch over and zero this out for everything underneath.
+   */
+  --safe-top: env(safe-area-inset-top);
+}
+
+/* Applied by the app shell when a bar above already owns the notch. */
+.safe-top-owned {
+  --safe-top: 0px;
+}
+
+html,
+body {
+  min-height: 100%;
+  background: #faf8f4;
+}
+
+body {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Snap rails (Test innings carousel) — the dots are the affordance. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.phone-shell {
+  width: 100%;
+  max-width: 28rem;
+  margin-left: auto;
+  margin-right: auto;
+  min-height: 100dvh;
+  position: relative;
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/*
+ * Landing page only: escape the phone-shell's 28rem column for full-bleed
+ * sections. overflow-x: clip (not hidden) so body never becomes a scroll
+ * container; :has keeps this scoped to pages that actually bleed.
+ */
+.full-bleed {
+  position: relative;
+  left: 50%;
+  width: 100vw;
+  transform: translateX(-50%);
+}
+body:has(.full-bleed) {
+  overflow-x: clip;
+}
+
+/* Landing: the pad's reaction bursts (FOUR! / SIX! / OUT!) */
+@keyframes pop-burst {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 10px) scale(0.6);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1.15);
+  }
+  60% {
+    opacity: 1;
+    transform: translate(-50%, -8px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -26px) scale(0.95);
+  }
+}
+.pop-burst {
+  animation: pop-burst 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Landing: the gold ticker band */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.marquee {
+  animation: marquee 26s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pop-burst,
+  .marquee {
+    animation: none;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rise-in {
+  animation: rise-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise-in {
+    animation: none;
+  }
+}

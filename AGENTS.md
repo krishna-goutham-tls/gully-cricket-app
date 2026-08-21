@@ -1,0 +1,109 @@
+# Gully Cricket (app repo)
+
+Mobile-first **gully cricket scoring app**. Public name **Gully Cricket**;
+repo/package still `cricket-scoring`. The product is the scoring UX — score
+an over with one thumb: tap ball outcome → instant register → next ball.
+Everything else (leaderboards, player profiles, match stories) is read-model
+on top of the ball log.
+
+Any active org member can create matches and score; **admin** only approves join
+requests and PIN resets.
+
+**Stack:** Next.js 14 (App Router) · TypeScript · Tailwind · Convex · Netlify
+**Live:** https://gullycricket.space
+
+---
+
+## Router — where to look
+
+Read the file for what you're doing. Don't read them all.
+
+| Need | File |
+|------|------|
+| Scoring engine, rules, schema | `convex/lib/scoring.ts`, `convex/lib/rules.ts`, `convex/schema.ts`, `convex/scoring.ts` |
+| Convex + Netlify deploy wiring | the Convex rules below |
+| How to run a copy | `README.md` |
+
+---
+
+## Commands
+
+```bash
+npm run dev             # Dev server on :3000 (uses .env.local)
+npm run build           # Production build
+npm run lint            # ESLint
+npm run typecheck       # tsc --noEmit
+npx convex dev --once   # Push convex/ to DEV (posh-mastiff-400)
+npx convex deploy --yes # Push convex/ to PROD — see the rules below
+```
+
+---
+
+## Convex deploys — the rules
+
+**One Convex project: `cricket-scoring-app`.** Two deployments inside it. The
+values are NOT interchangeable. **Netlify does not push Convex.** A push to
+`main` only rebuilds the Next.js app.
+
+| | Deployment | How to push |
+|---|---|---|
+| **Dev** | `posh-mastiff-400` | `npx convex dev --once` (uses `.env.local`) |
+| **Prod** | `dusty-jellyfish-63` | `npx convex deploy --yes` with the **prod** key |
+
+1. After any `convex/` change, push DEV first (`npx convex dev --once`).
+2. When the work is ready to go live, push PROD **yourself**, then push `main`
+   so Netlify rebuilds the app against the new functions.
+3. **`npx convex deploy` always means prod.** Never run it to "sync dev".
+4. Local `.env.local` has `CONVEX_DEPLOYMENT=dev:posh-mastiff-400` and a **dev**
+   `CONVEX_DEPLOY_KEY`. That key would send `npx convex deploy` to the wrong
+   place. For prod, prefix the **prod** key (the commented `prod:dusty-jellyfish-63`
+   line in `.env.local`) and do not write it back into the file:
+   `CONVEX_DEPLOY_KEY='prod:…' npx convex deploy --yes`
+5. **Never put a prod deploy key in `.env.local` as the active key.**
+6. **Never run `npx convex dev` without `--once` to "get set up"** — that is how
+   two orphan Convex projects got created.
+7. If the dashboard and these docs disagree, believe the dashboard and fix
+   the docs. Do not invent a third project.
+
+Netlify `NEXT_PUBLIC_CONVEX_URL` is set in `netlify.toml` to the prod deployment
+so the live bundle talks to `dusty-jellyfish-63`. Do not set
+`CONVEX_DEPLOY_KEY` on Netlify for the build — it is unused now.
+
+---
+
+## Non-negotiables
+
+- **The ball log is append-only.** Everything replays from it; undo depends on
+  it. A fix that rewrites history is the wrong fix.
+- **Nothing gets added to the score pad**, except Catch Drop (CD), which
+  Krishna explicitly put there. New inputs otherwise go to post-match
+  surfaces, never mid-over.
+- **`recomputeAndPersist` (`convex/scoring.ts`) changes with extreme care.**
+- **You cannot log into this app** (phone + 4-digit PIN). Say "not
+  browser-verified" and name what Krishna should eyeball — never claim a UI
+  change works because it compiled.
+
+---
+
+## UI and UX — how to decide where something goes
+
+This app is used one-handed, on a phone, often in sun, between overs. New
+numbers do not get a new tab by default.
+
+- **Few clicks.** If the player is already on a screen, the fact belongs
+  there. Do not add a filter, a settings page, or a second hop to reveal
+  one number.
+- **Breathable, not rushed.** Empty space is doing work. Do not fill a
+  gap because a stat exists. One new fact per surface, with air around it.
+- **Mobile real estate decides the home.** The profile header is four
+  numbers today (matches, innings, runs, wickets). If a new fact fits as
+  a line under one of those, it lives there. The Leaders tab is already a
+  two-level board — a new discipline tab is a last resort, not a first
+  home for a career stat.
+- **Prefer reading over configuring.** Defaults should match how the group
+  already argues. Toggles are for the exception (Everyone on Leaders),
+  not for the main number.
+- **Copy names the thing people say.** Win–loss, not "attribution rate".
+  Visitor, not "uncredited walk-on".
+
+If a proposed UI needs a legend to be understood, it is the wrong UI.

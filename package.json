@@ -1,0 +1,35 @@
+{
+  "name": "cricket-scoring",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "convex dev --once && next dev",
+    "dev:frontend": "next dev",
+    "dev:backend": "convex dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "convex": "^1.42.3",
+    "html-to-image": "^1.11.13",
+    "lucide-react": "^1.25.0",
+    "next": "^14.2.35",
+    "react": "^18",
+    "react-dom": "^18",
+    "tailwind-merge": "^3.6.0"
+  },
+  "devDependencies": {
+    "@netlify/plugin-nextjs": "^5.15.12",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.18",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
+  }
+}
