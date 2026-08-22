@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
+import { assertSeriesSides } from "./lib/tournamentLineup";
 
 const side = v.union(v.literal("A"), v.literal("B"));
 
@@ -150,9 +151,11 @@ export const reseatTournamentCaptain = internalMutation({
  * One-off ops: retroactively link a friendly match to a tournament series so it
  * counts toward standings. Used when a match had to be created outside the
  * tournament flow (e.g. a common player who wasn't in both fixed squads).
- * Guards: match + tournament must share an org, formats must match, and the
- * match must be completed. Side A of the match must already map to tournament
- * team A (standings count winnerSide with no remapping).
+ * Guards: match + tournament must share an org, formats must match, the
+ * match must be completed, and each XI must still include at least one
+ * player from that series team. Walk-ons are allowed. Side A of the match
+ * must already map to tournament team A (standings count winnerSide with
+ * no remapping).
  */
 export const linkMatchToTournament = internalMutation({
   args: {
@@ -171,6 +174,17 @@ export const linkMatchToTournament = internalMutation({
       );
     if (match.status !== "completed")
       throw new Error(`Match not completed (status=${match.status})`);
+    if (match.tournamentId && String(match.tournamentId) !== String(t._id)) {
+      throw new Error("Match already belongs to another tournament");
+    }
+    assertSeriesSides({
+      sideAName: t.sideAName,
+      sideBName: t.sideBName,
+      sideASquadIds: t.sideASquadIds,
+      sideBSquadIds: t.sideBSquadIds,
+      sideAPlayerIds: match.sideAPlayerIds,
+      sideBPlayerIds: match.sideBPlayerIds,
+    });
     await ctx.db.patch(matchId, { tournamentId });
     return {
       linked: matchId,

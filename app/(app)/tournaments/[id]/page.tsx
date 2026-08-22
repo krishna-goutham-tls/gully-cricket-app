@@ -14,6 +14,7 @@ import {
   errorMessage,
   TOURNAMENT_STATUS_LABEL as STATUS_LABEL,
 } from "@/lib/utils";
+import { dayLabel } from "@/lib/dates";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -45,7 +46,16 @@ export default function TournamentDetailPage() {
     api.tournaments.get,
     token ? { token, tournamentId } : "skip",
   );
+  const orgPlayers = useQuery(
+    api.players.listOrgPlayers,
+    token && t ? { token, orgId: t.orgId } : "skip",
+  );
+  const linkable = useQuery(
+    api.tournaments.linkableMatches,
+    token && isAdmin && t ? { token, tournamentId } : "skip",
+  );
   const startMatch = useMutation(api.tournaments.startMatch);
+  const linkMatch = useMutation(api.tournaments.linkMatch);
   const setStatus = useMutation(api.tournaments.setStatus);
   const setWinner = useMutation(api.tournaments.setWinner);
   const reopen = useMutation(api.tournaments.reopen);
@@ -72,6 +82,8 @@ export default function TournamentDetailPage() {
   const [renA, setRenA] = useState("");
   const [renB, setRenB] = useState("");
   const [renBusy, setRenBusy] = useState(false);
+  const [binOpen, setBinOpen] = useState(false);
+  const [binId, setBinId] = useState<Id<"matches"> | null>(null);
 
   const missingCore = useMemo(() => {
     if (!t) return [] as string[];
@@ -202,6 +214,22 @@ export default function TournamentDetailPage() {
     }
   }
 
+  async function confirmBin() {
+    if (!token || !binId) return;
+    setConfirmBusy(true);
+    setAdminError(null);
+    try {
+      await linkMatch({ token, tournamentId, matchId: binId });
+      setBinId(null);
+      setBinOpen(false);
+    } catch (e) {
+      setAdminError(errorMessage(e, "Could not add that match"));
+      setBinId(null);
+    } finally {
+      setConfirmBusy(false);
+    }
+  }
+
   async function changeStatus(status: "active" | "paused") {
     if (!token) return;
     setAdminError(null);
@@ -295,6 +323,21 @@ export default function TournamentDetailPage() {
   const sideBIds = new Set(t.sideB.map((p) => p.userId));
   const borrowForA = t.sideB.filter((p) => !sideAIds.has(p.userId));
   const borrowForB = t.sideA.filter((p) => !sideBIds.has(p.userId));
+  const rosterIds = new Set<string>([
+    ...Array.from(sideAIds),
+    ...Array.from(sideBIds),
+  ]);
+  const walkOns: SquadPlayer[] = (orgPlayers ?? [])
+    .filter((p) => !rosterIds.has(p.userId))
+    .map((p) => ({
+      userId: p.userId,
+      displayName: p.displayName,
+      isGuest: p.isGuest,
+      isCore: false,
+    }));
+  const binTarget = binId
+    ? (linkable ?? []).find((m) => m._id === binId) ?? null
+    : null;
 
   return (
     <div>
@@ -544,6 +587,59 @@ export default function TournamentDetailPage() {
             </div>
 
             <div className="mt-4 border-t border-line pt-3">
+              {t.status !== "complete" ? (
+                binOpen ? (
+                  <div className="space-y-2">
+                    <p className="text-[13px] font-semibold text-ink">
+                      Add a played match
+                    </p>
+                    <p className="text-xs leading-relaxed text-muted">
+                      Bins a completed match onto this series. Walk-ons stay
+                      on the scorecard. Side A must still be {t.sideAName}.
+                    </p>
+                    {(linkable ?? []).length === 0 ? (
+                      <p className="text-xs text-muted">
+                        No matching friendlies to add.
+                      </p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {(linkable ?? []).map((m) => (
+                          <button
+                            key={m._id}
+                            type="button"
+                            onClick={() => setBinId(m._id)}
+                            className="flex min-h-12 w-full flex-col items-start justify-center rounded-xl border border-line px-3 py-2 text-left active:bg-bg"
+                          >
+                            <span className="text-[13px] font-semibold text-ink">
+                              {m.resultText ?? `${m.sideAName} vs ${m.sideBName}`}
+                            </span>
+                            <span className="text-xs text-muted">
+                              {dayLabel(m.createdAt)}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <Button variant="ghost" onClick={() => setBinOpen(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="secondary"
+                    fullWidth
+                    onClick={() => {
+                      setAdminError(null);
+                      setBinOpen(true);
+                    }}
+                  >
+                    Add a played match
+                  </Button>
+                )
+              ) : null}
+            </div>
+
+            <div className="mt-4 border-t border-line pt-3">
               <Button
                 variant="danger"
                 fullWidth
@@ -573,8 +669,9 @@ export default function TournamentDetailPage() {
               </p>
               <p className="mt-1 text-xs leading-relaxed text-muted">
                 Core players are pre-selected. Tap to add today&apos;s
-                challengers or drop anyone who didn&apos;t turn up. Short on
-                players? Borrow one from the other team.
+                challengers or drop anyone who didn&apos;t turn up. Walk-ons
+                who aren&apos;t on either squad can join. Short on players?
+                Borrow one from the other team.
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <QuickPick label="Core only" onClick={pickCore} />
@@ -591,6 +688,7 @@ export default function TournamentDetailPage() {
                 players={t.sideA}
                 borrowFrom={t.sideBName}
                 borrowable={borrowForA}
+                walkable={walkOns}
                 present={presentA}
                 onToggle={(id) => toggle("A", id)}
               />
@@ -599,6 +697,7 @@ export default function TournamentDetailPage() {
                 players={t.sideB}
                 borrowFrom={t.sideAName}
                 borrowable={borrowForB}
+                walkable={walkOns}
                 present={presentB}
                 onToggle={(id) => toggle("B", id)}
               />
@@ -658,6 +757,20 @@ export default function TournamentDetailPage() {
       />
 
       <ConfirmDialog
+        open={binId !== null}
+        title="Add this match to the series?"
+        description={
+          binTarget
+            ? `${binTarget.resultText ?? `${binTarget.sideAName} vs ${binTarget.sideBName}`} will count toward ${t.name}. You can still declare the winner after.`
+            : "This match will count toward the series."
+        }
+        confirmLabel="Add to series"
+        busy={confirmBusy}
+        onConfirm={() => void confirmBin()}
+        onCancel={() => setBinId(null)}
+      />
+
+      <ConfirmDialog
         open={reopenOpen}
         title="Reopen this series?"
         description="The declared result is cleared and the series returns paused — hit Resume when you're ready to play more matches."
@@ -687,6 +800,7 @@ function SquadPicker({
   players,
   borrowFrom,
   borrowable,
+  walkable,
   present,
   onToggle,
 }: {
@@ -694,14 +808,17 @@ function SquadPicker({
   players: SquadPlayer[];
   borrowFrom: string;
   borrowable: SquadPlayer[];
+  walkable: SquadPlayer[];
   present: Set<string>;
   onToggle: (id: string) => void;
 }) {
   const [showBorrow, setShowBorrow] = useState(false);
+  const [showWalk, setShowWalk] = useState(false);
   const cores = players.filter((p) => p.isCore);
   const challengers = players.filter((p) => !p.isCore);
   const ownIn = players.filter((p) => present.has(p.userId)).length;
   const borrowedIn = borrowable.filter((p) => present.has(p.userId)).length;
+  const walkIn = walkable.filter((p) => present.has(p.userId)).length;
 
   return (
     <div className="mt-4">
@@ -712,6 +829,7 @@ function SquadPicker({
         <span className="tabular shrink-0 text-xs font-semibold text-muted">
           {ownIn} of {players.length} in
           {borrowedIn > 0 ? ` · +${borrowedIn} borrowed` : ""}
+          {walkIn > 0 ? ` · +${walkIn} walk-on` : ""}
         </span>
       </div>
 
@@ -777,6 +895,41 @@ function SquadPicker({
           {showBorrow ? (
             <div className="mt-1.5 space-y-1.5">
               {borrowable.map((p) => (
+                <PlayerRow
+                  key={p.userId}
+                  player={p}
+                  on={present.has(p.userId)}
+                  onToggle={() => onToggle(p.userId)}
+                />
+              ))}
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
+      {walkable.length > 0 ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowWalk((v) => !v)}
+            aria-expanded={showWalk}
+            className="mt-3 flex min-h-11 w-full items-center gap-1.5 rounded-xl border border-dashed border-line px-3 text-xs font-semibold text-muted active:border-accent"
+          >
+            <UserPlus className="h-3.5 w-3.5 shrink-0" />
+            <span className="min-w-0 truncate">
+              Walk-on
+              {walkIn > 0 ? ` · ${walkIn} in` : ""}
+            </span>
+            <ChevronDown
+              className={cn(
+                "ml-auto h-4 w-4 shrink-0 transition-transform",
+                showWalk && "rotate-180",
+              )}
+            />
+          </button>
+          {showWalk ? (
+            <div className="mt-1.5 space-y-1.5">
+              {walkable.map((p) => (
                 <PlayerRow
                   key={p.userId}
                   player={p}

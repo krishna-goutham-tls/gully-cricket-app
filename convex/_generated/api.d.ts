@@ -23,6 +23,7 @@ import type * as lib_rules from "../lib/rules.js";
 import type * as lib_scoring from "../lib/scoring.js";
 import type * as lib_session from "../lib/session.js";
 import type * as lib_teams from "../lib/teams.js";
+import type * as lib_tournamentLineup from "../lib/tournamentLineup.js";
 import type * as maintenance from "../maintenance.js";
 import type * as matches from "../matches.js";
 import type * as orgs from "../orgs.js";
@@ -54,6 +55,7 @@ declare const fullApi: ApiFromModules<{
   "lib/scoring": typeof lib_scoring;
   "lib/session": typeof lib_session;
   "lib/teams": typeof lib_teams;
+  "lib/tournamentLineup": typeof lib_tournamentLineup;
   maintenance: typeof maintenance;
   matches: typeof matches;
   orgs: typeof orgs;
