@@ -8,6 +8,7 @@ import {
 import { buildRuleSnapshot } from "./lib/rules";
 import { deleteMatchCascade } from "./lib/matches";
 import { captainTeamLabel } from "./lib/teams";
+import { assertSeriesSides } from "./lib/tournamentLineup";
 import { battingMode, matchFormat, side } from "./schema";
 
 type Side = "A" | "B";
@@ -250,16 +251,11 @@ export const get = query({
       winsA === winsB ? null : winsA > winsB ? "A" : "B";
 
     // Last lineup that actually took the field, for a "same as last match"
-    // prefill. Intersected with the fixed squads because mid-match squad edits
-    // (matches.setPlayerSides) can add someone outside the tournament squad,
-    // and startMatch would then reject the prefill.
+    // prefill. Walk-ons stay on it — startMatch now allows extras, so
+    // stripping them would drop Swayam-style players from the next XI.
     const lastPlayed = [...matches]
       .reverse()
       .find((m) => m.status === "live" || m.status === "completed");
-    const squadOnly = (ids: Id<"users">[], squad: Id<"users">[]) => {
-      const s = new Set(squad.map(String));
-      return ids.filter((id) => s.has(String(id)));
-    };
 
     return {
       _id: t._id,
@@ -293,14 +289,8 @@ export const get = query({
         ? {
             matchId: lastPlayed._id,
             createdAt: lastPlayed.createdAt,
-            sideAPlayerIds: squadOnly(
-              lastPlayed.sideAPlayerIds,
-              t.sideASquadIds,
-            ),
-            sideBPlayerIds: squadOnly(
-              lastPlayed.sideBPlayerIds,
-              t.sideBSquadIds,
-            ),
+            sideAPlayerIds: lastPlayed.sideAPlayerIds,
+            sideBPlayerIds: lastPlayed.sideBPlayerIds,
           }
         : null,
       matches: matchRows,
@@ -311,9 +301,10 @@ export const get = query({
 
 /**
  * Start a match inside a tournament. Format/overs/batting-mode and the two
- * team names are locked from the tournament; the caller passes only the
- * players present today (a subset of each fixed squad; common allowed). Side A
- * always maps to tournament team A so match winners feed standings directly.
+ * team names are locked from the tournament; the caller passes today's XI.
+ * Walk-ons (org members not on either squad) are allowed. Each side must
+ * still include at least one player from that series team. Side A always
+ * maps to tournament team A so match winners feed standings directly.
  * The soft "core missing" gate is a UI warning — the backend never blocks.
  */
 export const startMatch = mutation({
@@ -346,22 +337,17 @@ export const startMatch = mutation({
       throw new Error("Duplicate player in a team");
     }
 
-    // Players must belong to the series roster (either squad), but a player
-    // from one squad may be lent to the other side to balance numbers when
-    // someone is absent — so we check membership against the union, not each
-    // side's own squad. Side A still maps to tournament team A for standings;
-    // a borrowed player never changes which side wins.
-    const roster = new Set(
-      [...t.sideASquadIds, ...t.sideBSquadIds].map(String),
-    );
-    const outsider = [...args.sideAPlayerIds, ...args.sideBPlayerIds].find(
-      (id) => !roster.has(String(id)),
-    );
-    if (outsider) {
-      throw new Error(
-        `Only players from ${t.sideAName} or ${t.sideBName} can play in this series`,
-      );
-    }
+    // Walk-ons are allowed. A player from one squad may also be lent to the
+    // other side to balance numbers. Each XI must still carry that series
+    // team so winnerSide maps straight onto standings.
+    assertSeriesSides({
+      sideAName: t.sideAName,
+      sideBName: t.sideBName,
+      sideASquadIds: t.sideASquadIds,
+      sideBSquadIds: t.sideBSquadIds,
+      sideAPlayerIds: args.sideAPlayerIds,
+      sideBPlayerIds: args.sideBPlayerIds,
+    });
 
     await assertActiveMembers(
       ctx,
@@ -392,6 +378,122 @@ export const startMatch = mutation({
     return { matchId };
   },
 });
+
+/**
+ * Completed friendlies in this org that can be binned onto the series:
+ * same format, not already tagged, and each XI still carries that series team.
+ * Walk-ons on those XIs are fine.
+ */
+export const linkableMatches = query({
+  args: {
+    token: v.optional(v.string()),
+    tournamentId: v.id("tournaments"),
+  },
+  handler: async (ctx, args) => {
+    const t = await ctx.db.get(args.tournamentId);
+    if (!t) return [];
+    try {
+      await requireOrgAdmin(ctx, args.token, t.orgId);
+    } catch {
+      return [];
+    }
+
+    const matches = await ctx.db
+      .query("matches")
+      .withIndex("by_org_status", (q) =>
+        q.eq("orgId", t.orgId).eq("status", "completed"),
+      )
+      .collect();
+
+    const rows = [];
+    for (const m of matches) {
+      if (m.tournamentId) continue;
+      if (m.ruleSnapshot?.format !== t.format) continue;
+      try {
+        assertSeriesSides({
+          sideAName: t.sideAName,
+          sideBName: t.sideBName,
+          sideASquadIds: t.sideASquadIds,
+          sideBSquadIds: t.sideBSquadIds,
+          sideAPlayerIds: m.sideAPlayerIds,
+          sideBPlayerIds: m.sideBPlayerIds,
+        });
+      } catch {
+        continue;
+      }
+      rows.push({
+        _id: m._id,
+        resultText: m.resultText ?? null,
+        createdAt: m.createdAt,
+        sideAName: captainTeamLabel(
+          m.sideAName,
+          (await ctx.db.get(m.sideAPlayerIds[0]))?.displayName,
+        ),
+        sideBName: captainTeamLabel(
+          m.sideBName,
+          (await ctx.db.get(m.sideBPlayerIds[0]))?.displayName,
+        ),
+      });
+    }
+    rows.sort((a, b) => b.createdAt - a.createdAt);
+    return rows;
+  },
+});
+
+/** Admin bins a completed friendly onto this series. Same lineup rule as start. */
+export const linkMatch = mutation({
+  args: {
+    token: v.string(),
+    tournamentId: v.id("tournaments"),
+    matchId: v.id("matches"),
+  },
+  handler: async (ctx, args) => {
+    const t = await ctx.db.get(args.tournamentId);
+    if (!t) throw new Error("Tournament not found");
+    await requireOrgAdmin(ctx, args.token, t.orgId);
+    if (t.status === "complete") {
+      throw new Error("This tournament is over");
+    }
+    return await attachMatchToTournament(ctx, args.matchId, args.tournamentId);
+  },
+});
+
+async function attachMatchToTournament(
+  ctx: MutationCtx,
+  matchId: Id<"matches">,
+  tournamentId: Id<"tournaments">,
+) {
+  const match = await ctx.db.get(matchId);
+  if (!match) throw new Error("Match not found");
+  const t = await ctx.db.get(tournamentId);
+  if (!t) throw new Error("Tournament not found");
+  if (match.orgId !== t.orgId) throw new Error("Org mismatch");
+  if (match.ruleSnapshot?.format !== t.format) {
+    throw new Error(
+      `Format mismatch: match=${match.ruleSnapshot?.format} tournament=${t.format}`,
+    );
+  }
+  if (match.status !== "completed") {
+    throw new Error(`Match not completed (status=${match.status})`);
+  }
+  if (match.tournamentId && String(match.tournamentId) !== String(t._id)) {
+    throw new Error("Match already belongs to another tournament");
+  }
+  assertSeriesSides({
+    sideAName: t.sideAName,
+    sideBName: t.sideBName,
+    sideASquadIds: t.sideASquadIds,
+    sideBSquadIds: t.sideBSquadIds,
+    sideAPlayerIds: match.sideAPlayerIds,
+    sideBPlayerIds: match.sideBPlayerIds,
+  });
+  await ctx.db.patch(matchId, { tournamentId: t._id });
+  return {
+    linked: matchId,
+    tournament: t.name,
+    winnerSide: match.winnerSide,
+  };
+}
 
 /** Pause/resume is admin-only: a pause is a deliberate call, not a toggle. */
 export const setStatus = mutation({
