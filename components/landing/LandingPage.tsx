@@ -442,19 +442,33 @@ function HeroLive() {
           seam, desktop at the second fold the sticky phone scrolls into. */}
       <div className="absolute inset-x-0 bottom-0 top-[46%] bg-ink lg:top-[88vh]" />
       <div className="relative mx-auto max-w-6xl px-5 pt-6 sm:pt-8">
-        <header className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
+        <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <div className="flex min-w-0 items-center gap-2.5">
             <Logo size={36} />
-            <span className="text-lg font-bold tracking-tight text-ink">
+            <span className="truncate text-lg font-bold tracking-tight text-ink">
               Gully Cricket
             </span>
           </div>
-          <Link
-            href="/login"
-            className="inline-flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold text-muted hover:bg-ink/[0.04]"
-          >
-            Sign in
-          </Link>
+          <nav className="flex shrink-0 items-center">
+            <Link
+              href="/match-stories"
+              className="inline-flex min-h-11 items-center rounded-lg px-2.5 text-[13px] font-semibold text-muted hover:bg-ink/[0.04]"
+            >
+              Stories
+            </Link>
+            <Link
+              href="/release-notes"
+              className="inline-flex min-h-11 items-center rounded-lg px-2.5 text-[13px] font-semibold text-muted hover:bg-ink/[0.04]"
+            >
+              Notes
+            </Link>
+            <Link
+              href="/login"
+              className="inline-flex min-h-11 items-center rounded-lg px-2.5 text-[13px] font-semibold text-muted hover:bg-ink/[0.04]"
+            >
+              Sign in
+            </Link>
+          </nav>
         </header>
 
         {/* Mobile: text → phone → caption, stacked. Desktop: two full text
