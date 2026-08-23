@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { ArrowLeft, Flame, Trophy } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 
 function initials(name: string) {
   return name
@@ -20,11 +21,23 @@ function initials(name: string) {
 
 export default function RecordsPage() {
   const { token, activeOrgId } = useAuth();
-  const data = useQuery(
-    api.stats.leaderboard,
+  const [scope, setScope] = useState<"season" | "all" | null>(null);
+  const current = useQuery(
+    api.seasons.current,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
   );
-  const groups = data ? buildRecords(data) : [];
+  const usingSeason = Boolean(current) && (scope ?? "season") === "season";
+  const data = useQuery(
+    api.stats.leaderboard,
+    token && activeOrgId && current !== undefined
+      ? {
+          token,
+          orgId: activeOrgId,
+          ...(usingSeason && current ? { seasonId: current._id } : {}),
+        }
+      : "skip",
+  );
+  const groups = data ? buildRecords(data, { season: usingSeason }) : [];
 
   return (
     <div className="bg-bg pb-6">
@@ -33,17 +46,51 @@ export default function RecordsPage() {
           <Link
             href="/home"
             aria-label="Back to home"
-            className="-ml-2 flex h-11 w-11 items-center justify-center rounded-xl text-muted active:bg-line/60"
+            className="-ml-2 flex h-11 w-11 items-center justify-center rounded-lg text-muted active:bg-line/60"
           >
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h1 className="text-xl font-semibold leading-tight tracking-tight text-ink">
               Records
             </h1>
-            <p className="text-[11px] text-muted">The org record book</p>
+            <p className="text-[13px] text-muted">
+              {usingSeason
+                ? `${current?.name ?? "This season"} feats`
+                : "All-time feats"}
+            </p>
           </div>
         </div>
+        {current ? (
+          <div
+            className="mx-auto mt-1 flex max-w-md justify-end px-1"
+            role="group"
+            aria-label="Season or all time"
+          >
+            <button
+              type="button"
+              aria-pressed={usingSeason}
+              onClick={() => setScope("season")}
+              className={cn(
+                "min-h-11 px-1.5 text-[13px] font-semibold",
+                usingSeason ? "text-ink" : "text-muted",
+              )}
+            >
+              This season
+            </button>
+            <button
+              type="button"
+              aria-pressed={!usingSeason}
+              onClick={() => setScope("all")}
+              className={cn(
+                "min-h-11 px-1.5 text-[13px] font-semibold",
+                !usingSeason ? "text-ink" : "text-muted",
+              )}
+            >
+              All time
+            </button>
+          </div>
+        ) : null}
       </header>
 
       <main className="mx-auto max-w-md space-y-6 px-5 py-4">
@@ -55,8 +102,14 @@ export default function RecordsPage() {
           </div>
         ) : groups.length === 0 ? (
           <EmptyState
-            title="No records yet"
-            body="Feats show up here as soon as the first match is completed."
+            title={
+              usingSeason ? "No feats this season yet" : "No records yet"
+            }
+            body={
+              usingSeason
+                ? "Play a match. The board starts empty."
+                : "Feats show up here as soon as the first match is completed."
+            }
           />
         ) : (
           groups.map((g) => {
@@ -77,7 +130,7 @@ export default function RecordsPage() {
                 </div>
                 <div
                   className={cn(
-                    "overflow-hidden rounded-3xl border",
+                    "overflow-hidden rounded-2xl border",
                     roast
                       ? "border-danger/20 bg-danger-soft/40"
                       : "border-line bg-surface",
@@ -110,11 +163,11 @@ export default function RecordsPage() {
                         <p className="text-[15px] font-semibold leading-tight text-ink">
                           {it.label}
                         </p>
-                        <p className="truncate text-[12px] leading-tight text-muted">
+                        <p className="truncate text-[13px] leading-tight text-muted">
                           {it.holder}
                         </p>
                       </div>
-                      <p className="tabular shrink-0 text-[22px] font-bold leading-none text-ink">
+                      <p className="tabular shrink-0 text-2xl font-semibold leading-none text-ink">
                         {it.value}
                       </p>
                     </Link>

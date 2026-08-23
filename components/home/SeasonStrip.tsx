@@ -12,6 +12,30 @@ import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+function CapName({
+  label,
+  name,
+  loading,
+}: {
+  label: string;
+  name: string | null;
+  loading: boolean;
+}) {
+  return (
+    <span>
+      <span className="font-semibold text-accent-deep">{label}</span>
+      {loading ? (
+        <span
+          aria-hidden
+          className="ml-1 inline-block h-3 w-14 animate-pulse rounded-md bg-ink/[0.08] align-middle"
+        />
+      ) : name ? (
+        <span className="text-ink"> {name}</span>
+      ) : null}
+    </span>
+  );
+}
+
 function ordinal(n: number) {
   const v = n % 100;
   const suffix =
@@ -74,6 +98,7 @@ export function SeasonStrip({ series }: { series?: SeriesRow | null }) {
     return i >= 0 ? i + 1 : null;
   }, [board, user]);
 
+  const capsLoading = !!current && board === undefined;
   const orange = board?.batting[0]?.displayName ?? null;
   const purple = board?.bowling[0]?.displayName ?? null;
 
@@ -141,29 +166,19 @@ export function SeasonStrip({ series }: { series?: SeriesRow | null }) {
                 <SeriesCard series={series} nested />
               </div>
             ) : null}
-            {orange || purple ? (
-              <p className="border-t border-line px-4 py-2.5 text-[13px] leading-snug">
-                {orange ? (
-                  <>
-                    <span className="font-semibold text-accent-deep">
-                      Orange Cap
-                    </span>
-                    <span className="text-ink"> {orange}</span>
-                  </>
-                ) : null}
-                {orange && purple ? (
-                  <span className="text-muted"> · </span>
-                ) : null}
-                {purple ? (
-                  <>
-                    <span className="font-semibold text-accent-deep">
-                      Purple Cap
-                    </span>
-                    <span className="text-ink"> {purple}</span>
-                  </>
-                ) : null}
-              </p>
-            ) : null}
+            <p className="border-t border-line px-4 py-2.5 text-[13px] leading-snug">
+              <CapName
+                label="Orange Cap"
+                name={orange}
+                loading={capsLoading}
+              />
+              <span className="text-muted"> · </span>
+              <CapName
+                label="Purple Cap"
+                name={purple}
+                loading={capsLoading}
+              />
+            </p>
             {isAdmin ? (
               <button
                 type="button"

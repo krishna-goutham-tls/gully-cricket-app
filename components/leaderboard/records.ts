@@ -105,11 +105,13 @@ const tieRoastAllRound = <T extends Named & { points: number }>(a: T, b: T) =>
  * feats (nobody has done the thing yet) drop out, and a group with no feats
  * left drops entirely, so the page never shows a hollow heading.
  *
- * Records are all-time: `stats.leaderboard` aggregates every completed match in
- * the org with no date cutoff. The weekly figures on that query drive the ↑/↓
- * movement arrows on the Leaders tab only, and are not read here.
+ * Pass `{ season: true }` for the current stretch: the bar is looser so a
+ * short season still has names. All-time keeps the hard bar.
  */
-export function buildRecords(board: Board): RecordGroup[] {
+export function buildRecords(
+  board: Board,
+  opts: { season?: boolean } = {},
+): RecordGroup[] {
   const push = <T extends { displayName: string; userId: Id<"users"> }>(
     items: FeatRecord[],
     label: string,
@@ -128,12 +130,13 @@ export function buildRecords(board: Board): RecordGroup[] {
   // Everyone with enough of a body of work to hold a record, per discipline.
   // Counts and rates draw from the same pool on purpose: "most ducks" off two
   // innings is no more meaningful than a two-over economy.
+  const minBalls = opts.season ? 6 : RECORD_MIN_BALLS;
+  const minInns = opts.season ? 1 : RECORD_MIN_INNINGS;
   const bat = board.batting.filter(
-    (r) => r.balls >= RECORD_MIN_BALLS && r.innings >= RECORD_MIN_INNINGS,
+    (r) => r.balls >= minBalls && r.innings >= minInns,
   );
   const bowl = board.bowling.filter(
-    (r) =>
-      r.legalBalls >= RECORD_MIN_BALLS && r.innings >= RECORD_MIN_INNINGS,
+    (r) => r.legalBalls >= minBalls && r.innings >= minInns,
   );
   // Catches and turnout belong to neither discipline's ball count, so they
   // qualify on having cleared the bar as a batter or as a bowler — i.e. on
@@ -166,7 +169,7 @@ export function buildRecords(board: Board): RecordGroup[] {
   );
   push(
     honour,
-    "Best knock",
+    "Best score",
     bestBy(bat, (r) => r.bestScore, { tieBreak: tieHonourBat }),
     (r) => String(r.bestScore),
   );
@@ -186,7 +189,7 @@ export function buildRecords(board: Board): RecordGroup[] {
   }, null);
   if (figures) {
     honour.push({
-      label: "Best figures",
+      label: "Best spell",
       value: figures.row.best,
       holder: figures.row.displayName,
       holderId: figures.row.userId,
@@ -194,7 +197,7 @@ export function buildRecords(board: Board): RecordGroup[] {
   }
   push(
     honour,
-    "Best strike rate",
+    "Super striker",
     bestBy(bat, (r) => r.strikeRate, { tieBreak: tieHonourBat }),
     (r) => r.strikeRate.toFixed(0),
   );
@@ -225,6 +228,12 @@ export function buildRecords(board: Board): RecordGroup[] {
     "Most catches",
     bestBy(allRound, (r) => r.catches, { tieBreak: tieHonourAllRound }),
     (r) => String(r.catches),
+  );
+  push(
+    honour,
+    "Most dots",
+    bestBy(bowl, (r) => r.dots, { tieBreak: tieHonourBowl }),
+    (r) => String(r.dots),
   );
   /**
    * Turnout, not `allRound.matches` — the latter counts only matches a player
