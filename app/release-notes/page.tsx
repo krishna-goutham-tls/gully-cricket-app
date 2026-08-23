@@ -1,7 +1,6 @@
-import { NOTE_FEED } from "@/content/feed";
-import { RELEASE_NOTES_INTRO } from "@/content/release-notes";
-import { FeedList } from "@/components/reading/FeedList";
+import { NoteList } from "@/components/reading/NoteList";
 import { ReadingChrome } from "@/components/reading/ReadingChrome";
+import { RELEASE_NOTES, RELEASE_NOTES_INTRO } from "@/content/release-notes";
 
 export const metadata = {
   title: "Notes",
@@ -20,7 +19,7 @@ export default function ReleaseNotesPage() {
           <p key={paragraph}>{paragraph}</p>
         ))}
       </div>
-      <FeedList items={NOTE_FEED} />
+      <NoteList notes={RELEASE_NOTES} />
     </ReadingChrome>
   );
 }

@@ -168,7 +168,7 @@ export const COUNTING: Rule[] = [
   {
     emoji: "🧢",
     title: "Orange Cap and Purple Cap",
-    body: "This season, most runs is Orange Cap. Most wickets is Purple Cap. Regulars only. The labels sit on Home before the names load.",
+    body: "This season, most runs is Orange Cap. Most wickets is Purple Cap. Regulars only.",
     tilt: "r",
   },
   {

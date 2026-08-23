@@ -1,5 +1,8 @@
-import { formatFeedDate } from "@/content/feed";
-import { getReleaseNote, RELEASE_NOTES } from "@/content/release-notes";
+import {
+  formatNoteDate,
+  getReleaseNote,
+  RELEASE_NOTES,
+} from "@/content/release-notes";
 import { ReadingChrome } from "@/components/reading/ReadingChrome";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -50,7 +53,7 @@ export default function ReleaseNotePage({
           dateTime={note.date}
           className="text-[13px] font-semibold text-faint"
         >
-          {formatFeedDate(note.date)}
+          {formatNoteDate(note.date)}
         </time>
         <h1 className="mt-3 text-3xl font-bold tracking-tight text-ink sm:text-4xl">
           {note.title}

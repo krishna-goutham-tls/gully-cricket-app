@@ -4,7 +4,6 @@ import {
   RuleCard,
   RuleChipRow,
 } from "@/components/landing/ruleCards";
-import { ReadingNav } from "@/components/reading/ReadingNav";
 import { Logo } from "@/components/ui/Logo";
 import Link from "next/link";
 
@@ -25,7 +24,28 @@ export default function GullyRulesPage() {
     <main className="full-bleed min-h-dvh bg-bg">
       {/* Header + hero */}
       <div className="mx-auto max-w-5xl px-5 pt-6">
-        <ReadingNav />
+        <header className="flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2.5">
+            <Logo size={32} />
+            <span className="font-bold tracking-tight text-ink">
+              Gully Cricket
+            </span>
+          </Link>
+          <nav className="flex shrink-0 items-center">
+            <Link
+              href="/release-notes"
+              className="inline-flex min-h-11 items-center rounded-xl px-2.5 text-sm font-semibold text-muted hover:bg-ink/[0.04]"
+            >
+              Notes
+            </Link>
+            <Link
+              href="/"
+              className="inline-flex min-h-11 items-center rounded-xl px-2.5 text-sm font-semibold text-muted hover:bg-ink/[0.04]"
+            >
+              Home
+            </Link>
+          </nav>
+        </header>
 
         <div className="mt-10 text-center sm:mt-14">
           <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-accent-deep">
