@@ -9,16 +9,14 @@ import { useEffect } from "react";
 // signed-in visit as "on an open path, send to /home" (page.tsx already does).
 // /privacy and /support are public policy pages (Apple requires both URLs
 // live on the domain before an iOS app can ship).
-// /gully-rules, /feed, /match-stories, /release-notes are public reading pages
-// — nested slugs stay open too. Only "/" and "/login" bounce signed-in users.
+// /gully-rules and /release-notes are public reading pages — nested slugs
+// stay open too. Only "/" and "/login" bounce signed-in users.
 const OPEN_PATHS = [
   "/",
   "/login",
   "/privacy",
   "/support",
   "/gully-rules",
-  "/feed",
-  "/match-stories",
   "/release-notes",
 ];
 

@@ -1,8 +1,10 @@
 import {
+  COUNTING,
   RULES,
   RuleCard,
   RuleChipRow,
 } from "@/components/landing/ruleCards";
+import { ReadingNav } from "@/components/reading/ReadingNav";
 import { Logo } from "@/components/ui/Logo";
 import Link from "next/link";
 
@@ -23,20 +25,7 @@ export default function GullyRulesPage() {
     <main className="full-bleed min-h-dvh bg-bg">
       {/* Header + hero */}
       <div className="mx-auto max-w-5xl px-5 pt-6">
-        <header className="flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5">
-            <Logo size={32} />
-            <span className="font-bold tracking-tight text-ink">
-              Gully Cricket
-            </span>
-          </Link>
-          <Link
-            href="/"
-            className="inline-flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold text-muted hover:bg-ink/[0.04]"
-          >
-            Home
-          </Link>
-        </header>
+        <ReadingNav />
 
         <div className="mt-10 text-center sm:mt-14">
           <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-accent-deep">
@@ -64,6 +53,27 @@ export default function GullyRulesPage() {
       <div className="mx-auto max-w-5xl px-5 pb-4 pt-10 sm:pt-14">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
           {RULES.map((r) => (
+            <RuleCard key={r.title} {...r} />
+          ))}
+        </div>
+      </div>
+
+      {/* How we count */}
+      <div className="mx-auto max-w-5xl px-5 pb-4 pt-10 sm:pt-14">
+        <div className="text-center">
+          <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-accent-deep">
+            The ranking maths
+          </p>
+          <h2 className="mt-3 text-2xl font-bold tracking-tight text-ink sm:text-3xl">
+            How we count.
+          </h2>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted sm:text-base">
+            Same formula on Leaders, Player of the Match, and season awards.
+            Nobody picks a name.
+          </p>
+        </div>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
+          {COUNTING.map((r) => (
             <RuleCard key={r.title} {...r} />
           ))}
         </div>

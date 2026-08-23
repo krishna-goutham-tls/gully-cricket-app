@@ -142,3 +142,46 @@ export const RULES: Rule[] = [
     tilt: "r",
   },
 ];
+
+/** Ranking maths — live on Leaders, Match Story, and season awards. */
+export const COUNTING: Rule[] = [
+  {
+    emoji: "🧮",
+    title: "All-round points",
+    body: "1 point per run. 20 per wicket. 8 per catch. That number ranks Players, crowns Player of the Match, and seeds auto-formed teams.",
+    knob: "1 · 20 · 8",
+    tilt: "l",
+  },
+  {
+    emoji: "📈",
+    title: "Big days",
+    body: "A batting innings of 25, 50, 75, or 100 adds 5, 15, 25, or 40. Three wickets in a match add 5. Five wickets add 40.",
+    knob: "On top of the base",
+    tilt: "r",
+  },
+  {
+    emoji: "⭐",
+    title: "Player of the Match",
+    body: "Highest all-round points in that match. The app counts it. Nobody picks a name.",
+    tilt: "l",
+  },
+  {
+    emoji: "🧢",
+    title: "Orange Cap and Purple Cap",
+    body: "This season, most runs is Orange Cap. Most wickets is Purple Cap. Regulars only. The labels sit on Home before the names load.",
+    tilt: "r",
+  },
+  {
+    emoji: "👑",
+    title: "Player of the Season",
+    body: "When an admin ends a season, the highest all-round points on that board is Player of the Season. Same formula as a match.",
+    tilt: "l",
+  },
+  {
+    emoji: "📅",
+    title: "Season vs all time",
+    body: "Leaders and Records can show this season or the whole book. All-time rate records need 24 balls and 3 innings. A season is looser so a short stretch can still have a holder.",
+    knob: "24 balls · 3 innings (all time)",
+    tilt: "r",
+  },
+];

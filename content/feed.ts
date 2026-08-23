@@ -1,10 +1,7 @@
-import { MATCH_STORIES, storyPreview, type MatchStory } from "./match-stories";
 import { RELEASE_NOTES, type ReleaseNote } from "./release-notes";
 
-export type FeedKind = "story" | "note";
-
 export type FeedItem = {
-  kind: FeedKind;
+  kind: "note";
   slug: string;
   date: string;
   title: string;
@@ -15,17 +12,6 @@ export type FeedItem = {
 function firstSentence(text: string): string {
   const match = text.match(/^.+?[.]/);
   return (match ? match[0] : text).trim();
-}
-
-function storyItem(story: MatchStory): FeedItem {
-  return {
-    kind: "story",
-    slug: story.slug,
-    date: story.date,
-    title: story.title,
-    href: `/match-stories/${story.slug}`,
-    preview: storyPreview(story),
-  };
 }
 
 function noteItem(note: ReleaseNote): FeedItem {
@@ -39,18 +25,7 @@ function noteItem(note: ReleaseNote): FeedItem {
   };
 }
 
-/** Combined feed, newest calendar date first. Same day: Story, then App. */
-export const FEED: FeedItem[] = [
-  ...MATCH_STORIES.map(storyItem),
-  ...RELEASE_NOTES.map(noteItem),
-].sort((a, b) => {
-  if (a.date !== b.date) return b.date.localeCompare(a.date);
-  if (a.kind !== b.kind) return a.kind === "story" ? -1 : 1;
-  return 0;
-});
-
-export const STORY_FEED = FEED.filter((item) => item.kind === "story");
-export const NOTE_FEED = FEED.filter((item) => item.kind === "note");
+export const NOTE_FEED: FeedItem[] = RELEASE_NOTES.map(noteItem);
 
 /** Noon UTC on the heading date, so unread compares calendar days only. */
 export function feedDateAt(date: string): number {
@@ -58,7 +33,7 @@ export function feedDateAt(date: string): number {
   return Date.UTC(year, month - 1, day, 12, 0, 0);
 }
 
-/** "22 August 2026" — same shape as the match-story headings. */
+/** "22 August 2026" */
 export function formatFeedDate(date: string): string {
   return new Date(feedDateAt(date)).toLocaleDateString("en-GB", {
     day: "numeric",
@@ -69,9 +44,5 @@ export function formatFeedDate(date: string): string {
 }
 
 export const latestFeedAt = Math.max(
-  ...FEED.map((item) => feedDateAt(item.date)),
+  ...NOTE_FEED.map((item) => feedDateAt(item.date)),
 );
-
-export function feedKindLabel(kind: FeedKind): "Story" | "App" {
-  return kind === "story" ? "Story" : "App";
-}
