@@ -34,7 +34,7 @@ function Chip({
       type="button"
       onClick={onClick}
       className={cn(
-        "min-h-11 rounded-2xl border px-4 text-sm font-medium transition active:scale-[0.98]",
+        "min-h-11 rounded-xl border px-4 text-sm font-medium transition active:scale-[0.98]",
         selected
           ? "border-accent bg-accent-soft font-semibold text-accent-deep"
           : "border-line bg-surface text-ink hover:bg-bg",

@@ -66,7 +66,7 @@ export function ShareButton({
         disabled={busy}
         aria-label="Share card"
         className={cn(
-          "flex h-11 w-11 items-center justify-center rounded-xl disabled:opacity-60",
+          "flex h-11 w-11 items-center justify-center rounded-lg disabled:opacity-60",
           BUTTON_TONE[tone],
           className,
         )}

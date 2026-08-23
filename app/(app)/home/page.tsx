@@ -3,7 +3,6 @@
 import {
   LiveHero,
   MatchCard,
-  SeriesCard,
   type MatchRow,
 } from "@/components/home/HomeCards";
 import { FeedDoor } from "@/components/home/FeedDoor";
@@ -16,6 +15,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { groupByDay } from "@/lib/dates";
+import { TruncText } from "@/components/ui/TruncText";
 import { cn, errorMessage } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { ChevronRight, History, Medal, Plus, Sparkles } from "lucide-react";
@@ -53,18 +53,14 @@ function ExploreCard({
   return (
     <Link
       href={href}
-      className="flex min-h-12 min-w-0 flex-1 items-center gap-2.5 rounded-2xl border border-line bg-surface px-3 py-2.5 active:bg-bg"
+      className="flex min-h-12 min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-line bg-surface px-3 py-2.5 active:bg-bg"
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-deep">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-deep">
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[15px] font-semibold text-ink">
-          {title}
-        </span>
-        <span className="tabular block truncate text-[11px] text-muted">
-          {meta}
-        </span>
+        <TruncText className="text-[15px] font-semibold text-ink">{title}</TruncText>
+        <TruncText className="tabular text-[11px] text-muted">{meta}</TruncText>
       </span>
       <ChevronRight className="h-4 w-4 shrink-0 text-faint" />
     </Link>
@@ -171,24 +167,18 @@ export default function HomePage() {
 
         {hero ? <LiveHero {...cardProps(hero)} /> : null}
 
-        {series ? (
-          <div className={cn(hero && "mt-3")}>
-            <SeriesCard series={series} />
-          </div>
-        ) : null}
-
         <Button
           href="/matches/new"
           size="lg"
           fullWidth
-          variant={hero || series ? "secondary" : "primary"}
-          className={cn((hero || series) && "mt-3")}
+          variant={hero ? "secondary" : "primary"}
+          className={cn(hero && "mt-3")}
         >
           <Plus className="h-5 w-5" strokeWidth={2.4} />
           Start match
         </Button>
 
-        <SeasonStrip />
+        <SeasonStrip series={series} />
 
         {/* The doorways: full history and the record book. Two thin cards on
             one line — visible without scrolling, never competing with the

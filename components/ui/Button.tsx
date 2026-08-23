@@ -43,7 +43,7 @@ export const Button = forwardRef<
   ref,
 ) {
   const cls = cn(
-    "inline-flex items-center justify-center gap-2 rounded-2xl px-5 text-[15px] font-semibold transition duration-150 disabled:cursor-not-allowed disabled:opacity-40",
+    "inline-flex items-center justify-center gap-2 rounded-xl px-5 text-[15px] font-semibold transition duration-150 disabled:cursor-not-allowed disabled:opacity-40",
     sizes[size],
     styles[variant],
     fullWidth && "w-full",

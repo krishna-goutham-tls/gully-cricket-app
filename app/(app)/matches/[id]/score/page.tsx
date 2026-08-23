@@ -93,7 +93,7 @@ function OverTracker({
             <span
               key={b._id}
               className={cn(
-                "tabular flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-xs font-bold",
+                "tabular flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold",
                 chipClass(b),
               )}
             >
@@ -107,7 +107,7 @@ function OverTracker({
           <span
             key={b._id}
             className={cn(
-              "tabular flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-xs font-bold",
+              "tabular flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-[11px] font-semibold",
               chipClass(b),
             )}
           >
@@ -336,13 +336,13 @@ export default function ScorePage() {
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div className="flex flex-1 flex-col justify-center text-center">
-          <p className="text-sm font-medium uppercase tracking-wide text-faint">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">
             Live now
           </p>
           <h1 className="mt-2 text-2xl font-semibold text-ink">
             {state.sideA.name} vs {state.sideB.name}
           </h1>
-          <p className="mt-2 text-sm text-muted">
+          <p className="mt-2 text-[13px] text-muted">
             You&apos;re not in today&apos;s squad — watch along instead.
           </p>
           <Link
@@ -414,7 +414,7 @@ export default function ScorePage() {
               : (bi?.leadText ?? "Innings break")
             : `${batting.name} bat first`}
         </h1>
-        <p className="mt-1.5 text-sm text-muted">
+        <p className="mt-1.5 text-[13px] text-muted">
           {isBreak
             ? `${batting.name} bat${isFollowOn ? " again — follow-on" : ""} — pick ${
                 solo ? "the first batter" : "the openers"
@@ -423,7 +423,7 @@ export default function ScorePage() {
               ? "One batter at a time — pick who opens and who bowls."
               : "Pick the openers and opening bowler."}
         </p>
-        {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
+        {error ? <p className="mt-4 text-[13px] text-danger">{error}</p> : null}
         <div className="mt-6 space-y-4">
           {isBreak && bi?.canChooseSide && bi.followOnSide ? (
             <div className="rounded-3xl border border-line bg-surface p-4">
@@ -454,7 +454,7 @@ export default function ScorePage() {
                     )}
                   >
                     {opt.side === "A" ? state.sideA.name : state.sideB.name}
-                    <span className="block text-xs font-normal text-faint">
+                    <span className="block text-[11px] font-normal text-faint">
                       {opt.note}
                     </span>
                   </button>
@@ -525,7 +525,7 @@ export default function ScorePage() {
     return (
       <div className="flex min-h-dvh flex-col bg-bg px-5 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-[calc(var(--safe-top)+1rem)]">
         <div className="flex flex-1 flex-col justify-center text-center">
-          <p className="text-sm font-medium uppercase tracking-wide text-faint">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">
             {state.status === "abandoned" ? "Abandoned" : "Match complete"}
           </p>
           <h1 className="mt-3 text-2xl font-semibold text-ink">
@@ -744,7 +744,7 @@ export default function ScorePage() {
               type="button"
               disabled={busy}
               onClick={() => setConfirmEndInnings(true)}
-              className="-my-1 -mr-1 inline-flex min-h-11 items-center rounded-xl px-2 text-xs font-semibold uppercase tracking-wide text-bg/70 active:bg-white/10 hover:bg-white/10"
+              className="-my-1 -mr-1 inline-flex min-h-11 items-center rounded-lg px-2 text-[11px] font-semibold uppercase tracking-wide text-bg/70 active:bg-white/10 hover:bg-white/10"
             >
               {declareMode ? "Declare" : "End"}
             </button>
@@ -769,7 +769,7 @@ export default function ScorePage() {
               {live.wickets}
             </p>
             <div className="pb-1 text-left">
-              <p className="tabular text-[2.25rem] font-bold leading-none text-bg">
+              <p className="tabular text-[2.25rem] font-semibold leading-none text-bg">
                 {live.oversText}
               </p>
               <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-bg/70">
@@ -778,7 +778,7 @@ export default function ScorePage() {
             </div>
           </div>
           {live.runRate > 0 || live.potBalls > 0 ? (
-            <p className="tabular mt-2 text-sm text-bg/70">
+            <p className="tabular mt-2 text-[13px] text-bg/70">
               {live.runRate > 0 ? `RR ${live.runRate.toFixed(1)}` : null}
               {/* Spare balls left behind by batters out inside their quota —
                   the thing that decides whether anyone has to retire. */}
@@ -810,7 +810,7 @@ export default function ScorePage() {
 
         <div
           className={cn(
-            "mt-4 grid gap-2 text-center text-xs",
+            "mt-4 grid gap-2 text-center text-[11px]",
             solo ? "grid-cols-2" : "grid-cols-3",
           )}
         >
@@ -819,16 +819,19 @@ export default function ScorePage() {
             <p className="font-semibold uppercase tracking-wide text-accent">
               {solo ? "Batting" : "On strike"}
             </p>
-            <p className="mt-0.5 truncate font-bold text-bg">
+            <p
+              className="mt-0.5 line-clamp-2 text-[15px] font-semibold text-bg [overflow-wrap:anywhere]"
+              title={live.striker?.displayName ?? undefined}
+            >
               {live.striker?.displayName ?? "—"}
               {solo ? null : <span className="text-accent">*</span>}
             </p>
             {live.figures.striker ? (
-              <p className="tabular mt-0.5 text-xs text-bg/70">
+              <p className="tabular mt-0.5 text-[13px] text-bg/70">
                 {live.figures.striker.runs}({live.figures.striker.balls})
                 {live.strikerQuota &&
                 live.strikerQuota.faced >= live.strikerQuota.cap ? (
-                  <span className="font-bold text-accent">
+                  <span className="font-semibold text-accent">
                     {" "}
                     · {live.strikerQuota.faced}/{live.strikerQuota.cap}
                   </span>
@@ -838,16 +841,21 @@ export default function ScorePage() {
           </div>
           {solo ? null : (
             <div className="rounded-2xl bg-white/[0.05] px-2 py-2">
-              <p className="uppercase tracking-wide text-bg/70">Non-striker</p>
-              <p className="mt-0.5 truncate font-medium text-bg/75">
+              <p className="font-semibold uppercase tracking-wide text-bg/70">
+                Non-striker
+              </p>
+              <p
+                className="mt-0.5 line-clamp-2 text-[15px] font-semibold text-bg/70 [overflow-wrap:anywhere]"
+                title={live.nonStriker?.displayName ?? undefined}
+              >
                 {live.nonStriker?.displayName ?? "—"}
               </p>
               {live.figures.nonStriker ? (
-                <p className="tabular mt-0.5 text-xs text-bg/70">
+                <p className="tabular mt-0.5 text-[13px] text-bg/70">
                   {live.figures.nonStriker.runs}({live.figures.nonStriker.balls})
                   {live.nonStrikerQuota &&
                   live.nonStrikerQuota.faced >= live.nonStrikerQuota.cap ? (
-                    <span className="font-bold text-accent">
+                    <span className="font-semibold text-accent">
                       {" "}
                       · {live.nonStrikerQuota.faced}/{live.nonStrikerQuota.cap}
                     </span>
@@ -857,12 +865,17 @@ export default function ScorePage() {
             </div>
           )}
           <div className="rounded-2xl bg-white/[0.05] px-2 py-2">
-            <p className="uppercase tracking-wide text-bg/70">Bowling</p>
-            <p className="mt-0.5 truncate font-medium text-bg/90">
+            <p className="font-semibold uppercase tracking-wide text-bg/70">
+              Bowling
+            </p>
+            <p
+              className="mt-0.5 line-clamp-2 text-[15px] font-semibold text-bg [overflow-wrap:anywhere]"
+              title={live.bowler?.displayName ?? undefined}
+            >
               {live.bowler?.displayName ?? "—"}
             </p>
             {live.figures.bowler ? (
-              <p className="tabular mt-0.5 text-xs text-bg/70">
+              <p className="tabular mt-0.5 text-[13px] text-bg/70">
                 {live.figures.bowler.wickets}-{live.figures.bowler.runs}
               </p>
             ) : null}
@@ -877,7 +890,7 @@ export default function ScorePage() {
       </header>
 
       {error ? (
-        <div className="mx-4 mt-3 rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-sm text-danger">
+        <div className="mx-4 mt-3 rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-[13px] text-danger">
           {error}
         </div>
       ) : null}
@@ -982,7 +995,7 @@ export default function ScorePage() {
           <div className="max-h-[80dvh] w-full overflow-y-auto rounded-t-3xl bg-surface p-5 shadow-2xl safe-bottom">
             {activeSheet.kind === "extra" ? (
               <>
-                <p className="text-sm font-semibold text-ink">
+                <p className="text-[15px] font-semibold text-ink">
                   {activeSheet.type === "bye" ? "Byes" : "Leg byes"}
                 </p>
                 <div className="mt-4 grid grid-cols-4 gap-2">
@@ -1007,7 +1020,7 @@ export default function ScorePage() {
 
             {activeSheet.kind === "wicket" ? (
               <>
-                <p className="text-sm font-semibold text-danger">Wicket</p>
+                <p className="text-[15px] font-semibold text-danger">Wicket</p>
                 <p className="mt-3 text-[13px] font-medium text-muted">How out?</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {WICKET_TYPES.map((w) => (
@@ -1110,7 +1123,7 @@ export default function ScorePage() {
 
             {activeSheet.kind === "bowler" ? (
               <>
-                <p className="text-sm font-semibold text-ink">
+                <p className="text-[15px] font-semibold text-ink">
                   {midOverBowlerChange ? "Who finishes the over?" : "Next bowler"}
                 </p>
                 <p className="mt-1 text-[13px] text-muted">
@@ -1135,7 +1148,7 @@ export default function ScorePage() {
                         className="min-h-11 rounded-2xl border border-line px-3 py-3.5 text-left text-[15px] font-medium text-ink active:scale-[0.98] active:border-accent active:bg-accent-soft"
                       >
                         {p.displayName}
-                        <span className="tabular block text-xs font-normal text-faint">
+                        <span className="tabular block text-[11px] font-normal text-faint">
                           {p.oversText} ov bowled
                         </span>
                       </button>
@@ -1144,7 +1157,7 @@ export default function ScorePage() {
                 )}
                 {noBowlerToFollow ? (
                   <div className="mt-4 rounded-2xl border border-line bg-bg p-4">
-                    <p className="text-sm font-semibold text-ink">
+                    <p className="text-[15px] font-semibold text-ink">
                       Nobody left to bowl
                     </p>
                     <p className="mt-1 text-[13px] text-muted">
@@ -1174,7 +1187,7 @@ export default function ScorePage() {
 
             {activeSheet.kind === "batsman" ? (
               <>
-                <p className="text-sm font-semibold text-ink">Next batsman</p>
+                <p className="text-[15px] font-semibold text-ink">Next batsman</p>
                 {live.potBalls > 0 ? (
                   <p className="mt-1 text-[13px] text-muted">
                     {live.potBalls} spare {live.potBalls === 1 ? "ball" : "balls"}{" "}
@@ -1219,19 +1232,19 @@ export default function ScorePage() {
                       >
                         {p.displayName}
                         {!p.selectable ? (
-                          <span className="tabular block text-xs font-normal text-faint">
+                          <span className="tabular block text-[11px] font-normal text-faint">
                             Quota done · {p.runs}({p.balls})
                           </span>
                         ) : p.atCap ? (
-                          <span className="tabular block text-xs font-semibold text-accent-deep">
+                          <span className="tabular block text-[11px] font-semibold text-accent-deep">
                             Spare balls · {p.runs}({p.balls})
                           </span>
                         ) : p.retired ? (
-                          <span className="tabular block text-xs font-semibold text-accent-deep">
+                          <span className="tabular block text-[11px] font-semibold text-accent-deep">
                             Resume · {p.runs}({p.balls})
                           </span>
                         ) : (
-                          <span className="tabular block text-xs font-normal text-faint">
+                          <span className="tabular block text-[11px] font-normal text-faint">
                             {p.balls > 0 ? `${p.runs}(${p.balls})` : "Yet to bat"}
                           </span>
                         )}
@@ -1241,7 +1254,7 @@ export default function ScorePage() {
                 )}
                 {noBatterToFollow ? (
                   <div className="mt-4 rounded-2xl border border-line bg-bg p-4">
-                    <p className="text-sm font-semibold text-ink">
+                    <p className="text-[15px] font-semibold text-ink">
                       Nobody left to come in
                     </p>
                     <p className="mt-1 text-[13px] text-muted">
@@ -1271,7 +1284,7 @@ export default function ScorePage() {
 
             {activeSheet.kind === "retire" ? (
               <>
-                <p className="text-sm font-semibold text-ink">
+                <p className="text-[15px] font-semibold text-ink">
                   Retire batter
                 </p>
                 <p className="mt-1 text-[13px] text-muted">
@@ -1357,7 +1370,7 @@ export default function ScorePage() {
 
             {activeSheet.kind === "drop" ? (
               <>
-                <p className="text-sm font-semibold text-ink">
+                <p className="text-[15px] font-semibold text-ink">
                   {state.lastBallDrop
                     ? `${state.lastBallDrop.byName} dropped it`
                     : "Who dropped it?"}
@@ -1435,7 +1448,7 @@ export default function ScorePage() {
 
             {activeSheet.kind === "squad" ? (
               <>
-                <p className="text-sm font-semibold text-ink">Squads</p>
+                <p className="text-[15px] font-semibold text-ink">Squads</p>
                 <p className="mt-1 text-[13px] text-muted">
                   Someone turned up late? Put them on a side, or on both. Tap a
                   common player&apos;s team to release them to just that side.
@@ -1448,15 +1461,15 @@ export default function ScorePage() {
                       className="rounded-2xl border border-line p-3"
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <p className="truncate text-sm font-medium text-ink">
+                        <p className="truncate text-[15px] font-semibold text-ink">
                           {row.displayName}
                         </p>
                         {row.sides.length === 2 ? (
-                          <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent-deep">
+                          <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent-deep">
                             Both
                           </span>
                         ) : row.sides.length === 0 ? (
-                          <span className="shrink-0 rounded-full bg-bg px-2 py-0.5 text-xs font-medium text-muted">
+                          <span className="shrink-0 rounded-full bg-bg px-2 py-0.5 text-[11px] font-medium text-muted">
                             Not playing
                           </span>
                         ) : null}
@@ -1485,7 +1498,7 @@ export default function ScorePage() {
                               disabled={squadBusyId !== null}
                               onClick={() => assignSides(row.userId, [...opt.sides])}
                               className={cn(
-                                "min-h-11 truncate rounded-xl border px-2 py-2 text-xs font-medium transition disabled:opacity-40",
+                                "min-h-11 truncate rounded-xl border px-2 py-2 text-[13px] font-medium transition disabled:opacity-40",
                                 on
                                   ? "border-accent bg-accent-soft text-accent-deep"
                                   : "border-line text-muted",
@@ -1517,7 +1530,7 @@ export default function ScorePage() {
                 </div>
 
                 {squadError ? (
-                  <p className="mt-3 text-sm text-danger">{squadError}</p>
+                  <p className="mt-3 text-[13px] text-danger">{squadError}</p>
                 ) : null}
 
                 <Button

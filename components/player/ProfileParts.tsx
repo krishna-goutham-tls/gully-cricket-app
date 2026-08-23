@@ -325,7 +325,7 @@ function Cell({
     <Link
       href={`/players/${who.userId}`}
       className={cn(
-        "min-h-12 min-w-0 flex-1 rounded-2xl px-3 py-2.5 active:opacity-70",
+        "min-h-12 min-w-0 flex-1 rounded-xl px-3 py-2.5 active:opacity-70",
         tone === "easy" ? "bg-accent-soft" : "bg-ink/[0.05]",
       )}
     >
@@ -431,7 +431,7 @@ export function MatchupTable({
           {title}
         </p>
       )}
-      <div className="overflow-hidden rounded-3xl border border-line bg-surface">
+      <div className="overflow-hidden rounded-2xl border border-line bg-surface">
         {/* Column labels for the collapsed rows below. Rows expand for the full
             texture (4s, 6s, dot%) so the top line stays thumb-scannable. */}
         <div className="flex items-center gap-2 border-b border-line px-3.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-faint">
@@ -516,7 +516,7 @@ export function MatchupTable({
         <button
           type="button"
           onClick={() => setAll((v) => !v)}
-          className="mt-2 flex min-h-11 w-full items-center justify-center gap-1 rounded-2xl border border-line bg-surface text-[13px] font-semibold text-muted active:bg-bg"
+          className="mt-2 flex min-h-11 w-full items-center justify-center gap-1 rounded-xl border border-line bg-surface text-[13px] font-semibold text-muted active:bg-bg"
         >
           {all ? "Show fewer" : `Show all ${rows.length}`}
           <ChevronDown
@@ -550,7 +550,7 @@ export function bowlFigure(row: LogRow) {
  */
 export function InningsLog({ rows }: { rows: LogRow[] }) {
   return (
-    <div className="overflow-hidden rounded-3xl border border-line bg-surface">
+    <div className="overflow-hidden rounded-2xl border border-line bg-surface">
       {rows.map((row) => {
         const bat = batFigure(row);
         const bowl = bowlFigure(row);

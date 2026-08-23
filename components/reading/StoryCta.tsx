@@ -8,7 +8,7 @@ export function StoryCta() {
   const signedIn = Boolean(token && user);
 
   return (
-    <div className="mt-10 rounded-3xl border border-line bg-surface p-5 shadow-card">
+    <div className="mt-10 rounded-2xl border border-line bg-surface p-5 shadow-card">
       <Button
         href={signedIn ? "/home" : "/#invite"}
         size="lg"

@@ -12,7 +12,7 @@ export function FeedList({ items }: { items: FeedItem[] }) {
         <li key={`${item.kind}-${item.slug}`}>
           <Link
             href={item.href}
-            className="block min-h-12 rounded-3xl border border-line bg-surface px-4 py-3.5 active:bg-bg"
+            className="block min-h-12 rounded-xl border border-line bg-surface px-4 py-3.5 active:bg-bg"
           >
             <div className="flex flex-wrap items-center gap-2">
               <time dateTime={item.date} className="text-[13px] text-muted">

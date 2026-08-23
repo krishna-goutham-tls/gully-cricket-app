@@ -1,5 +1,6 @@
 "use client";
 
+import { TruncText } from "@/components/ui/TruncText";
 import { Id } from "@/convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { ArrowDown, ArrowUp } from "lucide-react";
@@ -71,6 +72,7 @@ export function RankedList({
   youId,
   showMovement = false,
   lowerIsBetter = false,
+  capLabel,
 }: {
   rows: RankRow[];
   /** Shown once, above the first row that missed the qualification bar. */
@@ -78,6 +80,8 @@ export function RankedList({
   youId?: Id<"users"> | string | null;
   /** Draw weekly climb/drop arrows — off until the board has a week of history. */
   showMovement?: boolean;
+  /** Season Orange Cap / Purple Cap — printed on the leading qualified row. */
+  capLabel?: string | null;
   /**
    * True for economy and the bowling/batting averages, where the *smallest*
    * number is the best. Without it the bar reads exactly backwards: scaling
@@ -112,7 +116,7 @@ export function RankedList({
   };
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-line bg-surface">
+    <div className="overflow-hidden rounded-2xl border border-line bg-surface">
       {rows.map((row, i) => {
         const first = i === 0 && row.qualified;
         const you = youId != null && String(row.userId) === String(youId);
@@ -146,9 +150,12 @@ export function RankedList({
                 >
                   {row.qualified ? i + 1 : "–"}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
+                <TruncText
+                  lines={2}
+                  className="flex-1 text-[15px] font-semibold text-ink"
+                >
                   {row.displayName}
-                </span>
+                </TruncText>
                 {row.tags && row.tags.length > 0
                   ? row.tags.map((tag) => (
                       <span
@@ -172,6 +179,11 @@ export function RankedList({
                 </span>
               </div>
               <div className="mt-1 flex items-center gap-2 pl-7 leading-tight">
+                {first && capLabel ? (
+                  <span className="shrink-0 text-[11px] font-semibold text-accent-deep">
+                    {capLabel}
+                  </span>
+                ) : null}
                 <span className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-line">
                   <span
                     className={cn(
@@ -181,9 +193,9 @@ export function RankedList({
                     style={{ width: `${pct}%` }}
                   />
                 </span>
-                <span className="tabular min-w-0 truncate text-[11px] text-faint">
+                <TruncText className="tabular flex-1 text-[11px] text-muted">
                   {row.meta}
-                </span>
+                </TruncText>
               </div>
             </Link>
           </Fragment>

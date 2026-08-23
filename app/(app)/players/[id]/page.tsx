@@ -134,7 +134,7 @@ function Expander({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex min-h-11 w-full items-center justify-between rounded-2xl border border-line bg-surface px-3.5 text-[13px] font-semibold text-ink active:bg-bg"
+        className="flex min-h-11 w-full items-center justify-between rounded-xl border border-line bg-surface px-3.5 text-[13px] font-semibold text-ink active:bg-bg"
       >
         {label}
         <ChevronDown
@@ -577,42 +577,33 @@ export default function PlayerDetailPage() {
 
       <main className="mx-auto max-w-md space-y-6 px-5 py-4">
         {isAdmin && token && activeOrgId ? (
-          <section>
-            <p className="px-1 text-[11px] font-semibold uppercase tracking-wide text-faint">
-              Tags
-            </p>
-            <div className="mt-1.5 rounded-2xl border border-line bg-surface px-3.5 py-3">
-              <PlayerTagEditor
-                tags={stats.playerTags}
-                busy={labelBusy}
-                onToggle={async (tag: PlayerTag) => {
-                  setLabelBusy(true);
-                  setLabelError(null);
-                  try {
-                    await togglePlayerTag({
-                      token,
-                      orgId: activeOrgId,
-                      userId: stats.userId,
-                      tag,
-                    });
-                  } catch (e) {
-                    setLabelError(
-                      errorMessage(e, "Could not update that tag"),
-                    );
-                  } finally {
-                    setLabelBusy(false);
-                  }
-                }}
-              />
-              <p className="mt-2 text-[12px] leading-snug text-muted">
-                Both can be on. A visiting kid gets Visitor and Junior.
-                Regulars have neither — they stay on the leaderboard.
-              </p>
-            </div>
+          <Section title="Tags">
+            <PlayerTagEditor
+              tags={stats.playerTags}
+              busy={labelBusy}
+              onToggle={async (tag: PlayerTag) => {
+                setLabelBusy(true);
+                setLabelError(null);
+                try {
+                  await togglePlayerTag({
+                    token,
+                    orgId: activeOrgId,
+                    userId: stats.userId,
+                    tag,
+                  });
+                } catch (e) {
+                  setLabelError(
+                    errorMessage(e, "Could not update that tag"),
+                  );
+                } finally {
+                  setLabelBusy(false);
+                }
+              }}
+            />
             {labelError ? (
-              <p className="mt-1 px-1 text-[12px] text-danger">{labelError}</p>
+              <p className="mt-1 text-[13px] text-danger">{labelError}</p>
             ) : null}
-          </section>
+          </Section>
         ) : null}
 
         <TrophyShelf trophies={trophies} />

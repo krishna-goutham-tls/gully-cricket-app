@@ -32,7 +32,7 @@ export function ConfirmDialog({
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/40 sm:items-center">
       <div className="safe-bottom w-full max-w-sm px-4 sm:px-0">
-        <div className="mb-4 rounded-3xl bg-surface p-5 shadow-card sm:mb-0">
+        <div className="mb-4 rounded-2xl bg-surface p-5 shadow-card sm:mb-0">
         <p className="text-[15px] font-semibold text-ink">{title}</p>
         {description ? (
           <p className="mt-1.5 text-[13px] leading-relaxed text-muted">

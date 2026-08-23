@@ -69,7 +69,7 @@ function OverTracker({
             <span
               key={b._id}
               className={cn(
-                "tabular flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-xs font-bold",
+                "tabular flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold",
                 chipClass(b),
               )}
             >
@@ -83,7 +83,7 @@ function OverTracker({
           <span
             key={b._id}
             className={cn(
-              "tabular flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-xs font-bold",
+              "tabular flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-[11px] font-semibold",
               chipClass(b),
             )}
           >
@@ -187,11 +187,11 @@ export default function WatchPage() {
               : `${state.sideA.name} vs ${state.sideB.name}`}
           </p>
           {done ? (
-            <span className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-bg/70">
+            <span className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-bg/70">
               {state.status === "abandoned" ? "Ended" : "Result"}
             </span>
           ) : (
-            <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-accent/20 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-accent">
+            <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-accent/20 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-accent">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
               Live
             </span>
@@ -206,7 +206,7 @@ export default function WatchPage() {
                 <span className="text-bg/70">/</span>
                 {live.wickets}
               </p>
-              <p className="tabular mt-2 text-sm text-bg/70">
+              <p className="tabular mt-2 text-[13px] text-bg/70">
                 {live.oversText} ov
                 {live.runRate > 0 ? ` · RR ${live.runRate.toFixed(1)}` : ""}
               </p>
@@ -230,7 +230,7 @@ export default function WatchPage() {
 
             <div
               className={cn(
-                "mt-4 grid gap-2 text-center text-xs",
+                "mt-4 grid gap-2 text-center text-[11px]",
                 solo ? "grid-cols-2" : "grid-cols-3",
               )}
             >
@@ -238,26 +238,32 @@ export default function WatchPage() {
                 <p className="font-semibold uppercase tracking-wide text-accent">
                   {solo ? "Batting" : "On strike"}
                 </p>
-                <p className="mt-0.5 truncate font-bold text-bg">
+                <p
+                  className="mt-0.5 line-clamp-2 text-[15px] font-semibold text-bg [overflow-wrap:anywhere]"
+                  title={live.striker?.displayName ?? undefined}
+                >
                   {live.striker?.displayName ?? "—"}
                   {solo ? null : <span className="text-accent">*</span>}
                 </p>
                 {live.figures.striker ? (
-                  <p className="tabular mt-0.5 text-xs text-bg/70">
+                  <p className="tabular mt-0.5 text-[13px] text-bg/70">
                     {live.figures.striker.runs}({live.figures.striker.balls})
                   </p>
                 ) : null}
               </div>
               {solo ? null : (
                 <div className="rounded-2xl bg-white/[0.05] px-2 py-2">
-                  <p className="uppercase tracking-wide text-bg/70">
+                  <p className="font-semibold uppercase tracking-wide text-bg/70">
                     Non-striker
                   </p>
-                  <p className="mt-0.5 truncate font-medium text-bg/75">
+                  <p
+                    className="mt-0.5 line-clamp-2 text-[15px] font-semibold text-bg/70 [overflow-wrap:anywhere]"
+                    title={live.nonStriker?.displayName ?? undefined}
+                  >
                     {live.nonStriker?.displayName ?? "—"}
                   </p>
                   {live.figures.nonStriker ? (
-                    <p className="tabular mt-0.5 text-xs text-bg/70">
+                    <p className="tabular mt-0.5 text-[13px] text-bg/70">
                       {live.figures.nonStriker.runs}(
                       {live.figures.nonStriker.balls})
                     </p>
@@ -265,12 +271,17 @@ export default function WatchPage() {
                 </div>
               )}
               <div className="rounded-2xl bg-white/[0.05] px-2 py-2">
-                <p className="uppercase tracking-wide text-bg/70">Bowling</p>
-                <p className="mt-0.5 truncate font-medium text-bg/90">
+                <p className="font-semibold uppercase tracking-wide text-bg/70">
+                  Bowling
+                </p>
+                <p
+                  className="mt-0.5 line-clamp-2 text-[15px] font-semibold text-bg [overflow-wrap:anywhere]"
+                  title={live.bowler?.displayName ?? undefined}
+                >
                   {live.bowler?.displayName ?? "—"}
                 </p>
                 {live.figures.bowler ? (
-                  <p className="tabular mt-0.5 text-xs text-bg/70">
+                  <p className="tabular mt-0.5 text-[13px] text-bg/70">
                     {live.figures.bowler.wickets}-{live.figures.bowler.runs}
                   </p>
                 ) : null}
@@ -312,7 +323,7 @@ export default function WatchPage() {
               <Pencil className="h-5 w-5" strokeWidth={2.4} />
               Resume scoring
             </Button>
-            <p className="mt-2 text-center text-xs text-faint">
+            <p className="mt-2 text-center text-[11px] text-faint">
               You&apos;re watching — nothing here changes the score.
             </p>
           </>
@@ -337,7 +348,7 @@ export default function WatchPage() {
               {state.innings.map((i) => (
                 <div
                   key={i._id}
-                  className="tabular flex items-center justify-between gap-3 text-sm"
+                  className="tabular flex items-center justify-between gap-3 text-[13px]"
                 >
                   <span className="min-w-0 truncate text-muted">
                     {i.battingSide === "A" ? state.sideA.name : state.sideB.name}

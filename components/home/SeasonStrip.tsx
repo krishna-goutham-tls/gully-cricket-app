@@ -1,9 +1,11 @@
 "use client";
 
+import { SeriesCard, type SeriesRow } from "@/components/home/HomeCards";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { api } from "@/convex/_generated/api";
+import { TruncText } from "@/components/ui/TruncText";
 import { errorMessage } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { ChevronRight } from "lucide-react";
@@ -26,10 +28,10 @@ function ordinal(n: number) {
 }
 
 /**
- * Home's season strip — play stays above this. One card: the live season,
- * or a quiet empty state. Admin start/end live here; winners are never picked.
+ * Home's season folder. A live series sits inside it — same card language,
+ * nested. Play (Start match) stays above, outside this card.
  */
-export function SeasonStrip() {
+export function SeasonStrip({ series }: { series?: SeriesRow | null }) {
   const { token, activeOrgId, isAdmin, user } = useAuth();
   const current = useQuery(
     api.seasons.current,
@@ -103,15 +105,15 @@ export function SeasonStrip() {
 
   if (current === undefined) {
     return (
-      <div className="mt-3 h-24 animate-pulse rounded-3xl bg-ink/[0.04]" />
+      <div className="mt-3 h-24 animate-pulse rounded-2xl bg-ink/[0.04]" />
     );
   }
 
   return (
     <>
-      <div className="mt-3 rounded-3xl border border-line bg-surface shadow-card">
+      <div className="mt-3 rounded-2xl border border-line bg-surface shadow-card">
         {error ? (
-          <p className="mx-4 mt-3 rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-sm text-danger">
+          <p className="mx-4 mt-3 rounded-xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-[13px] text-danger">
             {error}
           </p>
         ) : null}
@@ -120,50 +122,56 @@ export function SeasonStrip() {
           <>
             <Link
               href="/leaderboard"
-              className="flex min-h-11 items-start gap-2 px-4 py-3 active:bg-bg"
+              className="flex min-h-11 items-center gap-2 px-4 py-3 active:bg-bg"
             >
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[15px] font-semibold text-ink">
+                <TruncText className="text-[15px] font-semibold text-ink">
                   {current.name}
-                </span>
+                </TruncText>
                 {rank != null ? (
                   <span className="mt-0.5 block text-[13px] text-muted">
                     You · {ordinal(rank)} all-round
                   </span>
                 ) : null}
-                {orange || purple ? (
-                  <span className="mt-1.5 block space-y-0.5 text-[13px]">
-                    {orange ? (
-                      <span className="block truncate">
-                        <span className="font-semibold text-accent-deep">
-                          Orange Cap
-                        </span>
-                        <span className="text-ink"> {orange}</span>
-                      </span>
-                    ) : null}
-                    {purple ? (
-                      <span className="block truncate">
-                        <span className="font-semibold text-accent-deep">
-                          Purple Cap
-                        </span>
-                        <span className="text-ink"> {purple}</span>
-                      </span>
-                    ) : null}
-                  </span>
-                ) : null}
               </span>
-              <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-faint" />
+              <ChevronRight className="h-4 w-4 shrink-0 text-faint" />
             </Link>
-            {isAdmin ? (
-              <div className="px-4 pb-4">
-                <Button
-                  variant="secondary"
-                  fullWidth
-                  onClick={() => setPending("end")}
-                >
-                  End season
-                </Button>
+            {series ? (
+              <div className="px-3 pb-3">
+                <SeriesCard series={series} nested />
               </div>
+            ) : null}
+            {orange || purple ? (
+              <p className="border-t border-line px-4 py-2.5 text-[13px] leading-snug">
+                {orange ? (
+                  <>
+                    <span className="font-semibold text-accent-deep">
+                      Orange Cap
+                    </span>
+                    <span className="text-ink"> {orange}</span>
+                  </>
+                ) : null}
+                {orange && purple ? (
+                  <span className="text-muted"> · </span>
+                ) : null}
+                {purple ? (
+                  <>
+                    <span className="font-semibold text-accent-deep">
+                      Purple Cap
+                    </span>
+                    <span className="text-ink"> {purple}</span>
+                  </>
+                ) : null}
+              </p>
+            ) : null}
+            {isAdmin ? (
+              <button
+                type="button"
+                onClick={() => setPending("end")}
+                className="flex min-h-11 w-full items-center justify-center border-t border-line text-[13px] font-semibold text-muted active:bg-bg"
+              >
+                End season
+              </button>
             ) : null}
           </>
         ) : (
@@ -182,6 +190,11 @@ export function SeasonStrip() {
           </div>
         )}
       </div>
+      {!current && series ? (
+        <div className="mt-3">
+          <SeriesCard series={series} />
+        </div>
+      ) : null}
 
       <ConfirmDialog
         open={pending !== null}

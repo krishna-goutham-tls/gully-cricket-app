@@ -314,7 +314,7 @@ function CTA({
     <Link
       href={href}
       className={cn(
-        "inline-flex min-h-14 items-center justify-center rounded-2xl px-8 text-base font-semibold shadow-lift transition active:scale-[0.98]",
+        "inline-flex min-h-14 items-center justify-center rounded-xl px-8 text-base font-semibold shadow-lift transition active:scale-[0.98]",
         gold
           ? "bg-accent text-ink hover:bg-accent/90"
           : "bg-ink text-bg hover:bg-ink/90",
@@ -634,7 +634,7 @@ function GullyRules() {
       <div className="mt-8 text-center">
         <Link
           href="/gully-rules"
-          className="inline-flex min-h-12 items-center rounded-2xl border border-line bg-surface px-6 text-[15px] font-semibold text-ink shadow-card transition hover:bg-bg active:scale-[0.98]"
+          className="inline-flex min-h-12 items-center rounded-xl border border-line bg-surface px-6 text-[15px] font-semibold text-ink shadow-card transition hover:bg-bg active:scale-[0.98]"
         >
           The full rulebook →
         </Link>

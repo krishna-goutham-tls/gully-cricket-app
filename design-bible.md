@@ -45,8 +45,13 @@ Font: **Poppins** (`--font-sans`). Weight for UI: `font-semibold`. Body: default
 | 15px | `text-[15px] font-semibold` | Buttons, names, card titles |
 | 16px | `text-[16px]` | **Text inputs only** (stops iOS zoom) |
 | 20px | `text-xl font-semibold tracking-tight` | Sticky header titles |
+| 13px | `text-[13px] font-semibold text-muted` | Header subtitle / scope (`Season-01`) |
 | 24px | `text-2xl font-semibold tracking-tight text-ink` | Full-screen titles |
 | 24px | `text-2xl font-semibold tabular` | Stat numbers |
+
+Header subtitles that are short labels (`Season-01`, `All time`) do not truncate. The title cluster is `flex-1 min-w-0` so they have room.
+
+No `text-xs` (12px) or `text-sm` (14px) in the installed app — those are not on this scale. Use 11 / 13 / 15.
 
 Live score on the pad/watch may be larger. That is the one exception.
 
@@ -58,11 +63,11 @@ No half-pixels (`11.5`, `12.5`). No `tracking-[0.14em]` on labels — use `track
 
 | Kind | Height | Radius | Type |
 |------|--------|--------|------|
-| Primary / secondary **Button** | `min-h-12` | `rounded-2xl` | `text-[15px] font-semibold` |
-| Page-footer primary (one per screen) | `min-h-14` | `rounded-2xl` | same — `Button size="lg"` |
-| Icon / back | `h-11 w-11` | `rounded-xl` | icon 20px |
-| Segment / chip / tab | `min-h-11` | track `rounded-2xl`, thumb `rounded-xl`, filter chip `rounded-full` | `text-[13px] font-semibold` |
-| List row (tappable) | `min-h-12` | inside a `rounded-3xl` card | name `text-[15px] font-semibold` |
+| Primary / secondary **Button** | `min-h-12` | `rounded-xl` | `text-[15px] font-semibold` |
+| Page-footer primary (one per screen) | `min-h-14` | `rounded-xl` | same — `Button size="lg"` |
+| Icon / back | `h-11 w-11` | `rounded-lg` | icon 20px |
+| Segment / chip / tab | `min-h-11` | track `rounded-xl`, thumb `rounded-lg`, filter chip `rounded-lg` | `text-[13px] font-semibold` |
+| List row (tappable) | `min-h-12` | inside a `rounded-2xl` card | name `text-[15px] font-semibold` |
 | Score **pad key** | `min-h-16` | `rounded-2xl` | own type. Do not use `Button`. |
 | PIN key | `h-14` | `rounded-2xl` | PinPad only |
 
@@ -74,7 +79,19 @@ Disabled: `disabled:opacity-40 disabled:cursor-not-allowed`.
 
 Use `components/ui/Button.tsx` for every full-width or pair CTA (Start, Next, Approve, Add, Toss, Resume, Sign in). Pass `href` when it navigates.
 
-Use `components/ui/Input.tsx` for labelled text fields. Search-with-clear may stay custom but must keep `min-h-12 rounded-2xl text-[16px]`.
+Use `components/ui/Input.tsx` for labelled text fields. Search-with-clear may stay custom but must keep `min-h-12 rounded-xl text-[16px]`.
+
+Buttons are `rounded-xl`, not pills. `rounded-full` is for dots, bars, and tiny status marks — not for a tap target with a label.
+
+## Truncation
+
+A cut name must still be a name. Use `components/ui/TruncText.tsx`.
+
+- Always set `title` to the full string.
+- Player and team names: two lines (`lines={2}`) before ellipsis.
+- Do not truncate `Season-01` or other short scope labels.
+- One-line headers may stay one line.
+- Do not put a truncated name in `text-faint`.
 
 ---
 
@@ -88,7 +105,7 @@ Use `components/ui/Input.tsx` for labelled text fields. Search-with-clear may st
 - Sticky footers: outer `.safe-bottom`, inner `pb-3` (do not put `py-3` on the same node as `.safe-bottom`).
 - Sheets / confirms that sit on the home bar: same safe bottom.
 
-Cards: `rounded-3xl border border-line bg-surface shadow-card`.
+Cards: `rounded-2xl border border-line bg-surface shadow-card`.
 
 ---
 

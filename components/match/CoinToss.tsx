@@ -181,7 +181,7 @@ export function CoinToss({
                   setNudge(null);
                 }}
                 className={cn(
-                  "min-h-11 min-w-0 truncate rounded-2xl border px-3 text-[15px] font-semibold transition active:scale-[0.98]",
+                  "min-h-11 min-w-0 truncate rounded-xl border px-3 text-[15px] font-semibold transition active:scale-[0.98]",
                   caller === s.side
                     ? "border-ink bg-ink text-bg"
                     : "border-line bg-surface text-ink",
@@ -206,7 +206,7 @@ export function CoinToss({
                   setNudge(null);
                 }}
                 className={cn(
-                  "flex min-h-11 items-center justify-center gap-2 rounded-2xl border px-3 py-1.5 transition active:scale-[0.98]",
+                  "flex min-h-11 items-center justify-center gap-2 rounded-xl border px-3 py-1.5 transition active:scale-[0.98]",
                   call === face
                     ? "border-ink bg-ink text-bg"
                     : "border-line bg-surface text-ink",

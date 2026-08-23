@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/Button";
+import { TruncText } from "@/components/ui/TruncText";
 import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import type { FunctionReturnType } from "convex/server";
@@ -184,7 +185,7 @@ export function LiveHero({
     match.live?.battingSide === "A" ? match.sideBName : match.sideAName;
 
   return (
-    <div className="relative rounded-3xl bg-ink text-bg shadow-card">
+    <div className="relative rounded-2xl bg-ink text-bg shadow-card">
       <Link
         href={`/matches/${match._id}/watch`}
         className="block px-4 pb-4 pt-4 active:opacity-80"
@@ -201,9 +202,12 @@ export function LiveHero({
 
         {scoring ? (
           <>
-            <p className="mt-3 truncate text-[15px] font-semibold text-bg">
+            <TruncText
+              lines={2}
+              className="mt-3 text-[15px] font-semibold text-bg"
+            >
               {battingName}
-            </p>
+            </TruncText>
             <p className="tabular mt-0.5 flex items-baseline gap-2 text-[2.5rem] font-semibold leading-none tracking-tight text-bg">
               {match.live!.totalRuns}
               <span className="text-bg/70">/</span>
@@ -212,9 +216,9 @@ export function LiveHero({
                 {match.live!.oversText} ov
               </span>
             </p>
-            <p className="mt-2 truncate text-[13px] text-bg/70">
-              v {otherName}
-            </p>
+            <TruncText lines={2} className="mt-2 text-[13px] text-bg/70">
+              {`v ${otherName}`}
+            </TruncText>
             {match.live!.target ? (
               <p className="tabular mt-0.5 text-[13px] text-accent">
                 Chasing {match.live!.target}
@@ -223,12 +227,18 @@ export function LiveHero({
           </>
         ) : (
           <>
-            <p className="mt-3 truncate text-[15px] font-semibold text-bg">
+            <TruncText
+              lines={2}
+              className="mt-3 text-[15px] font-semibold text-bg"
+            >
               {match.sideAName}
-            </p>
-            <p className="mt-0.5 truncate text-[15px] font-semibold text-bg/70">
+            </TruncText>
+            <TruncText
+              lines={2}
+              className="mt-0.5 text-[15px] font-semibold text-bg/70"
+            >
               {match.sideBName}
-            </p>
+            </TruncText>
             <p className="mt-2 text-[13px] text-bg/70">
               {match.live?.inBreak ? "Innings break" : "Match in progress"}
             </p>
@@ -322,7 +332,7 @@ export function MatchCard({
   return (
     <div
       className={cn(
-        "relative rounded-3xl border bg-surface transition",
+        "relative rounded-2xl border bg-surface transition",
         isLive ? "border-accent/50 shadow-card" : "border-line",
       )}
     >
@@ -348,9 +358,12 @@ export function MatchCard({
                 is what makes game N different from game N+1 between the same
                 two teams — it reads in the same tabular ink as a scorecard. */}
             <div className="flex items-baseline gap-2">
-              <p className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
+              <TruncText
+                lines={2}
+                className="flex-1 text-[15px] font-semibold text-ink"
+              >
                 {first.name}
-              </p>
+              </TruncText>
               {isLive ? <LivePill /> : null}
               {decided && isThriller(match.resultText) ? <ThrillerChip /> : null}
               {first.score ? (
@@ -360,9 +373,9 @@ export function MatchCard({
               ) : null}
             </div>
             <div className="flex items-baseline gap-2">
-              <p className="min-w-0 flex-1 truncate text-[15px] text-muted">
+              <TruncText lines={2} className="flex-1 text-[15px] text-muted">
                 {second.name}
-              </p>
+              </TruncText>
               {second.score ? (
                 <span className="tabular shrink-0 text-[14px] font-medium text-muted">
                   {second.score}
@@ -372,7 +385,7 @@ export function MatchCard({
 
             {/* The margin is what tells this game apart from every other
                 between the same two sides — it reads in ink, not faint. */}
-            <p className="tabular mt-1.5 truncate text-[12px] text-faint">
+            <p className="tabular mt-1.5 text-[12px] text-muted">
               <span className="font-medium text-muted">{matchType(match)}</span>
               {" · "}
               <span className={decided ? "font-medium text-ink" : undefined}>
@@ -400,18 +413,29 @@ export function MatchCard({
  * inline as "A 0 — 1 B", which put two team names on one line, and the pips
  * make "how far in are we" a shape instead of a sentence.
  */
-export function SeriesCard({ series }: { series: SeriesRow }) {
+export function SeriesCard({
+  series,
+  nested,
+}: {
+  series: SeriesRow;
+  /** Inside a season card — same anatomy, no second outer border. */
+  nested?: boolean;
+}) {
   const left = Math.max(0, series.matchCount - series.played);
   return (
     <Link
       href={`/tournaments/${series._id}`}
-      className="block min-h-12 rounded-3xl border border-line bg-surface px-4 py-3 transition active:opacity-70"
+      className={
+        nested
+          ? "block min-h-12 rounded-xl bg-bg px-3 py-2.5 transition active:opacity-70"
+          : "block min-h-12 rounded-2xl border border-line bg-surface px-4 py-3 transition active:opacity-70"
+      }
     >
       <div className="flex items-center gap-2">
         <Trophy className="h-4 w-4 shrink-0 text-accent-deep" />
-        <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
+        <TruncText lines={2} className="flex-1 text-[15px] font-semibold text-ink">
           {series.name}
-        </span>
+        </TruncText>
         <span className="shrink-0 rounded-full bg-ink/[0.06] px-2 py-0.5 text-[11px] font-semibold text-muted">
           {series.format === "test" ? "Test" : "ODI"}
         </span>
@@ -424,12 +448,12 @@ export function SeriesCard({ series }: { series: SeriesRow }) {
           { name: series.sideBName, wins: series.winsB },
         ].map((side) => (
           <div key={side.name} className="flex items-baseline gap-2">
-            <span className="min-w-0 flex-1 truncate text-[14px] text-ink">
+            <span className="min-w-0 flex-1 truncate text-[15px] text-ink">
               {side.name}
             </span>
             <span
               className={cn(
-                "tabular shrink-0 text-[14px] font-semibold",
+                "tabular shrink-0 text-[15px] font-semibold",
                 side.wins > 0 ? "text-ink" : "text-faint",
               )}
             >
