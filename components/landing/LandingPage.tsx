@@ -729,6 +729,17 @@ function Closer() {
             Gully Cricket — made by gully cricketers, with{" "}
             <span className="text-accent">♥</span>
           </p>
+          <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-bg/60">
+            <a href="/match-stories" className="transition hover:text-bg">
+              Stories
+            </a>
+            <a href="/release-notes" className="transition hover:text-bg">
+              Notes
+            </a>
+            <a href="/gully-rules" className="transition hover:text-bg">
+              Rules
+            </a>
+          </nav>
           <a
             href="https://github.com/krishna-goutham-tls/gully-cricket-app"
             target="_blank"

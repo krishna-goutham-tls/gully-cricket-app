@@ -9,7 +9,25 @@ import { useEffect } from "react";
 // signed-in visit as "on an open path, send to /home" (page.tsx already does).
 // /privacy and /support are public policy pages (Apple requires both URLs
 // live on the domain before an iOS app can ship).
-const OPEN_PATHS = ["/", "/login", "/privacy", "/support", "/gully-rules"];
+// /gully-rules, /feed, /match-stories, /release-notes are public reading pages
+// — nested slugs stay open too. Only "/" and "/login" bounce signed-in users.
+const OPEN_PATHS = [
+  "/",
+  "/login",
+  "/privacy",
+  "/support",
+  "/gully-rules",
+  "/feed",
+  "/match-stories",
+  "/release-notes",
+];
+
+function isOpenPath(pathname: string) {
+  return OPEN_PATHS.some((path) => {
+    if (path === "/") return pathname === "/";
+    return pathname === path || pathname.startsWith(`${path}/`);
+  });
+}
 
 export function AppGate({ children }: { children: React.ReactNode }) {
   const { token, user, loading, activeMemberships } = useAuth();
@@ -19,7 +37,7 @@ export function AppGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) return;
     if (!token || !user) {
-      if (!OPEN_PATHS.includes(pathname)) router.replace("/login");
+      if (!isOpenPath(pathname)) router.replace("/login");
       return;
     }
 
@@ -34,13 +52,13 @@ export function AppGate({ children }: { children: React.ReactNode }) {
     }
 
     // Signed-in users bounce off the front door and login into the app —
-    // but the policy pages stay readable for everyone, signed in or not.
+    // but the policy and reading pages stay readable for everyone.
     if (["/", "/login"].includes(pathname)) {
       if (activeMemberships.length > 0) router.replace("/home");
       else router.replace("/join");
       return;
     }
-    if (OPEN_PATHS.includes(pathname)) return;
+    if (isOpenPath(pathname)) return;
 
     // The access queue is the platform owner's, not a community's — it must
     // stay reachable even for an account with no community yet.

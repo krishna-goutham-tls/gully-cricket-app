@@ -6,6 +6,8 @@ import {
   SeriesCard,
   type MatchRow,
 } from "@/components/home/HomeCards";
+import { FeedDoor } from "@/components/home/FeedDoor";
+import { SeasonStrip } from "@/components/home/SeasonStrip";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { AppHeader } from "@/components/shell/AppHeader";
 import { Button } from "@/components/ui/Button";
@@ -186,6 +188,8 @@ export default function HomePage() {
           Start match
         </Button>
 
+        <SeasonStrip />
+
         {/* The doorways: full history and the record book. Two thin cards on
             one line — visible without scrolling, never competing with the
             live game or the CTA above. */}
@@ -220,6 +224,10 @@ export default function HomePage() {
             />
           </div>
         ) : null}
+
+        <div className="mt-2">
+          <FeedDoor />
+        </div>
 
         {matches === undefined ? (
           <div className="mt-6 space-y-2">

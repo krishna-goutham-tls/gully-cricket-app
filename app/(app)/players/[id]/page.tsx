@@ -21,7 +21,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { PlayerTagEditor, PlayerTagList } from "@/components/player/LabelTag";
 import type { PlayerTag } from "@/lib/playerLabel";
-import { computeTrophies, type Trophy } from "@/lib/trophies";
+import { computeSeasonTrophies, computeTrophies, type Trophy } from "@/lib/trophies";
 import { cn, errorMessage } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { ArrowLeft, ChevronDown, Sparkles } from "lucide-react";
@@ -394,6 +394,10 @@ export default function PlayerDetailPage() {
     api.stats.playerStats,
     token && activeOrgId ? { token, orgId: activeOrgId, userId } : "skip",
   );
+  const seasons = useQuery(
+    api.seasons.list,
+    token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
+  );
 
   if (stats === undefined) {
     return (
@@ -428,7 +432,10 @@ export default function PlayerDetailPage() {
       m.bowling.toughest ||
       m.bowling.easiest,
   );
-  const trophies = computeTrophies(stats);
+  const trophies = [
+    ...computeSeasonTrophies(seasons ?? [], String(stats.userId)),
+    ...computeTrophies(stats),
+  ];
   const hasBothDisciplines = Boolean(stats.batting && stats.bowling);
   const activeDiscipline = discipline ?? defaultDiscipline(stats);
   const shareData = buildShareData(stats, trophies[0]);

@@ -345,13 +345,21 @@ export default function LeaderboardPage() {
   const [measureKey, setMeasureKey] = useState<MeasureKey>("runs");
   // Default: visitors and juniors off the board. Anyone can flip Everyone.
   const [includeExtras, setIncludeExtras] = useState(false);
+  // null = not chosen yet. Default This season when one is live, else All time.
+  const [scope, setScope] = useState<"season" | "all" | null>(null);
+  const current = useQuery(
+    api.seasons.current,
+    token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
+  );
+  const usingSeason = Boolean(current) && (scope ?? "season") === "season";
   const data = useQuery(
     api.stats.leaderboard,
-    token && activeOrgId
+    token && activeOrgId && current !== undefined
       ? {
           token,
           orgId: activeOrgId,
           includeVisitorsAndJuniors: includeExtras,
+          ...(usingSeason && current ? { seasonId: current._id } : {}),
         }
       : "skip",
   );
@@ -391,13 +399,19 @@ export default function LeaderboardPage() {
 
   const hasData = data && data.matchCount > 0 && rows.length > 0;
   const showMovement =
-    !!measure.movement && !!data && data.weekly.baselineMatches > 0;
+    !usingSeason &&
+    !!measure.movement &&
+    !!data &&
+    data.weekly.baselineMatches > 0;
 
   const shareData: LeaderboardShareData | null = useMemo(() => {
     if (!data) return null;
-    const subtitle = `${activeOrg?.orgName ?? "Gully"} · ${data.matchCount} match${
-      data.matchCount === 1 ? "" : "es"
-    }`;
+    const org = activeOrg?.orgName ?? "Gully";
+    const count = `${data.matchCount} match${data.matchCount === 1 ? "" : "es"}`;
+    const subtitle =
+      usingSeason && current
+        ? `${org} · ${current.name} · ${count}`
+        : `${org} · ${count}`;
     return {
       kind: "leaderboard" as const,
       title: measure.shareTitle,
@@ -411,12 +425,45 @@ export default function LeaderboardPage() {
           value: r.display ?? String(r.value),
         })),
     };
-  }, [data, rows, measure, activeOrg]);
+  }, [data, rows, measure, activeOrg, usingSeason, current]);
 
   return (
     <div>
       <AppHeader title="Leaders" />
       <main className="mx-auto max-w-md px-5 py-4">
+        {current ? (
+          <div
+            className="mb-2 flex rounded-2xl border border-line bg-surface p-1"
+            role="group"
+            aria-label="Season or all time"
+          >
+            <button
+              type="button"
+              aria-pressed={usingSeason}
+              onClick={() => setScope("season")}
+              className={cn(
+                "min-h-11 flex-1 rounded-xl text-[13px] font-semibold transition",
+                usingSeason ? "bg-ink text-bg" : "text-muted active:bg-line/60",
+              )}
+            >
+              This season
+            </button>
+            <button
+              type="button"
+              aria-pressed={!usingSeason}
+              onClick={() => setScope("all")}
+              className={cn(
+                "min-h-11 flex-1 rounded-xl text-[13px] font-semibold transition",
+                !usingSeason
+                  ? "bg-ink text-bg"
+                  : "text-muted active:bg-line/60",
+              )}
+            >
+              All time
+            </button>
+          </div>
+        ) : null}
+
         <div className="flex rounded-2xl border border-line bg-surface p-1">
           {TABS.map((t) => (
             <button
@@ -505,8 +552,10 @@ export default function LeaderboardPage() {
             {data === undefined
               ? "Loading…"
               : !data
-                ? "All-time"
-                : `All-time · ${data.matchCount} completed ${
+                ? usingSeason
+                  ? (current?.name ?? "This season")
+                  : "All-time"
+                : `${usingSeason ? (current?.name ?? "This season") : "All-time"} · ${data.matchCount} completed ${
                     data.matchCount === 1 ? "match" : "matches"
                   }${
                     !includeExtras && data.excludedCount > 0
@@ -533,8 +582,16 @@ export default function LeaderboardPage() {
         ) : !hasData ? (
           <div className="mt-3">
             <EmptyState
-              title="No completed matches yet"
-              body="Leaderboards build up as matches finish."
+              title={
+                usingSeason
+                  ? "No games in this season yet"
+                  : "No completed matches yet"
+              }
+              body={
+                usingSeason
+                  ? "Play a match. The board starts at zero."
+                  : "Leaderboards build up as matches finish."
+              }
             />
           </div>
         ) : (

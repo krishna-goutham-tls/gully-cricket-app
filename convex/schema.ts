@@ -370,4 +370,37 @@ export default defineSchema({
     scorerAt: v.optional(v.number()),
     updatedAt: v.number(),
   }).index("by_match", ["matchId"]),
+
+  /**
+   * Org-scoped scoring window. Matches are not tagged; the board filters
+   * completed matches by createdAt against startedAt / endedAt.
+   */
+  seasons: defineTable({
+    orgId: v.id("orgs"),
+    name: v.string(),
+    status: v.union(v.literal("active"), v.literal("complete")),
+    startedAt: v.number(),
+    endedAt: v.optional(v.number()),
+    createdBy: v.id("users"),
+    endedBy: v.optional(v.id("users")),
+    awards: v.optional(
+      v.array(
+        v.object({
+          kind: v.union(
+            v.literal("pots"),
+            v.literal("orange_cap"),
+            v.literal("purple_cap"),
+            v.literal("most_sixes"),
+            v.literal("highest_sr"),
+            v.literal("best_economy"),
+          ),
+          userId: v.id("users"),
+          value: v.number(),
+          display: v.string(),
+        }),
+      ),
+    ),
+  })
+    .index("by_org", ["orgId"])
+    .index("by_org_status", ["orgId", "status"]),
 });

@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, QueryCtx } from "./_generated/server";
+import { query, QueryCtx, MutationCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
 import { requireActiveMembership } from "./lib/session";
 import { legalBallToOverText } from "./lib/scoring";
@@ -130,25 +130,30 @@ type Focus = {
  * means one pass over the ball log and one copy of the attribution rules.
  */
 async function aggregateOrg(
-  ctx: QueryCtx,
+  ctx: QueryCtx | MutationCtx,
   orgId: Id<"orgs">,
-  focusPlayerId?: Id<"users">,
-  beforeTs?: number,
+  opts: {
+    focusPlayerId?: Id<"users">;
+    /** Exclusive end. Weekly arrows and completed seasons use this. */
+    beforeTs?: number;
+    /** Inclusive start. Season boards use season.startedAt. */
+    afterTs?: number;
+  } = {},
 ) {
+  const { focusPlayerId, beforeTs, afterTs } = opts;
   const completedAll = await ctx.db
     .query("matches")
     .withIndex("by_org_status", (q) =>
       q.eq("orgId", orgId).eq("status", "completed"),
     )
     .collect();
-  // The weekly leaderboard needs the board "as it stood a week ago": only
-  // matches that already existed before the cutoff. Gully matches are created
-  // and finished the same day, and there is no separate completedAt, so
-  // createdAt stands in for when the match landed on the board.
-  const completed =
-    beforeTs === undefined
-      ? completedAll
-      : completedAll.filter((m) => m.createdAt < beforeTs);
+  // Gully matches are created and finished the same day, so createdAt is
+  // when they landed on the board. afterTs inclusive, beforeTs exclusive.
+  const completed = completedAll.filter((m) => {
+    if (afterTs !== undefined && m.createdAt < afterTs) return false;
+    if (beforeTs !== undefined && m.createdAt >= beforeTs) return false;
+    return true;
+  });
 
   const batting = new Map<string, BatAgg>();
   const bowling = new Map<string, BowlAgg>();
@@ -879,6 +884,45 @@ function boardFilter<T extends { playerTags: PlayerTag[] }>(
   return rows.filter((r) => isBoardRegular(r.playerTags));
 }
 
+export async function loadRegularsBoard(
+  ctx: QueryCtx | MutationCtx,
+  orgId: Id<"orgs">,
+  window: { afterTs?: number; beforeTs?: number } = {},
+) {
+  const snap = await aggregateOrg(ctx, orgId, window);
+  const keys = [
+    ...Array.from(snap.batting.keys()),
+    ...Array.from(snap.bowling.keys()),
+    ...Array.from(snap.catches.keys()),
+  ];
+  const names = await resolveNames(ctx, keys);
+  const tags = await tagsForUsers(ctx, orgId, keys);
+  return {
+    matchCount: snap.matchCount,
+    allRound: boardFilter(
+      stampTags(
+        buildAllRoundRows(
+          snap.batting,
+          snap.bowling,
+          snap.catches,
+          snap.allRoundMatches,
+          names,
+        ),
+        tags,
+      ),
+      false,
+    ),
+    batting: boardFilter(
+      stampTags(buildBattingRows(snap.batting, names), tags),
+      false,
+    ),
+    bowling: boardFilter(
+      stampTags(buildBowlingRows(snap.bowling, names), tags),
+      false,
+    ),
+  };
+}
+
 export const leaderboard = query({
   args: {
     token: v.optional(v.string()),
@@ -888,6 +932,7 @@ export const leaderboard = query({
      * the Leaders "Everyone" toggle, so ranks and weekly arrows stay honest.
      */
     includeVisitorsAndJuniors: v.optional(v.boolean()),
+    seasonId: v.optional(v.id("seasons")),
   },
   handler: async (ctx, args) => {
     try {
@@ -898,14 +943,29 @@ export const leaderboard = query({
 
     const includeExtras = args.includeVisitorsAndJuniors === true;
     const now = Date.now();
-    const current = await aggregateOrg(ctx, args.orgId);
-    // The same board, rebuilt from only the matches that existed a week ago.
-    const previous = await aggregateOrg(
-      ctx,
-      args.orgId,
-      undefined,
-      now - WEEK_MS,
-    );
+    let afterTs: number | undefined;
+    let beforeTs: number | undefined;
+    let prevAfterTs: number | undefined;
+    let prevBeforeTs: number | undefined = now - WEEK_MS;
+
+    if (args.seasonId) {
+      const season = await ctx.db.get(args.seasonId);
+      if (!season || String(season.orgId) !== String(args.orgId)) return null;
+      afterTs = season.startedAt;
+      // Completed seasons freeze at endedAt; active ones use now.
+      const windowEnd = Math.min(now, season.endedAt ?? now);
+      beforeTs = windowEnd;
+      prevAfterTs = season.startedAt;
+      // Weekly lookback clipped into the season. If this is before startedAt
+      // the previous snapshot is empty and baselineMatches is 0.
+      prevBeforeTs = windowEnd - WEEK_MS;
+    }
+
+    const current = await aggregateOrg(ctx, args.orgId, { afterTs, beforeTs });
+    const previous = await aggregateOrg(ctx, args.orgId, {
+      afterTs: prevAfterTs,
+      beforeTs: prevBeforeTs,
+    });
 
     // One name map for both snapshots — a week-ago player is always a subset of
     // today's, so today's keys cover everyone either snapshot can name.
@@ -1006,11 +1066,9 @@ export const playerStats = query({
     const player = await ctx.db.get(args.userId);
     if (!player) return null;
 
-    const { batting, bowling, focus } = await aggregateOrg(
-      ctx,
-      args.orgId,
-      args.userId,
-    );
+    const { batting, bowling, focus } = await aggregateOrg(ctx, args.orgId, {
+      focusPlayerId: args.userId,
+    });
     const names = await resolveNames(ctx, [
       ...Array.from(batting.keys()),
       ...Array.from(bowling.keys()),
