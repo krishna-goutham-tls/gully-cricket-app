@@ -6,7 +6,7 @@ import { ReadingChrome } from "@/components/reading/ReadingChrome";
 export const metadata = {
   title: "Notes",
   description:
-    "What we put on the phone — Gully Cricket release notes, newest first.",
+    "What we put on the phone — Gully Cricket notes, newest first.",
 };
 
 export default function ReleaseNotesPage() {

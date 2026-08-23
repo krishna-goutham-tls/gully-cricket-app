@@ -5,7 +5,7 @@ import {
   MatchCard,
   type MatchRow,
 } from "@/components/home/HomeCards";
-import { FeedDoor } from "@/components/home/FeedDoor";
+import { ReadingDoors } from "@/components/home/ReadingDoors";
 import { SeasonStrip } from "@/components/home/SeasonStrip";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { AppHeader } from "@/components/shell/AppHeader";
@@ -215,9 +215,7 @@ export default function HomePage() {
           </div>
         ) : null}
 
-        <div className="mt-2">
-          <FeedDoor />
-        </div>
+        <ReadingDoors />
 
         {matches === undefined ? (
           <div className="mt-6 space-y-2">

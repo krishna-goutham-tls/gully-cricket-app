@@ -451,10 +451,10 @@ function HeroLive() {
           </div>
           <nav className="flex shrink-0 items-center">
             <Link
-              href="/match-stories"
+              href="/gully-rules"
               className="inline-flex min-h-11 items-center rounded-lg px-2.5 text-[13px] font-semibold text-muted hover:bg-ink/[0.04]"
             >
-              Stories
+              Rules
             </Link>
             <Link
               href="/release-notes"
@@ -744,14 +744,11 @@ function Closer() {
             <span className="text-accent">♥</span>
           </p>
           <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-bg/60">
-            <a href="/match-stories" className="transition hover:text-bg">
-              Stories
+            <a href="/gully-rules" className="transition hover:text-bg">
+              Rules
             </a>
             <a href="/release-notes" className="transition hover:text-bg">
               Notes
-            </a>
-            <a href="/gully-rules" className="transition hover:text-bg">
-              Rules
             </a>
           </nav>
           <a
