@@ -96,7 +96,7 @@ export default function GullyRulesPage() {
           <div className="mt-8 flex justify-center">
             <Link
               href="/#invite"
-              className="inline-flex min-h-14 items-center justify-center rounded-2xl bg-accent px-8 text-base font-semibold text-ink shadow-lift transition hover:bg-accent/90 active:scale-[0.98]"
+              className="inline-flex min-h-14 items-center justify-center rounded-xl bg-accent px-8 text-base font-semibold text-ink shadow-lift transition hover:bg-accent/90 active:scale-[0.98]"
             >
               Register your community
             </Link>

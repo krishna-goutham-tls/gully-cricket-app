@@ -191,18 +191,22 @@ export default function MatchDetailPage() {
                 >
                   <span
                     className={cn(
-                      "flex min-w-0 items-center gap-1.5 text-[17px] font-semibold",
+                      "flex min-w-0 items-center gap-1.5 text-[15px] font-semibold",
                       lost ? "text-bg/70" : "text-bg",
                     )}
                   >
                     {won ? (
                       <Trophy className="h-3.5 w-3.5 shrink-0 text-accent" />
                     ) : null}
-                    <span className="truncate">{name}</span>
+                    <span className="min-w-0" title={name}>
+                      <span className="line-clamp-2 [overflow-wrap:anywhere]">
+                        {name}
+                      </span>
+                    </span>
                   </span>
                   <span
                     className={cn(
-                      "tabular shrink-0 text-[17px] font-semibold",
+                      "tabular shrink-0 text-2xl font-semibold",
                       score === null || lost ? "text-bg/70" : "text-bg",
                     )}
                   >

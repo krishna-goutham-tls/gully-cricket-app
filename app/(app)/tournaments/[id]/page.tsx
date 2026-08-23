@@ -788,7 +788,7 @@ function QuickPick({ label, onClick }: { label: string; onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="min-h-11 rounded-full border border-line bg-bg px-4 text-xs font-semibold text-ink active:scale-95 active:border-accent"
+      className="min-h-11 rounded-xl border border-line bg-bg px-4 text-xs font-semibold text-ink active:scale-95 active:border-accent"
     >
       {label}
     </button>

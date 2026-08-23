@@ -24,10 +24,8 @@ function Chip({
 }) {
   const label = PLAYER_TAG_COPY[tag];
   const dark = tone === "dark";
-  // Slack-like: small type, slight rounding, solid fill when on.
-  const className = cn(
-    "shrink-0 rounded-[4px] px-1.5 py-0.5 text-[10px] font-semibold leading-none tracking-wide",
-    interactive && "min-h-11 px-2.5",
+  const chip = cn(
+    "shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold leading-none tracking-wide",
     dark
       ? on
         ? "bg-bg text-ink"
@@ -37,7 +35,7 @@ function Chip({
         : "bg-line text-muted",
   );
   if (!interactive) {
-    return <span className={className}>{label}</span>;
+    return <span className={chip}>{label}</span>;
   }
   return (
     <button
@@ -49,9 +47,9 @@ function Chip({
         e.stopPropagation();
         onClick?.();
       }}
-      className={cn(className, "active:opacity-80 disabled:opacity-50")}
+      className="inline-flex min-h-11 items-center active:opacity-80 disabled:opacity-50"
     >
-      {label}
+      <span className={chip}>{label}</span>
     </button>
   );
 }

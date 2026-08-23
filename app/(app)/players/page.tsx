@@ -209,14 +209,14 @@ export default function PlayersPage() {
                     <button
                       type="button"
                       onClick={() => void decide("approve", req.membershipId)}
-                      className="min-h-11 rounded-2xl bg-ink text-[15px] font-semibold text-bg active:scale-[0.98]"
+                      className="min-h-11 rounded-xl bg-ink text-[15px] font-semibold text-bg active:scale-[0.98]"
                     >
                       Approve
                     </button>
                     <button
                       type="button"
                       onClick={() => void decide("reject", req.membershipId)}
-                      className="min-h-11 rounded-2xl border border-line bg-surface text-[15px] font-semibold text-muted active:scale-[0.98]"
+                      className="min-h-11 rounded-xl border border-line bg-surface text-[15px] font-semibold text-muted active:scale-[0.98]"
                     >
                       Not now
                     </button>
@@ -242,14 +242,14 @@ export default function PlayersPage() {
                       <button
                         type="button"
                         onClick={() => void decidePinReset("approve", r.resetId)}
-                        className="min-h-11 rounded-2xl bg-ink text-[15px] font-semibold text-bg active:scale-[0.98]"
+                        className="min-h-11 rounded-xl bg-ink text-[15px] font-semibold text-bg active:scale-[0.98]"
                       >
                         Reset PIN
                       </button>
                       <button
                         type="button"
                         onClick={() => void decidePinReset("reject", r.resetId)}
-                        className="min-h-11 rounded-2xl border border-line bg-surface text-[15px] font-semibold text-muted active:scale-[0.98]"
+                        className="min-h-11 rounded-xl border border-line bg-surface text-[15px] font-semibold text-muted active:scale-[0.98]"
                       >
                         Ignore
                       </button>
@@ -278,7 +278,7 @@ export default function PlayersPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search players"
-              className="min-h-12 w-full rounded-2xl border border-line bg-surface pl-4 pr-12 text-[16px] text-ink outline-none placeholder:text-faint focus:border-accent"
+              className="min-h-12 w-full rounded-xl border border-line bg-surface pl-4 pr-12 text-[16px] text-ink outline-none placeholder:text-faint focus:border-accent"
             />
             {search ? (
               <button
@@ -378,7 +378,10 @@ export default function PlayersPage() {
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="flex min-w-0 items-center gap-2">
-                        <span className="truncate text-[15px] font-semibold text-ink">
+                        <span
+                          className="truncate text-[15px] font-semibold text-ink"
+                          title={p.displayName}
+                        >
                           {p.displayName}
                         </span>
                         {p.isAdmin ? (
@@ -387,7 +390,7 @@ export default function PlayersPage() {
                           </span>
                         ) : null}
                       </span>
-                      <span className="tabular mt-0.5 block truncate text-[12px] text-faint">
+                      <span className="tabular mt-0.5 block truncate text-[12px] text-muted">
                         {summary.get(String(p.userId)) ?? "Yet to play"}
                       </span>
                     </span>

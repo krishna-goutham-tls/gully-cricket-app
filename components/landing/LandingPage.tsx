@@ -314,7 +314,7 @@ function CTA({
     <Link
       href={href}
       className={cn(
-        "inline-flex min-h-14 items-center justify-center rounded-2xl px-8 text-base font-semibold shadow-lift transition active:scale-[0.98]",
+        "inline-flex min-h-14 items-center justify-center rounded-xl px-8 text-base font-semibold shadow-lift transition active:scale-[0.98]",
         gold
           ? "bg-accent text-ink hover:bg-accent/90"
           : "bg-ink text-bg hover:bg-ink/90",
@@ -634,7 +634,7 @@ function GullyRules() {
       <div className="mt-8 text-center">
         <Link
           href="/gully-rules"
-          className="inline-flex min-h-12 items-center rounded-2xl border border-line bg-surface px-6 text-[15px] font-semibold text-ink shadow-card transition hover:bg-bg active:scale-[0.98]"
+          className="inline-flex min-h-12 items-center rounded-xl border border-line bg-surface px-6 text-[15px] font-semibold text-ink shadow-card transition hover:bg-bg active:scale-[0.98]"
         >
           The full rulebook →
         </Link>
@@ -729,6 +729,17 @@ function Closer() {
             Gully Cricket — made by gully cricketers, with{" "}
             <span className="text-accent">♥</span>
           </p>
+          <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-bg/60">
+            <a href="/match-stories" className="transition hover:text-bg">
+              Stories
+            </a>
+            <a href="/release-notes" className="transition hover:text-bg">
+              Notes
+            </a>
+            <a href="/gully-rules" className="transition hover:text-bg">
+              Rules
+            </a>
+          </nav>
           <a
             href="https://github.com/krishna-goutham-tls/gully-cricket-app"
             target="_blank"

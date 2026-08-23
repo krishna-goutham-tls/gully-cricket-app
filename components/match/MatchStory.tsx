@@ -121,7 +121,7 @@ function BadgeShelf({ badges }: { badges: Story["badges"] }) {
             </span>
             <span
               className={cn(
-                "block text-[14px] font-semibold",
+                "block text-[15px] font-semibold",
                 b.kind === "roast" ? "text-danger" : "text-accent-deep",
               )}
             >
@@ -480,7 +480,7 @@ function TurningPoint({ story }: { story: Story }) {
           {at ? `${clockTime(at)} · ` : ""}
           {tp.title}
         </p>
-        <p className="mt-1.5 text-[14px] leading-relaxed">{tp.text}</p>
+        <p className="mt-1.5 text-[13px] leading-relaxed">{tp.text}</p>
         <p className="mt-2 text-[11px] text-bg/70">{tp.meta}</p>
       </div>
     </section>
@@ -512,7 +512,7 @@ function NumbersStrip({ story }: { story: Story }) {
           >
             <p
               className={cn(
-                "tabular text-[17px] font-bold",
+                "tabular text-[15px] font-semibold",
                 t.gold && "text-accent-deep",
               )}
             >

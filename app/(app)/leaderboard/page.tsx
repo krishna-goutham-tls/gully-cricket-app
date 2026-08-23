@@ -15,7 +15,8 @@ import { PLAYER_TAG_COPY, type PlayerTag } from "@/lib/playerLabel";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { useMemo, useState } from "react";
+import { Check, ChevronDown } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Board = NonNullable<FunctionReturnType<typeof api.stats.leaderboard>>;
 type BatRow = Board["batting"][number];
@@ -339,19 +340,109 @@ const DEFAULT_MEASURE: Record<Tab, MeasureKey> = {
   players: "points",
 };
 
+function ScopeToggle({
+  usingSeason,
+  seasonName,
+  onSeason,
+  onAll,
+}: {
+  usingSeason: boolean;
+  seasonName: string;
+  onSeason: () => void;
+  onAll: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(e: PointerEvent) {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="-mx-1 flex h-11 items-center gap-1 rounded-lg px-1 text-[13px] font-semibold text-muted active:bg-bg"
+      >
+        <span className="whitespace-nowrap">
+          {usingSeason ? seasonName : "All time"}
+        </span>
+        <ChevronDown className="h-4 w-4 shrink-0" />
+      </button>
+      {open ? (
+        <div
+          role="listbox"
+          className="absolute left-0 z-20 mt-1 w-52 overflow-hidden rounded-xl border border-line bg-surface shadow-lift"
+        >
+          <button
+            type="button"
+            role="option"
+            aria-selected={usingSeason}
+            onClick={() => {
+              onSeason();
+              setOpen(false);
+            }}
+            className={cn(
+              "flex min-h-11 w-full items-center justify-between gap-2 px-4 text-left text-[15px] text-ink active:bg-bg",
+              usingSeason && "font-semibold text-accent-deep",
+            )}
+          >
+            <span className="truncate" title={seasonName}>
+              {seasonName}
+            </span>
+            {usingSeason ? <Check className="h-4 w-4 shrink-0" /> : null}
+          </button>
+          <button
+            type="button"
+            role="option"
+            aria-selected={!usingSeason}
+            onClick={() => {
+              onAll();
+              setOpen(false);
+            }}
+            className={cn(
+              "flex min-h-11 w-full items-center justify-between gap-2 px-4 text-left text-[15px] text-ink active:bg-bg",
+              !usingSeason && "font-semibold text-accent-deep",
+            )}
+          >
+            All time
+            {!usingSeason ? <Check className="h-4 w-4 shrink-0" /> : null}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function LeaderboardPage() {
   const { token, activeOrgId, user, activeOrg } = useAuth();
   const [tab, setTab] = useState<Tab>("batting");
   const [measureKey, setMeasureKey] = useState<MeasureKey>("runs");
   // Default: visitors and juniors off the board. Anyone can flip Everyone.
   const [includeExtras, setIncludeExtras] = useState(false);
+  // null = not chosen yet. Default This season when one is live, else All time.
+  const [scope, setScope] = useState<"season" | "all" | null>(null);
+  const current = useQuery(
+    api.seasons.current,
+    token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
+  );
+  const usingSeason = Boolean(current) && (scope ?? "season") === "season";
   const data = useQuery(
     api.stats.leaderboard,
-    token && activeOrgId
+    token && activeOrgId && current !== undefined
       ? {
           token,
           orgId: activeOrgId,
           includeVisitorsAndJuniors: includeExtras,
+          ...(usingSeason && current ? { seasonId: current._id } : {}),
         }
       : "skip",
   );
@@ -391,13 +482,19 @@ export default function LeaderboardPage() {
 
   const hasData = data && data.matchCount > 0 && rows.length > 0;
   const showMovement =
-    !!measure.movement && !!data && data.weekly.baselineMatches > 0;
+    !usingSeason &&
+    !!measure.movement &&
+    !!data &&
+    data.weekly.baselineMatches > 0;
 
   const shareData: LeaderboardShareData | null = useMemo(() => {
     if (!data) return null;
-    const subtitle = `${activeOrg?.orgName ?? "Gully"} · ${data.matchCount} match${
-      data.matchCount === 1 ? "" : "es"
-    }`;
+    const org = activeOrg?.orgName ?? "Gully";
+    const count = `${data.matchCount} match${data.matchCount === 1 ? "" : "es"}`;
+    const subtitle =
+      usingSeason && current
+        ? `${org} · ${current.name} · ${count}`
+        : `${org} · ${count}`;
     return {
       kind: "leaderboard" as const,
       title: measure.shareTitle,
@@ -411,118 +508,152 @@ export default function LeaderboardPage() {
           value: r.display ?? String(r.value),
         })),
     };
-  }, [data, rows, measure, activeOrg]);
+  }, [data, rows, measure, activeOrg, usingSeason, current]);
+
+  const [scrolled, setScrolled] = useState(false);
+  const [chipsOpen, setChipsOpen] = useState(false);
+  useEffect(() => {
+    function onScroll() {
+      const next = window.scrollY > 24;
+      setScrolled(next);
+      if (!next) setChipsOpen(false);
+    }
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+  const compactChips = scrolled && !chipsOpen;
+
+  const capLabel =
+    usingSeason && measure.key === "runs"
+      ? "Orange Cap"
+      : usingSeason && measure.key === "wickets"
+        ? "Purple Cap"
+        : null;
+
+  const disciplineTabs = (
+    <div className="flex rounded-xl border border-line bg-surface p-1">
+      {TABS.map((t) => (
+        <button
+          key={t}
+          type="button"
+          onClick={() => selectTab(t)}
+          aria-current={tab === t}
+          className={cn(
+            "min-h-11 flex-1 rounded-lg text-[13px] font-semibold transition",
+            tab === t ? "bg-ink text-bg" : "text-muted active:bg-line/60",
+          )}
+        >
+          {TAB_LABEL[t]}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <div>
-      <AppHeader title="Leaders" />
-      <main className="mx-auto max-w-md px-5 py-4">
-        <div className="flex rounded-2xl border border-line bg-surface p-1">
-          {TABS.map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => selectTab(t)}
-              aria-current={tab === t}
-              className={cn(
-                "min-h-11 flex-1 rounded-xl text-[13px] font-semibold transition",
-                tab === t ? "bg-ink text-bg" : "text-muted active:bg-line/60",
-              )}
-            >
-              {TAB_LABEL[t]}
-            </button>
-          ))}
-        </div>
-
-        {/* Level two, deliberately lighter than the filled pill above it: two
-            identical segmented controls stacked would leave the reader working
-            out which one is which. Text plus a gold underline reads as "sort",
-            not as a second set of tabs. */}
-        <div
-          role="tablist"
-          aria-label="Rank by"
-          className="mt-2 flex items-stretch gap-1"
-        >
-          {chips.map((m) => {
-            const on = m.key === measure.key;
-            return (
-              <button
-                key={m.key}
-                type="button"
-                role="tab"
-                aria-selected={on}
-                onClick={() => setMeasureKey(m.key)}
-                className={cn(
-                  "min-h-11 flex-1 rounded-xl border-b-2 px-1 text-[13px] font-semibold leading-tight transition",
-                  on
-                    ? "border-accent text-ink"
-                    : "border-transparent text-faint active:bg-line/50",
-                )}
-              >
-                {m.label}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="mt-2.5 flex items-center justify-between gap-2">
-          <div
-            className="flex min-w-0 flex-1 rounded-2xl border border-line bg-surface p-1"
-            role="group"
-            aria-label="Who appears on the board"
-          >
-            <button
-              type="button"
-              aria-pressed={!includeExtras}
-              onClick={() => setIncludeExtras(false)}
-              className={cn(
-                "min-h-11 flex-1 rounded-xl px-2 text-[13px] font-semibold transition",
-                !includeExtras
-                  ? "bg-ink text-bg"
-                  : "text-muted active:bg-line/60",
-              )}
-            >
-              Regulars
-            </button>
-            <button
-              type="button"
-              aria-pressed={includeExtras}
-              onClick={() => setIncludeExtras(true)}
-              className={cn(
-                "min-h-11 flex-1 rounded-xl px-2 text-[13px] font-semibold transition",
-                includeExtras
-                  ? "bg-ink text-bg"
-                  : "text-muted active:bg-line/60",
-              )}
-            >
-              Everyone
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-2 flex items-center justify-between gap-2 px-1">
-          <p className="min-w-0 flex-1 text-[11px] text-faint">
-            {data === undefined
-              ? "Loading…"
-              : !data
-                ? "All-time"
-                : `All-time · ${data.matchCount} completed ${
-                    data.matchCount === 1 ? "match" : "matches"
-                  }${
-                    !includeExtras && data.excludedCount > 0
-                      ? " · visitors & juniors hidden"
-                      : ""
-                  }${showMovement ? " · arrows show this week's movement" : ""}`}
-          </p>
-          {hasData && shareData ? (
+      <AppHeader
+        title="Leaders"
+        subtitle={
+          current ? (
+            <ScopeToggle
+              usingSeason={usingSeason}
+              seasonName={current.name}
+              onSeason={() => setScope("season")}
+              onAll={() => setScope("all")}
+            />
+          ) : undefined
+        }
+        trailing={
+          hasData && shareData ? (
             <ShareButton
               data={shareData}
               filename={`gully-leaders-${measure.key}.png`}
               tone="light"
-              className="-mr-1"
             />
-          ) : null}
-        </div>
+          ) : null
+        }
+        below={disciplineTabs}
+      />
+      <main className="mx-auto max-w-md px-5 py-3">
+        {/* Gold underline = sort, not a second tab set. */}
+        {compactChips ? (
+          <button
+            type="button"
+            aria-expanded={false}
+            onClick={() => setChipsOpen(true)}
+            className="flex min-h-11 w-full items-center justify-between rounded-lg border-b-2 border-accent px-1 text-[13px] font-semibold text-ink active:bg-bg"
+          >
+            {measure.label}
+            <ChevronDown className="h-4 w-4 text-muted" />
+          </button>
+        ) : (
+          <div role="tablist" aria-label="Rank by" className="flex items-stretch gap-1">
+            {chips.map((m) => {
+              const on = m.key === measure.key;
+              return (
+                <button
+                  key={m.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={on}
+                  onClick={() => {
+                    setMeasureKey(m.key);
+                    setChipsOpen(false);
+                  }}
+                  className={cn(
+                    "min-h-11 flex-1 rounded-lg border-b-2 px-1 text-[13px] font-semibold leading-tight transition",
+                    on
+                      ? "border-accent text-ink"
+                      : "border-transparent text-faint active:bg-line/50",
+                  )}
+                >
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {!scrolled ? (
+          <div className="mt-1 flex items-center gap-2 px-1">
+            <p className="min-w-0 flex-1 text-[11px] text-faint">
+              {data === undefined
+                ? "Loading…"
+                : data
+                  ? `${data.matchCount} match${data.matchCount === 1 ? "" : "es"}`
+                  : null}
+            </p>
+            <div
+              className="flex shrink-0"
+              role="group"
+              aria-label="Who appears on the board"
+            >
+              <button
+                type="button"
+                aria-pressed={!includeExtras}
+                onClick={() => setIncludeExtras(false)}
+                className={cn(
+                  "min-h-11 px-1.5 text-[13px] font-semibold active:opacity-70",
+                  !includeExtras ? "text-ink" : "text-muted",
+                )}
+              >
+                Regulars
+              </button>
+              <button
+                type="button"
+                aria-pressed={includeExtras}
+                onClick={() => setIncludeExtras(true)}
+                className={cn(
+                  "min-h-11 px-1.5 text-[13px] font-semibold active:opacity-70",
+                  includeExtras ? "text-ink" : "text-muted",
+                )}
+              >
+                Everyone
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         {data === undefined ? (
           <div className="mt-3 space-y-2">
@@ -533,8 +664,16 @@ export default function LeaderboardPage() {
         ) : !hasData ? (
           <div className="mt-3">
             <EmptyState
-              title="No completed matches yet"
-              body="Leaderboards build up as matches finish."
+              title={
+                usingSeason
+                  ? "No games in this season yet"
+                  : "No completed matches yet"
+              }
+              body={
+                usingSeason
+                  ? "Play a match. The board starts at zero."
+                  : "Leaderboards build up as matches finish."
+              }
             />
           </div>
         ) : (
@@ -545,6 +684,7 @@ export default function LeaderboardPage() {
               showMovement={showMovement}
               lowerIsBetter={measure.lowerIsBetter}
               cutLabel={measure.cutLabel}
+              capLabel={capLabel}
             />
           </div>
         )}

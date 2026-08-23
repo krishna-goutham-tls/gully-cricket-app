@@ -9,6 +9,67 @@ export type Trophy = {
   tier: "gold" | "silver";
 };
 
+/** Mirrors convex/seasons.ts award kinds — kept here so the client never imports the server module. */
+export type SeasonAwardKind =
+  | "pots"
+  | "orange_cap"
+  | "purple_cap"
+  | "most_sixes"
+  | "highest_sr"
+  | "best_economy";
+
+export type SeasonForTrophies = {
+  _id: string;
+  name: string;
+  status?: string;
+  awards?: Array<{
+    kind: SeasonAwardKind;
+    userId: string;
+    value?: number;
+    display?: string;
+  }> | null;
+};
+
+const SEASON_AWARD_COPY: Record<
+  SeasonAwardKind,
+  { label: string; icon: "Crown" | "Award" }
+> = {
+  pots: { label: "Player of the season", icon: "Crown" },
+  orange_cap: { label: "Orange Cap", icon: "Crown" },
+  purple_cap: { label: "Purple Cap", icon: "Crown" },
+  most_sixes: { label: "Most sixes", icon: "Award" },
+  highest_sr: { label: "Highest strike rate", icon: "Award" },
+  best_economy: { label: "Best economy", icon: "Award" },
+};
+
+/**
+ * Gold chips for awards the player actually holds on a finished season.
+ * Label keeps the season name ("Season 1 Orange Cap"). Does not replace
+ * career trophies — concatenate on the shelf.
+ */
+export function computeSeasonTrophies(
+  seasons: SeasonForTrophies[],
+  userId: string,
+): Trophy[] {
+  const me = String(userId);
+  const trophies: Trophy[] = [];
+  for (const season of seasons) {
+    if (season.status === "active") continue;
+    for (const award of season.awards ?? []) {
+      if (String(award.userId) !== me) continue;
+      const copy = SEASON_AWARD_COPY[award.kind];
+      if (!copy) continue;
+      trophies.push({
+        id: `season-${season._id}-${award.kind}`,
+        icon: copy.icon,
+        label: `${season.name} ${copy.label}`,
+        tier: "gold",
+      });
+    }
+  }
+  return trophies;
+}
+
 /** "5/23" → 5. Best stays a display string end to end; this only reads the wicket count. */
 function bestWickets(best: string | null): number {
   if (!best) return 0;

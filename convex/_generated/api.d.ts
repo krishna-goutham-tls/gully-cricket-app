@@ -29,6 +29,7 @@ import type * as matches from "../matches.js";
 import type * as orgs from "../orgs.js";
 import type * as players from "../players.js";
 import type * as scoring from "../scoring.js";
+import type * as seasons from "../seasons.js";
 import type * as stats from "../stats.js";
 import type * as story from "../story.js";
 import type * as tournaments from "../tournaments.js";
@@ -61,6 +62,7 @@ declare const fullApi: ApiFromModules<{
   orgs: typeof orgs;
   players: typeof players;
   scoring: typeof scoring;
+  seasons: typeof seasons;
   stats: typeof stats;
   story: typeof story;
   tournaments: typeof tournaments;
