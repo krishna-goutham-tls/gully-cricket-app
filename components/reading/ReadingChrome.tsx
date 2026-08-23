@@ -1,14 +1,6 @@
-"use client";
-
 import { ReadingNav } from "@/components/reading/ReadingNav";
-import { markFeedSeen } from "@/lib/feedSeen";
-import { useEffect } from "react";
 
 export function ReadingChrome({ children }: { children: React.ReactNode }) {
-  useEffect(() => {
-    markFeedSeen();
-  }, []);
-
   return (
     <main className="full-bleed min-h-dvh bg-bg">
       <div className="mx-auto max-w-6xl px-5 pt-[calc(var(--safe-top)+1rem)]">

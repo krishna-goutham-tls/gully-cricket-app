@@ -21,14 +21,13 @@ export const RELEASE_NOTES: ReleaseNote[] = [
       "A career board keeps the same names on top. A season is a fresh board for the cricket we are playing now.",
       "Season-01 holds every match we already had. Later seasons start on the day an admin opens them. Home's season card is the match folder: the series sits inside it, Orange Cap and Purple Cap sit on the card, and the title opens that season's matches.",
       "Leaders is Regulars or Everyone, this season or all time. Records split the same way. Super striker, most dots, best score, and best spell are on that page.",
-      "Notes is what we put on the phone. Rules is how we play and how we count. The public Stories list is gone.",
+      "Rules live on the website, next to Notes. The public Stories list is gone.",
     ],
     whatsNew: [
       "Named seasons",
       "Season match folder",
       "Orange Cap and Purple Cap",
       "Season records",
-      "Notes and Rules on Home",
     ],
     whatWeDropped: ["Public Stories and the mixed Feed"],
   },
@@ -248,4 +247,19 @@ export const RELEASE_NOTES: ReleaseNote[] = [
 
 export function getReleaseNote(slug: string): ReleaseNote | undefined {
   return RELEASE_NOTES.find((note) => note.slug === slug);
+}
+
+function noteDateAt(date: string): number {
+  const [year, month, day] = date.split("-").map(Number);
+  return Date.UTC(year, month - 1, day, 12, 0, 0);
+}
+
+/** "22 August 2026" */
+export function formatNoteDate(date: string): string {
+  return new Date(noteDateAt(date)).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
