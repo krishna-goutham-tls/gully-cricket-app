@@ -1,4 +1,4 @@
-import { MATCH_STORIES, type MatchStory } from "./match-stories";
+import { MATCH_STORIES, storyPreview, type MatchStory } from "./match-stories";
 import { RELEASE_NOTES, type ReleaseNote } from "./release-notes";
 
 export type FeedKind = "story" | "note";
@@ -24,7 +24,7 @@ function storyItem(story: MatchStory): FeedItem {
     date: story.date,
     title: story.title,
     href: `/match-stories/${story.slug}`,
-    preview: firstSentence(story.paragraphs[0] ?? ""),
+    preview: storyPreview(story),
   };
 }
 
