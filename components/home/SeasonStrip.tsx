@@ -146,7 +146,7 @@ export function SeasonStrip({ series }: { series?: SeriesRow | null }) {
         {current ? (
           <>
             <Link
-              href="/leaderboard"
+              href={`/seasons/${current._id}`}
               className="flex min-h-11 items-center gap-2 px-4 py-3 active:bg-bg"
             >
               <span className="min-w-0 flex-1">
@@ -166,19 +166,29 @@ export function SeasonStrip({ series }: { series?: SeriesRow | null }) {
                 <SeriesCard series={series} nested />
               </div>
             ) : null}
-            <p className="border-t border-line px-4 py-2.5 text-[13px] leading-snug">
-              <CapName
-                label="Orange Cap"
-                name={orange}
-                loading={capsLoading}
-              />
-              <span className="text-muted"> · </span>
-              <CapName
-                label="Purple Cap"
-                name={purple}
-                loading={capsLoading}
-              />
-            </p>
+            <div className="flex flex-wrap items-center gap-x-1 border-t border-line px-3">
+              <Link
+                href="/leaderboard?cap=orange"
+                className="inline-flex min-h-11 items-center px-1 text-[13px] leading-snug"
+              >
+                <CapName
+                  label="Orange Cap"
+                  name={orange}
+                  loading={capsLoading}
+                />
+              </Link>
+              <span className="text-muted">·</span>
+              <Link
+                href="/leaderboard?cap=purple"
+                className="inline-flex min-h-11 items-center px-1 text-[13px] leading-snug"
+              >
+                <CapName
+                  label="Purple Cap"
+                  name={purple}
+                  loading={capsLoading}
+                />
+              </Link>
+            </div>
             {isAdmin ? (
               <button
                 type="button"

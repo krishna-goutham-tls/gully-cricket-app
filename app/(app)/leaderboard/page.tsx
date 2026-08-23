@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { Check, ChevronDown } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type Board = NonNullable<FunctionReturnType<typeof api.stats.leaderboard>>;
@@ -424,12 +425,20 @@ function ScopeToggle({
 
 export default function LeaderboardPage() {
   const { token, activeOrgId, user, activeOrg } = useAuth();
-  const [tab, setTab] = useState<Tab>("batting");
-  const [measureKey, setMeasureKey] = useState<MeasureKey>("runs");
+  const cap = useSearchParams().get("cap");
+  const [tab, setTab] = useState<Tab>(
+    cap === "purple" ? "bowling" : "batting",
+  );
+  const [measureKey, setMeasureKey] = useState<MeasureKey>(
+    cap === "purple" ? "wickets" : "runs",
+  );
   // Default: visitors and juniors off the board. Anyone can flip Everyone.
   const [includeExtras, setIncludeExtras] = useState(false);
   // null = not chosen yet. Default This season when one is live, else All time.
-  const [scope, setScope] = useState<"season" | "all" | null>(null);
+  // A cap link from Home always means this season.
+  const [scope, setScope] = useState<"season" | "all" | null>(
+    cap === "orange" || cap === "purple" ? "season" : null,
+  );
   const current = useQuery(
     api.seasons.current,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
