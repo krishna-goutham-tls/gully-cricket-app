@@ -341,6 +341,42 @@ const DEFAULT_MEASURE: Record<Tab, MeasureKey> = {
   players: "points",
 };
 
+type FormatScope = "all" | "test" | "limited";
+
+function WordToggle<T extends string>({
+  value,
+  options,
+  onChange,
+  ariaLabel,
+}: {
+  value: T;
+  options: { id: T; label: string }[];
+  onChange: (next: T) => void;
+  ariaLabel: string;
+}) {
+  return (
+    <div className="flex shrink-0" role="group" aria-label={ariaLabel}>
+      {options.map((o) => {
+        const on = value === o.id;
+        return (
+          <button
+            key={o.id}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onChange(o.id)}
+            className={cn(
+              "min-h-11 px-1.5 text-[13px] font-semibold active:opacity-70",
+              on ? "text-ink" : "text-muted",
+            )}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function ScopeToggle({
   usingSeason,
   seasonName,
@@ -434,6 +470,8 @@ export default function LeaderboardPage() {
   );
   // Default: visitors and juniors off the board. Anyone can flip Everyone.
   const [includeExtras, setIncludeExtras] = useState(false);
+  // Mixed board is how the group already argues. Tests / Lim overs is the slice.
+  const [format, setFormat] = useState<FormatScope>("all");
   // null = not chosen yet. Default This season when one is live, else All time.
   // A cap link from Home always means this season.
   const [scope, setScope] = useState<"season" | "all" | null>(
@@ -452,6 +490,7 @@ export default function LeaderboardPage() {
           orgId: activeOrgId,
           includeVisitorsAndJuniors: includeExtras,
           ...(usingSeason && current ? { seasonId: current._id } : {}),
+          ...(format === "all" ? {} : { format }),
         }
       : "skip",
   );
@@ -500,10 +539,16 @@ export default function LeaderboardPage() {
     if (!data) return null;
     const org = activeOrg?.orgName ?? "Gully";
     const count = `${data.matchCount} match${data.matchCount === 1 ? "" : "es"}`;
+    const formatBit =
+      format === "test"
+        ? "Tests"
+        : format === "limited"
+          ? "Lim overs"
+          : null;
     const subtitle =
       usingSeason && current
-        ? `${org} · ${current.name} · ${count}`
-        : `${org} · ${count}`;
+        ? [org, current.name, formatBit, count].filter(Boolean).join(" · ")
+        : [org, formatBit, count].filter(Boolean).join(" · ");
     return {
       kind: "leaderboard" as const,
       title: measure.shareTitle,
@@ -517,7 +562,7 @@ export default function LeaderboardPage() {
           value: r.display ?? String(r.value),
         })),
     };
-  }, [data, rows, measure, activeOrg, usingSeason, current]);
+  }, [data, rows, measure, activeOrg, usingSeason, current, format]);
 
   const [scrolled, setScrolled] = useState(false);
   const [chipsOpen, setChipsOpen] = useState(false);
@@ -534,9 +579,9 @@ export default function LeaderboardPage() {
   const compactChips = scrolled && !chipsOpen;
 
   const capLabel =
-    usingSeason && measure.key === "runs"
+    format === "all" && usingSeason && measure.key === "runs"
       ? "Orange Cap"
-      : usingSeason && measure.key === "wickets"
+      : format === "all" && usingSeason && measure.key === "wickets"
         ? "Purple Cap"
         : null;
 
@@ -625,41 +670,40 @@ export default function LeaderboardPage() {
         )}
 
         {!scrolled ? (
-          <div className="mt-1 flex items-center gap-2 px-1">
-            <p className="min-w-0 flex-1 text-[11px] text-faint">
-              {data === undefined
-                ? "Loading…"
-                : data
-                  ? `${data.matchCount} match${data.matchCount === 1 ? "" : "es"}`
-                  : null}
-            </p>
-            <div
-              className="flex shrink-0"
-              role="group"
-              aria-label="Who appears on the board"
-            >
-              <button
-                type="button"
-                aria-pressed={!includeExtras}
-                onClick={() => setIncludeExtras(false)}
-                className={cn(
-                  "min-h-11 px-1.5 text-[13px] font-semibold active:opacity-70",
-                  !includeExtras ? "text-ink" : "text-muted",
-                )}
-              >
-                Regulars
-              </button>
-              <button
-                type="button"
-                aria-pressed={includeExtras}
-                onClick={() => setIncludeExtras(true)}
-                className={cn(
-                  "min-h-11 px-1.5 text-[13px] font-semibold active:opacity-70",
-                  includeExtras ? "text-ink" : "text-muted",
-                )}
-              >
-                Everyone
-              </button>
+          <div className="mt-1 px-1">
+            <div className="flex items-center gap-2">
+              <p className="min-w-0 flex-1 text-[11px] text-faint">
+                {data === undefined
+                  ? "Loading…"
+                  : data
+                    ? format === "test"
+                      ? `${data.matchCount} Test${data.matchCount === 1 ? "" : "s"}`
+                      : format === "limited"
+                        ? `${data.matchCount} limited`
+                        : `${data.matchCount} match${data.matchCount === 1 ? "" : "es"}`
+                    : null}
+              </p>
+              <WordToggle
+                ariaLabel="Who appears on the board"
+                value={includeExtras ? "everyone" : "regulars"}
+                onChange={(next) => setIncludeExtras(next === "everyone")}
+                options={[
+                  { id: "regulars", label: "Regulars" },
+                  { id: "everyone", label: "Everyone" },
+                ]}
+              />
+            </div>
+            <div className="flex justify-end">
+              <WordToggle
+                ariaLabel="Test or limited overs"
+                value={format}
+                onChange={setFormat}
+                options={[
+                  { id: "test", label: "Tests" },
+                  { id: "limited", label: "Lim overs" },
+                  { id: "all", label: "All" },
+                ]}
+              />
             </div>
           </div>
         ) : null}
@@ -674,14 +718,26 @@ export default function LeaderboardPage() {
           <div className="mt-3">
             <EmptyState
               title={
-                usingSeason
-                  ? "No games in this season yet"
-                  : "No completed matches yet"
+                format === "test"
+                  ? usingSeason
+                    ? "No Tests in this season yet"
+                    : "No Tests yet"
+                  : format === "limited"
+                    ? usingSeason
+                      ? "No limited games in this season yet"
+                      : "No limited-overs games yet"
+                    : usingSeason
+                      ? "No games in this season yet"
+                      : "No completed matches yet"
               }
               body={
-                usingSeason
-                  ? "Play a match. The board starts at zero."
-                  : "Leaderboards build up as matches finish."
+                format === "test"
+                  ? "Play a Test. The board starts at zero."
+                  : format === "limited"
+                    ? "Play a limited-overs match. The board starts at zero."
+                    : usingSeason
+                      ? "Play a match. The board starts at zero."
+                      : "Leaderboards build up as matches finish."
               }
             />
           </div>
