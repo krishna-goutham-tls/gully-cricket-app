@@ -38,6 +38,23 @@ export const playerTag = v.union(v.literal("visitor"), v.literal("junior"));
 
 export const battingMode = v.union(v.literal("double"), v.literal("single"));
 
+export const wishlistCategory = v.union(
+  v.literal("scoring"),
+  v.literal("numbers"),
+  v.literal("leaders"),
+  v.literal("setup"),
+  v.literal("sharing"),
+  v.literal("broken"),
+);
+
+export const wishlistState = v.union(
+  v.literal("open"),
+  v.literal("planned"),
+  v.literal("building"),
+  v.literal("shipped"),
+  v.literal("not_doing"),
+);
+
 /** Which of the two match sides. Sides are defined per match, unique to it. */
 export const side = v.union(v.literal("A"), v.literal("B"));
 
@@ -403,4 +420,49 @@ export default defineSchema({
   })
     .index("by_org", ["orgId"])
     .index("by_org_status", ["orgId", "status"]),
+  /**
+   * A player's ask, on their own community's board. Nothing here touches the
+   * ball log or any scoring read-model — the wishlist is a separate room.
+   *
+   * `upCount` / `downCount` / `score` are denormalised onto the row so the
+   * board sorts on one indexed field instead of counting ballots on every
+   * read. `wishlistVotes` is the ledger those numbers are derived from; the
+   * two are written in the same mutation and must never drift.
+   */
+  wishlistRequests: defineTable({
+    orgId: v.id("orgs"),
+    authorId: v.id("users"),
+    category: wishlistCategory,
+    text: v.string(),
+    state: wishlistState,
+    upCount: v.number(),
+    downCount: v.number(),
+    /** upCount - downCount. Sorted on; never computed at read time. */
+    score: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    /** Stamped when the platform admin moves it between sections. */
+    stateChangedAt: v.optional(v.number()),
+    stateChangedBy: v.optional(v.id("users")),
+  })
+    .index("by_org", ["orgId"])
+    .index("by_org_state", ["orgId", "state"])
+    .index("by_org_author", ["orgId", "authorId"]),
+
+  /**
+   * One row per player per request — the ballot slips behind the score.
+   * Without them a player could tap the arrow ten times and the board would
+   * be fiction. Switching a vote rewrites this row; taking it back deletes it.
+   */
+  wishlistVotes: defineTable({
+    requestId: v.id("wishlistRequests"),
+    userId: v.id("users"),
+    /** 1 for the up arrow, -1 for the down arrow. Never 0 — that is a delete. */
+    value: v.union(v.literal(1), v.literal(-1)),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_request_user", ["requestId", "userId"])
+    .index("by_request", ["requestId"])
+    .index("by_user", ["userId"]),
 });

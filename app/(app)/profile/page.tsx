@@ -10,7 +10,7 @@ import { api } from "@/convex/_generated/api";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { BarChart3, ChevronDown, ChevronRight } from "lucide-react";
+import { BarChart3, ChevronDown, ChevronRight, Lightbulb } from "lucide-react";
 import { cn, errorMessage } from "@/lib/utils";
 
 const ROLES = ["batsman", "bowler", "all-rounder", "keeper"] as const;
@@ -112,6 +112,8 @@ export default function ProfilePage() {
             <ChevronRight className="h-5 w-5 shrink-0 text-faint" />
           </Link>
         ) : null}
+
+        <WishlistRow />
 
         {/* Everything else is a settings list — one card, thin rows, expand only
             what you actually came to change, so the page opens on one screen. */}
@@ -290,6 +292,44 @@ function Row({
  * normal player, so this collapses to nothing — the row is not hidden with
  * CSS, it never renders.
  */
+/**
+ * The wishlist doorway. Every player sees it — the board is the community's,
+ * not the admin's. The count is open asks only; settled ones are not a
+ * to-do for anybody.
+ */
+function WishlistRow() {
+  const { token, activeOrgId } = useAuth();
+  const open =
+    useQuery(
+      api.wishlist.openCount,
+      token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
+    ) ?? 0;
+
+  if (!activeOrgId) return null;
+
+  return (
+    <Link
+      href="/wishlist"
+      className="flex min-h-12 items-center gap-3 rounded-3xl border border-line bg-surface px-4 py-3 active:bg-bg"
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-deep">
+        <Lightbulb className="h-4 w-4" strokeWidth={2.2} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] font-semibold text-ink">
+          Wishlist
+        </span>
+        <span className="block text-[12px] text-muted">
+          {open > 0
+            ? `${open} open ask${open === 1 ? "" : "s"} \u00b7 ask for a feature`
+            : "Ask for a feature, vote on others"}
+        </span>
+      </span>
+      <ChevronRight className="h-5 w-5 shrink-0 text-faint" />
+    </Link>
+  );
+}
+
 function AccessRequestsRow() {
   const { token } = useAuth();
   const isPlatformAdmin =
