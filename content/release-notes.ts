@@ -14,6 +14,22 @@ export const RELEASE_NOTES_INTRO = [
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    slug: "2026-08-28-wishlist",
+    date: "2026-08-28",
+    title: "Wishlist",
+    paragraphs: [
+      "Everyone has a thing they wish this app did. Those things were living in the group chat and dying there.",
+      "Profile now has a Wishlist. Say what you want in a line or two, pick what it is about, and it goes on your community's board. Everybody else can push it up or pull it down. The board sorts on that number, so the top of it is the queue.",
+      "One ask a day each. Building, Planned and Open sit in that order, and the ones that are settled move out of the way.",
+      "Your community sees your name on your ask. Nobody outside it does.",
+    ],
+    whatsNew: [
+      "A Wishlist on Profile",
+      "Up and down votes on every ask",
+      "A board that sorts itself by what people want",
+    ],
+  },
+  {
     slug: "2026-08-23-seasons-leaders-records",
     date: "2026-08-23",
     title: "Seasons, Leaders, Records",
