@@ -4,6 +4,7 @@ import { Doc, Id } from "./_generated/dataModel";
 import { requireActiveMembership } from "./lib/session";
 import { legalBallToOverText } from "./lib/scoring";
 import { captainTeamLabel } from "./lib/teams";
+import { matchFormat } from "./schema";
 import {
   basePoints,
   battingMilestoneBonus,
@@ -23,6 +24,13 @@ import {
   tagsForUsers,
   type PlayerTag,
 } from "./lib/playerLabel";
+
+type Format = "limited" | "test";
+
+/** Absent `ruleSnapshot.format` is a pre-format match — those were limited. */
+function snapshotFormat(match: Doc<"matches">): Format {
+  return match.ruleSnapshot.format === "test" ? "test" : "limited";
+}
 
 type BatAgg = {
   userId: Id<"users">;
@@ -138,9 +146,11 @@ async function aggregateOrg(
     beforeTs?: number;
     /** Inclusive start. Season boards use season.startedAt. */
     afterTs?: number;
+    /** Leaders format slice. Absent = Tests and limited together. */
+    format?: Format;
   } = {},
 ) {
-  const { focusPlayerId, beforeTs, afterTs } = opts;
+  const { focusPlayerId, beforeTs, afterTs, format } = opts;
   const completedAll = await ctx.db
     .query("matches")
     .withIndex("by_org_status", (q) =>
@@ -152,6 +162,7 @@ async function aggregateOrg(
   const completed = completedAll.filter((m) => {
     if (afterTs !== undefined && m.createdAt < afterTs) return false;
     if (beforeTs !== undefined && m.createdAt >= beforeTs) return false;
+    if (format !== undefined && snapshotFormat(m) !== format) return false;
     return true;
   });
 
@@ -933,6 +944,8 @@ export const leaderboard = query({
      */
     includeVisitorsAndJuniors: v.optional(v.boolean()),
     seasonId: v.optional(v.id("seasons")),
+    /** Tests or limited only. Omit for the mixed board (the default). */
+    format: v.optional(matchFormat),
   },
   handler: async (ctx, args) => {
     try {
@@ -961,10 +974,15 @@ export const leaderboard = query({
       prevBeforeTs = windowEnd - WEEK_MS;
     }
 
-    const current = await aggregateOrg(ctx, args.orgId, { afterTs, beforeTs });
+    const current = await aggregateOrg(ctx, args.orgId, {
+      afterTs,
+      beforeTs,
+      format: args.format,
+    });
     const previous = await aggregateOrg(ctx, args.orgId, {
       afterTs: prevAfterTs,
       beforeTs: prevBeforeTs,
+      format: args.format,
     });
 
     // One name map for both snapshots — a week-ago player is always a subset of
