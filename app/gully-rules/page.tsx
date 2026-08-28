@@ -133,7 +133,7 @@ export default function GullyRulesPage() {
           </div>
           <footer className="mt-14 flex flex-col items-center gap-3 border-t border-white/10 pt-8">
             <Logo size={28} />
-            <p className="text-sm text-bg/60">
+            <p className="text-sm text-bg/70">
               Gully Cricket — made by gully cricketers, with{" "}
               <span className="text-accent">♥</span>
             </p>

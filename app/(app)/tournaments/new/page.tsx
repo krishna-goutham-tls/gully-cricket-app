@@ -155,7 +155,7 @@ export default function NewTournamentPage() {
       });
       router.replace(`/tournaments/${res.tournamentId}`);
     } catch (e) {
-      setError(errorMessage(e, "Could not create the tournament"));
+      setError(errorMessage(e, "Could not create the series"));
       setBusy(false);
     }
   }
@@ -166,25 +166,25 @@ export default function NewTournamentPage() {
         <Link
           href="/tournaments"
           className="-ml-2 flex h-11 w-11 items-center justify-center rounded-xl text-muted active:bg-ink/[0.04]"
-          aria-label="Back to tournaments"
+          aria-label="Back to series"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <h1 className="text-xl font-semibold tracking-tight text-ink">
-          New tournament
+          New series
         </h1>
       </header>
 
       <main className="mx-auto w-full max-w-md flex-1 space-y-4 px-5 py-4 pb-32">
         {error ? (
-          <p className="rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-sm text-danger">
+          <p className="rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-[13px] text-danger">
             {error}
           </p>
         ) : null}
 
-        <div className="rounded-3xl border border-line bg-surface p-4">
+        <div className="rounded-2xl border border-line bg-surface p-4">
           <Input
-            label="Tournament name"
+            label="Series name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
@@ -195,7 +195,7 @@ export default function NewTournamentPage() {
           />
         </div>
 
-        <div className="rounded-3xl border border-line bg-surface p-4">
+        <div className="rounded-2xl border border-line bg-surface p-4">
           <div className="flex items-center justify-between">
             <p className="text-[15px] font-medium text-ink">Format</p>
             <div className="flex rounded-2xl border border-line p-1">
@@ -228,7 +228,7 @@ export default function NewTournamentPage() {
           </p>
         </div>
 
-        <div className="flex items-center justify-between gap-3 rounded-3xl border border-line bg-surface p-4">
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4">
           <p className="text-[15px] font-medium text-ink">Overs per innings</p>
           <input
             type="number"
@@ -260,7 +260,7 @@ export default function NewTournamentPage() {
           />
         ) : null}
 
-        <div className="rounded-3xl border border-line bg-surface p-4">
+        <div className="rounded-2xl border border-line bg-surface p-4">
           <div className="flex items-center justify-between gap-3">
             <p className="text-[15px] font-medium text-ink">Batters at a time</p>
             <div className="flex rounded-2xl border border-line p-1">
@@ -299,17 +299,17 @@ export default function NewTournamentPage() {
         <section className="space-y-3">
           <div>
             <p className="text-[15px] font-semibold text-ink">Squads</p>
-            <p className="mt-0.5 text-xs leading-relaxed text-muted">
+            <p className="mt-0.5 text-[11px] leading-relaxed text-muted">
               Pick a team below, then tap players to add them — the team stays
               selected until you change it.
             </p>
-            <p className="mt-1 text-xs leading-relaxed text-muted">
+            <p className="mt-1 text-[11px] leading-relaxed text-muted">
               Mark a player <span className="font-semibold text-ink">Core</span>{" "}
               if they&apos;re expected every match. Everyone else is a
               challenger who floats in and out — missing core only warns, never
               blocks.
             </p>
-            <p className="mt-1 text-xs leading-relaxed text-muted">
+            <p className="mt-1 text-[11px] leading-relaxed text-muted">
               The <span className="font-semibold text-ink">crown</span> sets each
               side&apos;s captain — it names the team unless you type a name
               above. You can change it here or later.
@@ -344,7 +344,7 @@ export default function NewTournamentPage() {
               <section
                 key={side}
                 className={cn(
-                  "rounded-3xl border bg-surface p-3 transition",
+                  "rounded-2xl border bg-surface p-3 transition",
                   activeTarget === side
                     ? "border-accent ring-2 ring-accent/40"
                     : "border-line",
@@ -363,7 +363,7 @@ export default function NewTournamentPage() {
                     maxLength={30}
                     className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-ink outline-none placeholder:text-faint"
                   />
-                  <span className="tabular shrink-0 rounded-full bg-bg px-2 py-0.5 text-xs font-semibold text-muted">
+                  <span className="tabular shrink-0 rounded-full bg-bg px-2 py-0.5 text-[11px] font-semibold text-muted">
                     {count}
                   </span>
                 </div>
@@ -372,7 +372,7 @@ export default function NewTournamentPage() {
                   onClick={() => setActiveTarget(side)}
                   aria-pressed={activeTarget === side}
                   className={cn(
-                    "mb-2 flex min-h-11 w-full items-center justify-center rounded-xl border px-2 text-xs font-semibold transition",
+                    "mb-2 flex min-h-11 w-full items-center justify-center rounded-xl border px-2 text-[11px] font-semibold transition",
                     activeTarget === side
                       ? "border-accent bg-accent-soft text-accent-deep"
                       : "border-line text-muted",
@@ -405,7 +405,7 @@ export default function NewTournamentPage() {
                     />
                   ))}
                   {team.length === 0 && common.length === 0 ? (
-                    <p className="px-1 py-3 text-center text-xs text-muted">
+                    <p className="px-1 py-3 text-center text-[11px] text-muted">
                       Empty
                     </p>
                   ) : null}
@@ -427,24 +427,24 @@ export default function NewTournamentPage() {
           >
             <Users className="h-4 w-4 shrink-0 text-accent-deep" />
             <span className="min-w-0">
-              <span className="block text-[14px] font-semibold text-ink">
+              <span className="block text-[15px] font-semibold text-ink">
                 {activeTarget === "common"
                   ? "Adding to both sides"
                   : "Plays both sides"}
               </span>
-              <span className="block text-xs text-muted">
+              <span className="block text-[11px] text-muted">
                 Common players join both squads.
               </span>
             </span>
             {common.length > 0 ? (
-              <span className="tabular ml-auto shrink-0 rounded-full bg-bg px-2 py-0.5 text-xs font-semibold text-muted">
+              <span className="tabular ml-auto shrink-0 rounded-full bg-bg px-2 py-0.5 text-[11px] font-semibold text-muted">
                 {common.length}
               </span>
             ) : null}
           </button>
 
           {draftPool.length > 0 ? (
-            <div className="rounded-3xl border border-line bg-surface p-4">
+            <div className="rounded-2xl border border-line bg-surface p-4">
               <p className="mb-2.5 text-[13px] font-medium text-muted">
                 Still to pick ({draftPool.length})
               </p>
@@ -462,7 +462,7 @@ export default function NewTournamentPage() {
               </div>
             </div>
           ) : assigned.size > 0 ? (
-            <p className="text-center text-xs text-muted">
+            <p className="text-center text-[11px] text-muted">
               All players assigned
             </p>
           ) : null}
@@ -550,12 +550,12 @@ function PlayerChip({
           {name}
         </span>
         {captain ? (
-          <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-ink px-1.5 py-0.5 text-xs font-bold leading-tight text-bg">
+          <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-ink px-1.5 py-0.5 text-[11px] font-bold leading-tight text-bg">
             <Crown className="h-3 w-3" fill="currentColor" />C
           </span>
         ) : null}
         {both ? (
-          <span className="shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-xs font-bold leading-tight text-ink">
+          <span className="shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[11px] font-bold leading-tight text-ink">
             both
           </span>
         ) : null}
@@ -619,11 +619,11 @@ function Stepper({
   onInc: () => void;
 }) {
   return (
-    <div className="rounded-3xl border border-line bg-surface p-4">
+    <div className="rounded-2xl border border-line bg-surface p-4">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[15px] font-medium text-ink">{label}</p>
-          {hint ? <p className="mt-0.5 text-xs text-muted">{hint}</p> : null}
+          {hint ? <p className="mt-0.5 text-[11px] text-muted">{hint}</p> : null}
         </div>
         <div className="flex items-center gap-3">
           <button

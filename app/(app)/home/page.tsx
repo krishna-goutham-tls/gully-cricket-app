@@ -159,7 +159,7 @@ export default function HomePage() {
       <AppHeader />
       <main className="mx-auto max-w-md px-5 py-4">
         {error ? (
-          <p className="mb-3 rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-sm text-danger">
+          <p className="mb-3 rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-[13px] text-danger">
             {error}
           </p>
         ) : null}
@@ -217,7 +217,7 @@ export default function HomePage() {
         {matches === undefined ? (
           <div className="mt-6 space-y-2">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="h-20 animate-pulse rounded-3xl bg-ink/[0.04]" />
+              <div key={i} className="h-20 animate-pulse rounded-2xl bg-ink/[0.04]" />
             ))}
           </div>
         ) : matches.length === 0 ? (

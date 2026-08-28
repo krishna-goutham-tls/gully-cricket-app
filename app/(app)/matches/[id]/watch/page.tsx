@@ -177,7 +177,7 @@ export default function WatchPage() {
           <Link
             href="/home"
             aria-label="Back to home"
-            className="-ml-2 flex h-11 w-11 items-center justify-center rounded-xl text-bg/60 active:bg-white/10"
+            className="-ml-2 flex h-11 w-11 items-center justify-center rounded-xl text-bg/70 active:bg-white/10"
           >
             <ArrowLeft className="h-5 w-5" />
           </Link>
@@ -340,7 +340,7 @@ export default function WatchPage() {
         </Button>
 
         {state.innings.length > 1 ? (
-          <div className="mt-6 rounded-3xl border border-line bg-surface p-4">
+          <div className="mt-6 rounded-2xl border border-line bg-surface p-4">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">
               Innings
             </p>

@@ -58,7 +58,7 @@ function isThriller(resultText: string | undefined) {
 
 function ThrillerChip() {
   return (
-    <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-deep">
+    <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-accent-deep">
       Thriller
     </span>
   );
@@ -138,7 +138,7 @@ export function MatchMenu({
               <button
                 type="button"
                 onClick={() => onEnd(match._id, label)}
-                className="block min-h-11 w-full px-4 py-3 text-left text-sm font-medium text-ink active:bg-bg hover:bg-bg"
+                className="block min-h-11 w-full px-4 py-3 text-left text-[13px] font-medium text-ink active:bg-bg hover:bg-bg"
               >
                 End without result
               </button>
@@ -146,7 +146,7 @@ export function MatchMenu({
             <button
               type="button"
               onClick={() => onDelete(match._id, label)}
-              className="block min-h-11 w-full border-t border-line px-4 py-3 text-left text-sm font-medium text-danger active:bg-danger-soft hover:bg-danger-soft"
+              className="block min-h-11 w-full border-t border-line px-4 py-3 text-left text-[13px] font-medium text-danger active:bg-danger-soft hover:bg-danger-soft"
             >
               Delete match
             </button>
@@ -367,7 +367,7 @@ export function MatchCard({
               {isLive ? <LivePill /> : null}
               {decided && isThriller(match.resultText) ? <ThrillerChip /> : null}
               {first.score ? (
-                <span className="tabular shrink-0 text-[14px] font-semibold text-ink">
+                <span className="tabular shrink-0 text-[15px] font-semibold text-ink">
                   {first.score}
                 </span>
               ) : null}
@@ -377,7 +377,7 @@ export function MatchCard({
                 {second.name}
               </TruncText>
               {second.score ? (
-                <span className="tabular shrink-0 text-[14px] font-medium text-muted">
+                <span className="tabular shrink-0 text-[15px] font-medium text-muted">
                   {second.score}
                 </span>
               ) : null}
@@ -385,7 +385,7 @@ export function MatchCard({
 
             {/* The margin is what tells this game apart from every other
                 between the same two sides — it reads in ink, not faint. */}
-            <p className="tabular mt-1.5 text-[12px] text-muted">
+            <p className="tabular mt-1.5 text-[13px] text-muted">
               <span className="font-medium text-muted">{matchType(match)}</span>
               {" · "}
               <span className={decided ? "font-medium text-ink" : undefined}>

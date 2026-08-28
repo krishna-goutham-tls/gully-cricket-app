@@ -17,6 +17,7 @@ function hideNav(pathname: string) {
   if (pathname === "/matches/new") return true;
   if (pathname === "/tournaments/new") return true;
   if (pathname === "/hero") return true;
+  if (/^\/seasons\/[^/]+\/wrap$/.test(pathname)) return true;
   return false;
 }
 

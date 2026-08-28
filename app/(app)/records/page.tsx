@@ -97,7 +97,7 @@ export default function RecordsPage() {
         {data === undefined ? (
           <div className="space-y-2">
             {[0, 1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-16 animate-pulse rounded-3xl bg-line" />
+              <div key={i} className="h-16 animate-pulse rounded-2xl bg-line" />
             ))}
           </div>
         ) : groups.length === 0 ? (
@@ -151,7 +151,7 @@ export default function RecordsPage() {
                           is charcoal — the same face, a colder verdict. */}
                       <span
                         className={cn(
-                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[12px] font-bold",
+                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[13px] font-bold",
                           roast
                             ? "bg-ink text-bg"
                             : "bg-accent-soft text-accent-deep",

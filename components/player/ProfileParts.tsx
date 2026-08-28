@@ -72,8 +72,8 @@ export function Meter({
   return (
     <div>
       <div className="flex items-baseline justify-between gap-2">
-        <p className="truncate text-[12px] text-muted">{label}</p>
-        <p className="tabular shrink-0 text-[12px] font-semibold text-ink">
+        <p className="truncate text-[13px] text-muted">{label}</p>
+        <p className="tabular shrink-0 text-[13px] font-semibold text-ink">
           {Math.round(pct)}%
         </p>
       </div>
@@ -111,7 +111,7 @@ export function FormStrip({
           <span
             key={i}
             className={cn(
-              "tabular rounded-md px-1.5 py-0.5 text-[12px] font-semibold",
+              "tabular rounded-md px-1.5 py-0.5 text-[13px] font-semibold",
               e.good
                 ? "bg-accent-soft text-accent-deep"
                 : "bg-ink/[0.05] text-muted",
@@ -167,7 +167,7 @@ export function TrophyShelf({ trophies }: { trophies: Trophy[] }) {
                   t.tier === "gold" ? "text-accent-deep" : "text-muted",
                 )}
               />
-              <span className="whitespace-nowrap text-[12px] font-semibold">
+              <span className="whitespace-nowrap text-[13px] font-semibold">
                 {t.label}
                 {t.value ? (
                   <span
@@ -502,7 +502,7 @@ export function MatchupTable({
                   />
                   <Link
                     href={`/players/${r.userId}`}
-                    className="ml-auto text-[12px] font-semibold text-accent-deep active:opacity-70"
+                    className="ml-auto text-[13px] font-semibold text-accent-deep active:opacity-70"
                   >
                     View →
                   </Link>
@@ -565,14 +565,14 @@ export function InningsLog({ rows }: { rows: LogRow[] }) {
                 {row.bothSides ? row.opponent : `v ${row.opponent}`}
               </p>
               {row.contributionPct != null ? (
-                <span className="tabular shrink-0 text-[12px] text-faint">
+                <span className="tabular shrink-0 text-[13px] text-faint">
                   {Math.round(row.contributionPct)}%
                 </span>
               ) : null}
               {row.result === "none" ? null : (
                 <span
                   className={cn(
-                    "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase",
+                    "shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-bold uppercase",
                     row.result === "won"
                       ? "bg-accent-soft text-accent-deep"
                       : "bg-ink/[0.06] text-muted",
@@ -582,7 +582,7 @@ export function InningsLog({ rows }: { rows: LogRow[] }) {
                 </span>
               )}
             </div>
-            <p className="tabular mt-0.5 truncate text-[12px] text-faint">
+            <p className="tabular mt-0.5 truncate text-[13px] text-faint">
               {shortDate(row.date)}
               {row.format === "test" ? " · Test" : ""}
               {bat ? (

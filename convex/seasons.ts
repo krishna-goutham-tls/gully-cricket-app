@@ -11,6 +11,7 @@ import {
   requireActiveMembership,
   requireOrgAdmin,
 } from "./lib/session";
+import { seasonsForOrg } from "./lib/seasons";
 import { loadRegularsBoard } from "./stats";
 
 /** Same bars as components/leaderboard/records.ts — do not import from UI. */
@@ -174,12 +175,10 @@ export const current = query({
     } catch {
       return null;
     }
-    return await ctx.db
-      .query("seasons")
-      .withIndex("by_org_status", (q) =>
-        q.eq("orgId", args.orgId).eq("status", "active"),
-      )
-      .unique();
+    return (
+      (await seasonsForOrg(ctx, args.orgId)).find((s) => s.status === "active") ??
+      null
+    );
   },
 });
 
@@ -189,17 +188,28 @@ export const list = query({
     orgId: v.id("orgs"),
   },
   handler: async (ctx, args) => {
-    try {
-      await requireActiveMembership(ctx, args.token, args.orgId);
-    } catch {
-      return null;
-    }
-    const rows = await ctx.db
-      .query("seasons")
-      .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
-      .collect();
-    rows.sort((a, b) => b.startedAt - a.startedAt);
-    return rows;
+    await requireActiveMembership(ctx, args.token, args.orgId);
+    return await seasonsForOrg(ctx, args.orgId);
+  },
+});
+
+/**
+ * One round-trip for Home. current + list used to land on different ticks:
+ * "no active season" arrived first and Home painted "No season yet" while
+ * Season-01 was still in flight. This payload is all-or-nothing.
+ */
+export const forHome = query({
+  args: {
+    token: v.optional(v.string()),
+    orgId: v.id("orgs"),
+  },
+  handler: async (ctx, args) => {
+    await requireActiveMembership(ctx, args.token, args.orgId);
+    const seasons = await seasonsForOrg(ctx, args.orgId);
+    const current =
+      seasons.find((s) => s.status === "active") ?? null;
+    const featured = current ?? seasons[0] ?? null;
+    return { seasons, current, featured };
   },
 });
 

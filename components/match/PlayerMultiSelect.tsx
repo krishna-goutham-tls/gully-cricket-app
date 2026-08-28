@@ -126,7 +126,7 @@ export function PlayerMultiSelect({
             setGuestName(search.trim());
             setGuestOpen(true);
           }}
-          className="mt-1 flex min-h-11 items-center gap-1.5 px-1 text-sm font-semibold text-accent-deep"
+          className="mt-1 flex min-h-11 items-center gap-1.5 px-1 text-[13px] font-semibold text-accent-deep"
         >
           <Plus className="h-4 w-4" />
           Add guest player
@@ -153,12 +153,12 @@ export function PlayerMultiSelect({
               <span className="flex min-w-0 items-center gap-2">
                 <span className="truncate">{p.displayName}</span>
                 {p.isGuest ? (
-                  <span className="shrink-0 rounded-full border border-line bg-bg px-2 py-0.5 text-xs font-medium text-muted">
+                  <span className="shrink-0 rounded-full border border-line bg-bg px-2 py-0.5 text-[11px] font-medium text-muted">
                     guest
                   </span>
                 ) : null}
                 {otherSet.has(p.userId) ? (
-                  <span className="shrink-0 text-xs font-medium text-faint">
+                  <span className="shrink-0 text-[11px] font-medium text-faint">
                     {selected ? "both teams" : "other team"}
                   </span>
                 ) : null}
@@ -168,7 +168,7 @@ export function PlayerMultiSelect({
           );
         })}
         {filtered.length === 0 ? (
-          <p className="px-3.5 py-2.5 text-sm text-faint">No players found</p>
+          <p className="px-3.5 py-2.5 text-[13px] text-faint">No players found</p>
         ) : null}
       </div>
     </div>

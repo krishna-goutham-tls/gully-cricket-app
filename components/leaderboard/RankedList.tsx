@@ -160,14 +160,14 @@ export function RankedList({
                   ? row.tags.map((tag) => (
                       <span
                         key={tag}
-                        className="shrink-0 rounded-full border border-line bg-bg px-1.5 py-0.5 text-[10px] font-medium text-muted"
+                        className="shrink-0 rounded-full border border-line bg-bg px-1.5 py-0.5 text-[11px] font-medium text-muted"
                       >
                         {tag}
                       </span>
                     ))
                   : null}
                 {you ? (
-                  <span className="shrink-0 rounded-full bg-ink/[0.07] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                  <span className="shrink-0 rounded-full bg-ink/[0.07] px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
                     You
                   </span>
                 ) : null}

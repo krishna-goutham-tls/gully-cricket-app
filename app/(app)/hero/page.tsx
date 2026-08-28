@@ -1,13 +1,8 @@
 "use client";
 
 import { useAuth } from "@/components/providers/AuthProvider";
-import {
-  CARD_HEIGHT,
-  CARD_WIDTH,
-  ShareCard,
-  type HeroShareData,
-  type ShareStat,
-} from "@/components/share/ShareCard";
+import { PosterPreview } from "@/components/share/PosterPreview";
+import { type HeroShareData, type ShareStat } from "@/components/share/ShareCard";
 import { ShareButton } from "@/components/share/ShareButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
@@ -17,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { ArrowLeft } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 /**
  * "Hero" — one player's flex for one DAY (a day is often several matches),
@@ -48,48 +43,11 @@ function dayBounds(ts: number) {
   return { dayStart: start, dayEnd: start + 24 * 60 * 60 * 1000 };
 }
 
-/** Scales the fixed 1080×1350 ShareCard down to whatever width its
- * container gives it, instead of guessing a viewport size up front — the
- * same card the exported PNG uses, just shown live on screen. */
-function PosterPreview({ data }: { data: HeroShareData }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(0);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const update = () => setScale(el.clientWidth / CARD_WIDTH);
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  return (
-    <div
-      ref={containerRef}
-      className="w-full overflow-hidden rounded-[28px] shadow-lift"
-      style={{ aspectRatio: `${CARD_WIDTH} / ${CARD_HEIGHT}` }}
-    >
-      <div
-        style={{
-          width: CARD_WIDTH,
-          height: CARD_HEIGHT,
-          transform: `scale(${scale})`,
-          transformOrigin: "top left",
-        }}
-      >
-        <ShareCard data={data} />
-      </div>
-    </div>
-  );
-}
-
 function HeroPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectPlayerId = searchParams.get("playerId");
-  const { token, activeOrgId } = useAuth();
+  const { token, activeOrgId, user } = useAuth();
 
   const days = useQuery(
     api.hero.heroDays,
@@ -135,6 +93,34 @@ function HeroPageInner() {
 
   const activeDay = dayGroups.find((d) => d.key === dayKey) ?? null;
 
+  const shares = useQuery(
+    api.hero.dayShares,
+    token && activeOrgId && activeDay
+      ? {
+          token,
+          orgId: activeOrgId,
+          dayStart: activeDay.dayStart,
+          dayEnd: activeDay.dayEnd,
+        }
+      : "skip",
+  );
+
+  const ranked = useMemo(() => {
+    const pts = new Map(
+      (shares ?? []).map((s) => [String(s.id), s.points] as const),
+    );
+    return [...(activeDay?.players ?? [])]
+      .map((p) => ({
+        id: String(p.id),
+        name: p.name,
+        points: pts.get(String(p.id)) ?? 0,
+      }))
+      .sort(
+        (a, b) =>
+          b.points - a.points || a.name.localeCompare(b.name),
+      );
+  }, [activeDay, shares]);
+
   const hero = useQuery(
     api.hero.heroDay,
     token && activeOrgId && activeDay && playerId
@@ -151,21 +137,40 @@ function HeroPageInner() {
   const heroData: HeroShareData | null = useMemo(() => {
     if (!hero) return null;
     const n = hero.numbers;
+    const bowlLed = n.wickets >= 3 && n.wickets * 20 >= n.runs;
     const stats: ShareStat[] = [{ label: "Matches", value: String(n.matches) }];
-    if (n.ballsFaced > 0) {
-      stats.push({ label: "Runs", value: String(n.runs), accent: true });
-      stats.push({ label: "SR", value: n.strikeRate.toFixed(1) });
-    }
-    if (n.fours > 0 || n.sixes > 0) {
-      stats.push({ label: "4s / 6s", value: `${n.fours}/${n.sixes}` });
-    }
-    if (n.ballsBowled > 0) {
+    if (bowlLed && n.ballsBowled > 0) {
       stats.push({
         label: "Wickets",
         value: String(n.wickets),
-        accent: n.ballsFaced === 0,
+        accent: true,
       });
-      stats.push({ label: "Economy", value: n.economy !== null ? n.economy.toFixed(1) : "—" });
+      stats.push({
+        label: "Economy",
+        value: n.economy !== null ? n.economy.toFixed(1) : "—",
+      });
+      if (n.ballsFaced > 0) {
+        stats.push({ label: "Runs", value: String(n.runs) });
+      }
+    } else {
+      if (n.ballsFaced > 0) {
+        stats.push({
+          label: "Runs",
+          value: String(n.runs),
+          accent: true,
+        });
+        stats.push({ label: "SR", value: n.strikeRate.toFixed(1) });
+      }
+      if (n.ballsBowled > 0) {
+        stats.push({
+          label: "Wickets",
+          value: String(n.wickets),
+          accent: n.ballsFaced === 0,
+        });
+      }
+    }
+    if (n.fours > 0 || n.sixes > 0) {
+      stats.push({ label: "4s / 6s", value: `${n.fours}/${n.sixes}` });
     }
     if (n.catches > 0) {
       stats.push({ label: "Catches", value: String(n.catches) });
@@ -214,7 +219,7 @@ function HeroPageInner() {
       <main className="mx-auto max-w-md px-5 pb-8 pt-2">
         {/* Day chips */}
         {dayGroups.length > 0 ? (
-          <div className="-mx-5 mb-4 flex gap-2 overflow-x-auto px-5 pb-1">
+          <div className="no-scrollbar -mx-5 mb-4 flex gap-2 overflow-x-auto px-5">
             {dayGroups.map((d) => (
               <button
                 key={d.key}
@@ -224,7 +229,7 @@ function HeroPageInner() {
                   if (!d.players.some((p) => String(p.id) === playerId)) setPlayerId(null);
                 }}
                 className={cn(
-                  "min-h-11 shrink-0 whitespace-nowrap rounded-full px-4 text-[13px] font-semibold",
+                  "min-h-11 shrink-0 whitespace-nowrap rounded-lg px-4 text-[13px] font-semibold",
                   d.key === dayKey
                     ? "bg-accent text-ink"
                     : "border border-white/10 text-bg/70 active:bg-white/10",
@@ -251,27 +256,69 @@ function HeroPageInner() {
           </div>
         ) : !activeDay ? null : !playerId || !heroData ? (
           <>
-            <p className="mb-3 px-1 text-[13px] text-bg/70">
-              Who had the day? {activeDay.matchCount} match
-              {activeDay.matchCount === 1 ? "" : "es"} on {activeDay.label.toLowerCase()}.
-            </p>
-            <div className="grid grid-cols-3 gap-2.5">
-              {activeDay.players.map((p) => (
-                <button
-                  key={String(p.id)}
-                  type="button"
-                  onClick={() => setPlayerId(String(p.id))}
-                  className="flex flex-col items-center gap-2 rounded-2xl border border-white/10 px-2 py-3.5 text-center active:bg-white/5"
-                >
-                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-[15px] font-semibold text-accent">
-                    {initials(p.name)}
-                  </span>
-                  <span className="line-clamp-2 text-[12px] font-medium leading-tight text-bg/80">
-                    {p.name}
-                  </span>
-                </button>
-              ))}
-            </div>
+            <p className="mb-3 px-1 text-[13px] text-bg/70">Who had the day</p>
+            {shares === undefined ? (
+              <div className="space-y-1.5">
+                {[0, 1, 2, 3].map((i) => (
+                  <div key={i} className="h-14 animate-pulse rounded-2xl bg-white/5" />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {ranked.map((p, i) => {
+                  const max = Math.max(ranked[0]?.points ?? 1, 1);
+                  const pct = Math.max(0, Math.round((p.points / max) * 100));
+                  const lead = i === 0 && p.points > 0;
+                  const you = user && String(user._id) === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setPlayerId(p.id)}
+                      className={cn(
+                        "flex min-h-12 w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left active:bg-white/5",
+                        lead
+                          ? "border-accent/40 bg-accent/10"
+                          : "border-white/10",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "flex shrink-0 items-center justify-center rounded-xl bg-accent/15 font-semibold text-accent",
+                          lead ? "h-12 w-12 text-[15px]" : "h-11 w-11 text-[13px]",
+                        )}
+                      >
+                        {initials(p.name)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex min-w-0 items-baseline gap-1.5">
+                          <span className="min-w-0 truncate text-[15px] font-semibold text-bg">
+                            {p.name}
+                          </span>
+                          {you ? (
+                            <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-bg/70">
+                              You
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-white/10">
+                          <span
+                            className={cn(
+                              "block h-full rounded-full",
+                              lead ? "bg-accent" : "bg-white/35",
+                            )}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </span>
+                      </span>
+                      <span className="tabular shrink-0 text-[15px] font-semibold text-bg">
+                        {p.points}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             {hero === null ? (
               <p className="mt-4 text-center text-[13px] text-bg/70">
                 Nothing to show for that pick — try another player.
@@ -286,7 +333,7 @@ function HeroPageInner() {
               <button
                 type="button"
                 onClick={() => setPlayerId(null)}
-                className="min-h-11 rounded-2xl border border-white/10 px-4 text-[13px] font-semibold text-bg/70 active:bg-white/10"
+                className="min-h-11 rounded-xl border border-white/10 px-4 text-[13px] font-semibold text-bg/70 active:bg-white/10"
               >
                 Change player
               </button>

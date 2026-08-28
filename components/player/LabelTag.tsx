@@ -29,7 +29,7 @@ function Chip({
     dark
       ? on
         ? "bg-bg text-ink"
-        : "bg-white/15 text-bg/55"
+        : "bg-white/15 text-bg/70"
       : on
         ? "bg-ink text-bg"
         : "bg-line text-muted",

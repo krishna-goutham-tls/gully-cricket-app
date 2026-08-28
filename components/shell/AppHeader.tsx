@@ -78,7 +78,7 @@ export function AppHeader({
               <div ref={switcherRef} className="relative shrink-0">
                 <button
                   type="button"
-                  aria-label="Switch group"
+                  aria-label="Switch community"
                   aria-expanded={open}
                   onClick={() => setOpen((v) => !v)}
                   className="flex h-11 w-11 items-center justify-center rounded-lg border border-line bg-surface text-muted active:bg-bg"

@@ -85,7 +85,7 @@ function shareScore(card: Scorecard, side: "A" | "B") {
 export default function MatchDetailPage() {
   const params = useParams();
   const matchId = params.id as Id<"matches">;
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const card = useQuery(
     api.scoring.scorecard,
     token ? { token, matchId } : "skip",
@@ -283,7 +283,7 @@ export default function MatchDetailPage() {
             <EmptyState title="No play yet" />
           </div>
         ) : isTest && card.innings.length > 1 ? (
-          <InningsRail card={card} />
+          <InningsRail card={card} youId={user?._id} />
         ) : (
           <div className="mx-auto max-w-md space-y-3 px-4">
             {card.innings.map((inn) => (
@@ -292,6 +292,7 @@ export default function MatchDetailPage() {
                 inn={inn}
                 card={card}
                 label={inningsLabel(card, inn)}
+                youId={user?._id}
               />
             ))}
           </div>
@@ -306,7 +307,13 @@ export default function MatchDetailPage() {
  * thing natively. One innings fills the viewport, so nothing scrolls
  * vertically to read a complete innings.
  */
-function InningsRail({ card }: { card: Scorecard }) {
+function InningsRail({
+  card,
+  youId,
+}: {
+  card: Scorecard;
+  youId?: string;
+}) {
   const railRef = useRef<HTMLDivElement>(null);
   // Open on the live innings — that's what anyone picking up the phone wants —
   // and on the most recent one for a finished match.
@@ -383,6 +390,7 @@ function InningsRail({ card }: { card: Scorecard }) {
                 inn={inn}
                 card={card}
                 label={inningsLabel(card, inn)}
+                youId={youId}
               />
             </div>
           </div>

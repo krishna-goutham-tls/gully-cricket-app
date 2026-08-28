@@ -21,7 +21,7 @@ export const Input = forwardRef<
         )}
         {...props}
       />
-      {hint ? <span className="block text-xs text-faint">{hint}</span> : null}
+      {hint ? <span className="block text-[11px] text-faint">{hint}</span> : null}
     </label>
   );
 });

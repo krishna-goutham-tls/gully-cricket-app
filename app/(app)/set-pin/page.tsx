@@ -54,7 +54,7 @@ export default function SetPinPage() {
         </p>
       </div>
 
-      <div className="rounded-3xl border border-line bg-surface p-6 shadow-card">
+      <div className="rounded-2xl border border-line bg-surface p-6 shadow-card">
         <p className="mb-5 text-center text-[15px] font-semibold text-ink">
           {stage === "new" ? "New PIN" : "Confirm PIN"}
         </p>
@@ -84,7 +84,7 @@ export default function SetPinPage() {
           }}
         />
         {error ? (
-          <p className="mt-4 rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-center text-sm text-danger">
+          <p className="mt-4 rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-center text-[13px] text-danger">
             {error}
           </p>
         ) : null}

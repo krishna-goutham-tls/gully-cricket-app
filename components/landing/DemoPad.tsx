@@ -251,7 +251,7 @@ export function DemoPad() {
             {burst.text}
           </p>
         ) : null}
-        <p className="text-center text-[11px] font-medium text-bg/60">
+        <p className="text-center text-[11px] font-medium text-bg/70">
           Innings 1 · Team Ashu batting
         </p>
         <div className="mt-1.5 flex items-end justify-center gap-3">
@@ -262,14 +262,14 @@ export function DemoPad() {
             )}
           >
             {live.runs}
-            <span className="text-bg/35">/</span>
+            <span className="text-bg/70">/</span>
             {live.wickets}
           </p>
           <div className="pb-0.5 text-left">
             <p className="tabular text-[1.4rem] font-bold leading-none text-bg">
               {live.oversText}
             </p>
-            <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-bg/50">
+            <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-bg/70">
               Overs
             </p>
           </div>
@@ -289,17 +289,17 @@ export function DemoPad() {
             </p>
           </div>
           <div className="rounded-lg bg-white/[0.05] px-1 py-1">
-            <p className="uppercase tracking-wide text-bg/45">Non-striker</p>
+            <p className="uppercase tracking-wide text-bg/70">Non-striker</p>
             <p className="truncate font-medium text-bg/75">{nonStriker}</p>
-            <p className="tabular text-bg/55">
+            <p className="tabular text-bg/70">
               {live.batRuns[live.nonStrikerIdx]}(
               {live.batBalls[live.nonStrikerIdx]})
             </p>
           </div>
           <div className="rounded-lg bg-white/[0.05] px-1 py-1">
-            <p className="uppercase tracking-wide text-bg/45">Bowling</p>
+            <p className="uppercase tracking-wide text-bg/70">Bowling</p>
             <p className="truncate font-medium text-bg/90">{live.bowler}</p>
-            <p className="tabular text-bg/55">Over {live.oversText}</p>
+            <p className="tabular text-bg/70">Over {live.oversText}</p>
           </div>
         </div>
 

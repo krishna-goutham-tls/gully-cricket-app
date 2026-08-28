@@ -51,7 +51,7 @@ export default function NewOrgPage() {
   if (allowance === undefined) {
     return (
       <main className="mx-auto max-w-md px-5 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-[calc(var(--safe-top)+1.5rem)]">
-        <div className="h-40 animate-pulse rounded-3xl bg-line/60" />
+        <div className="h-40 animate-pulse rounded-2xl bg-line/60" />
       </main>
     );
   }
@@ -75,12 +75,12 @@ export default function NewOrgPage() {
 
     return (
       <main className="mx-auto max-w-md px-5 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-[calc(var(--safe-top)+1.5rem)]">
-        <div className="rounded-3xl border border-line bg-surface p-6 text-center">
+        <div className="rounded-2xl border border-line bg-surface p-6 text-center">
           <p className="text-3xl">🏏</p>
           <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink">
             {copy.title}
           </h1>
-          <p className="mt-2 text-sm leading-relaxed text-muted">{copy.body}</p>
+          <p className="mt-2 text-[13px] leading-relaxed text-muted">{copy.body}</p>
           <Button
             variant="secondary"
             fullWidth
@@ -100,12 +100,12 @@ export default function NewOrgPage() {
         <h1 className="text-2xl font-semibold tracking-tight text-ink">
           Create your community
         </h1>
-        <p className="mt-1.5 text-sm text-muted">
+        <p className="mt-1.5 text-[13px] text-muted">
           You become admin. Players sign up and you approve them.
         </p>
       </div>
 
-      <div className="space-y-4 rounded-3xl border border-line bg-surface p-5">
+      <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
         <Input
           label="Community name"
           placeholder="Green Valley Society"
@@ -118,7 +118,7 @@ export default function NewOrgPage() {
           value={location}
           onChange={(e) => setLocation(e.target.value)}
         />
-        {error ? <p className="text-sm text-danger">{error}</p> : null}
+        {error ? <p className="text-[13px] text-danger">{error}</p> : null}
         <Button
           fullWidth
           disabled={busy || name.trim().length < 2}

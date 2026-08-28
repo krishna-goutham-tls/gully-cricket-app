@@ -98,16 +98,16 @@ export default function TournamentDetailPage() {
   if (t === undefined) {
     return (
       <main className="mx-auto max-w-md px-5 py-6">
-        <div className="h-40 animate-pulse rounded-3xl bg-ink/[0.04]" />
+        <div className="h-40 animate-pulse rounded-2xl bg-ink/[0.04]" />
       </main>
     );
   }
   if (t === null) {
     return (
       <main className="mx-auto max-w-md px-5 py-6">
-        <EmptyState title="Tournament not found" body="It may have been removed." />
-        <Link href="/tournaments" className="mt-4 block text-center text-sm text-accent-deep">
-          Back to tournaments
+        <EmptyState title="Series not found" body="It may have been removed." />
+        <Link href="/tournaments" className="mt-4 block text-center text-[13px] text-accent-deep">
+          Back to series
         </Link>
       </main>
     );
@@ -236,7 +236,7 @@ export default function TournamentDetailPage() {
     try {
       await setStatus({ token, tournamentId, status });
     } catch (e) {
-      setAdminError(errorMessage(e, "Could not update the tournament"));
+      setAdminError(errorMessage(e, "Could not update the series"));
     }
   }
 
@@ -268,7 +268,7 @@ export default function TournamentDetailPage() {
       await reopen({ token, tournamentId });
       setReopenOpen(false);
     } catch (e) {
-      setAdminError(errorMessage(e, "Could not reopen the tournament"));
+      setAdminError(errorMessage(e, "Could not reopen the series"));
       setReopenOpen(false);
     } finally {
       setConfirmBusy(false);
@@ -283,7 +283,7 @@ export default function TournamentDetailPage() {
       await removeTournament({ token, tournamentId });
       router.replace("/tournaments");
     } catch (e) {
-      setAdminError(errorMessage(e, "Could not delete the tournament"));
+      setAdminError(errorMessage(e, "Could not delete the series"));
       setDeleteOpen(false);
       setConfirmBusy(false);
     }
@@ -304,7 +304,7 @@ export default function TournamentDetailPage() {
     unplayedCount > 0
       ? `${unplayedCount} fixture${unplayedCount === 1 ? "" : "s"} that never started ${unplayedCount === 1 ? "is" : "are"} removed.`
       : null,
-    "The tournament itself can't be brought back.",
+    "The series itself can't be brought back.",
   ]
     .filter(Boolean)
     .join(" ");
@@ -345,7 +345,7 @@ export default function TournamentDetailPage() {
         <Link
           href="/tournaments"
           className="-ml-2 flex h-11 w-11 items-center justify-center rounded-xl text-muted active:bg-ink/[0.04]"
-          aria-label="Back to tournaments"
+          aria-label="Back to series"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
@@ -359,19 +359,19 @@ export default function TournamentDetailPage() {
 
       <main className="mx-auto max-w-md space-y-4 px-5 py-5">
         {error ? (
-          <p className="rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-sm text-danger">
+          <p className="rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-[13px] text-danger">
             {error}
           </p>
         ) : null}
 
-        <div className="rounded-3xl border border-line bg-surface p-4">
+        <div className="rounded-2xl border border-line bg-surface p-4">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
               {t.format === "limited" ? "ODI series" : "Test series"}
             </p>
             <span
               className={cn(
-                "rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wide",
+                "rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide",
                 t.status === "active"
                   ? "bg-accent-soft text-accent-deep"
                   : "bg-ink/[0.06] text-muted",
@@ -382,29 +382,29 @@ export default function TournamentDetailPage() {
           </div>
           <div className="mt-3 flex items-center justify-between gap-2 tabular">
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-ink">{t.sideAName}</p>
+              <p className="truncate text-[13px] font-medium text-ink">{t.sideAName}</p>
               <p className="text-3xl font-semibold text-ink">{s.winsA}</p>
             </div>
             <span className="text-muted">—</span>
             <div className="min-w-0 flex-1 text-right">
-              <p className="truncate text-sm font-medium text-ink">{t.sideBName}</p>
+              <p className="truncate text-[13px] font-medium text-ink">{t.sideBName}</p>
               <p className="text-3xl font-semibold text-ink">{s.winsB}</p>
             </div>
           </div>
           {s.overrun && t.status !== "complete" ? (
-            <p className="mt-2.5 rounded-xl border border-accent/30 bg-accent-soft px-3 py-2 text-xs font-medium leading-relaxed text-accent-deep">
+            <p className="mt-2.5 rounded-xl border border-accent/30 bg-accent-soft px-3 py-2 text-[11px] font-medium leading-relaxed text-accent-deep">
               {ranLong
                 ? `${s.played} match${s.played === 1 ? "" : "es"} played — ${t.matchCount} ${t.matchCount === 1 ? "was" : "were"} planned. Extra matches still count.`
                 : `All ${t.matchCount} planned match${t.matchCount === 1 ? "" : "es"} ${t.matchCount === 1 ? "is" : "are"} done.`}
               {" An admin can declare the series whenever you're ready."}
             </p>
           ) : t.status !== "complete" ? (
-            <p className="mt-2 text-xs text-muted">
+            <p className="mt-2 text-[11px] text-muted">
               {s.played} of {t.matchCount} match{t.matchCount === 1 ? "" : "es"} played · {s.remaining} to go
             </p>
           ) : null}
           {t.winnerText ? (
-            <p className="mt-2 rounded-xl bg-accent-soft px-3 py-2 text-sm font-semibold text-accent-deep">
+            <p className="mt-2 rounded-xl bg-accent-soft px-3 py-2 text-[13px] font-semibold text-accent-deep">
               {t.winnerText}
             </p>
           ) : null}
@@ -416,7 +416,7 @@ export default function TournamentDetailPage() {
           </Button>
         ) : t.status === "paused" && isAdmin ? (
           <Button fullWidth size="lg" onClick={() => changeStatus("active")}>
-            Resume tournament
+            Resume series
           </Button>
         ) : t.status === "paused" ? (
           <p className="rounded-2xl border border-line bg-surface px-4 py-3 text-[13px] text-muted">
@@ -426,7 +426,7 @@ export default function TournamentDetailPage() {
 
         {/* Matches */}
         <div>
-          <p className="px-1 pb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+          <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
             Matches
           </p>
           {t.matches.length === 0 ? (
@@ -448,16 +448,16 @@ export default function TournamentDetailPage() {
                     className="block rounded-2xl border border-line bg-surface p-3.5 active:opacity-70"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-ink">
+                      <span className="text-[13px] font-medium text-ink">
                         Match {i + 1}
                       </span>
                       {m.status === "live" ? (
-                        <span className="flex items-center gap-1.5 rounded-full bg-accent-soft px-2 py-0.5 text-xs font-bold uppercase text-accent-deep">
+                        <span className="flex items-center gap-1.5 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-bold uppercase text-accent-deep">
                           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
                           Live
                         </span>
                       ) : (
-                        <span className="text-xs font-medium uppercase tracking-wide text-muted">
+                        <span className="text-[11px] font-medium uppercase tracking-wide text-muted">
                           {m.status === "completed"
                             ? "Done"
                             : m.status === "abandoned"
@@ -480,16 +480,16 @@ export default function TournamentDetailPage() {
 
         {/* Admin controls */}
         {isAdmin ? (
-          <div className="rounded-3xl border border-line bg-surface p-4">
+          <div className="rounded-2xl border border-line bg-surface p-4">
             <p className="text-[13px] font-semibold text-ink">Admin</p>
             {adminError ? (
-              <p className="mt-2 rounded-xl border border-danger/20 bg-danger-soft px-3 py-2 text-xs text-danger">
+              <p className="mt-2 rounded-xl border border-danger/20 bg-danger-soft px-3 py-2 text-[11px] text-danger">
                 {adminError}
               </p>
             ) : null}
             {t.status === "complete" ? (
               <>
-                <p className="mt-1 text-xs leading-relaxed text-muted">
+                <p className="mt-1 text-[11px] leading-relaxed text-muted">
                   This series is closed. Reopen it if the result was declared by
                   mistake.
                 </p>
@@ -513,7 +513,7 @@ export default function TournamentDetailPage() {
                 </div>
                 {declareOpen ? (
                   <div className="mt-3 space-y-2">
-                    <p className="text-xs leading-relaxed text-muted">
+                    <p className="text-[11px] leading-relaxed text-muted">
                       {s.leaderSide
                         ? `${s.leaderSide === "A" ? t.sideAName : t.sideBName} lead ${Math.max(s.winsA, s.winsB)}–${Math.min(s.winsA, s.winsB)}.`
                         : "Series is level."}{" "}
@@ -554,7 +554,7 @@ export default function TournamentDetailPage() {
                   <p className="text-[13px] font-semibold text-ink">
                     Rename teams
                   </p>
-                  <p className="text-xs leading-relaxed text-muted">
+                  <p className="text-[11px] leading-relaxed text-muted">
                     Fixes a mislabelled side. Matches already played keep their
                     old name; new matches use the new one.
                   </p>
@@ -593,12 +593,12 @@ export default function TournamentDetailPage() {
                     <p className="text-[13px] font-semibold text-ink">
                       Add a played match
                     </p>
-                    <p className="text-xs leading-relaxed text-muted">
+                    <p className="text-[11px] leading-relaxed text-muted">
                       Bins a completed match onto this series. Walk-ons stay
                       on the scorecard. Side A must still be {t.sideAName}.
                     </p>
                     {(linkable ?? []).length === 0 ? (
-                      <p className="text-xs text-muted">
+                      <p className="text-[11px] text-muted">
                         No matching friendlies to add.
                       </p>
                     ) : (
@@ -613,7 +613,7 @@ export default function TournamentDetailPage() {
                             <span className="text-[13px] font-semibold text-ink">
                               {m.resultText ?? `${m.sideAName} vs ${m.sideBName}`}
                             </span>
-                            <span className="text-xs text-muted">
+                            <span className="text-[11px] text-muted">
                               {dayLabel(m.createdAt)}
                             </span>
                           </button>
@@ -647,9 +647,9 @@ export default function TournamentDetailPage() {
                 onClick={() => setDeleteOpen(true)}
               >
                 <Trash2 className="h-4 w-4" />
-                Delete tournament
+                Delete series
               </Button>
-              <p className="mt-2 text-xs leading-relaxed text-muted">
+              <p className="mt-2 text-[11px] leading-relaxed text-muted">
                 {hasLiveMatch
                   ? "A match is being scored right now. Finish or abandon it before deleting the series."
                   : "Matches already played are kept — they stop counting toward a series."}
@@ -667,7 +667,7 @@ export default function TournamentDetailPage() {
               <p className="text-[15px] font-semibold text-ink">
                 Who&apos;s playing today?
               </p>
-              <p className="mt-1 text-xs leading-relaxed text-muted">
+              <p className="mt-1 text-[11px] leading-relaxed text-muted">
                 Core players are pre-selected. Tap to add today&apos;s
                 challengers or drop anyone who didn&apos;t turn up. Walk-ons
                 who aren&apos;t on either squad can join. Short on players?
@@ -712,7 +712,7 @@ export default function TournamentDetailPage() {
                 </p>
               ) : null}
               {error ? (
-                <p className="mb-3 text-sm text-danger">{error}</p>
+                <p className="mb-3 text-[13px] text-danger">{error}</p>
               ) : null}
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="ghost" onClick={() => setPanelOpen(false)}>
@@ -788,7 +788,7 @@ function QuickPick({ label, onClick }: { label: string; onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="min-h-11 rounded-xl border border-line bg-bg px-4 text-xs font-semibold text-ink active:scale-95 active:border-accent"
+      className="min-h-11 rounded-xl border border-line bg-bg px-4 text-[11px] font-semibold text-ink active:scale-95 active:border-accent"
     >
       {label}
     </button>
@@ -826,7 +826,7 @@ function SquadPicker({
         <p className="min-w-0 truncate text-[13px] font-semibold text-ink">
           {title}
         </p>
-        <span className="tabular shrink-0 text-xs font-semibold text-muted">
+        <span className="tabular shrink-0 text-[11px] font-semibold text-muted">
           {ownIn} of {players.length} in
           {borrowedIn > 0 ? ` · +${borrowedIn} borrowed` : ""}
           {walkIn > 0 ? ` · +${walkIn} walk-on` : ""}
@@ -835,7 +835,7 @@ function SquadPicker({
 
       {cores.length > 0 ? (
         <>
-          <p className="mt-2.5 text-xs font-semibold uppercase tracking-wide text-muted">
+          <p className="mt-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
             Core · expected every match
           </p>
           <div className="mt-1.5 space-y-1.5">
@@ -853,7 +853,7 @@ function SquadPicker({
 
       {challengers.length > 0 ? (
         <>
-          <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-muted">
+          <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-muted">
             Challengers
           </p>
           <div className="mt-1.5 space-y-1.5">
@@ -878,7 +878,7 @@ function SquadPicker({
             type="button"
             onClick={() => setShowBorrow((v) => !v)}
             aria-expanded={showBorrow}
-            className="mt-3 flex min-h-11 w-full items-center gap-1.5 rounded-xl border border-dashed border-line px-3 text-xs font-semibold text-muted active:border-accent"
+            className="mt-3 flex min-h-11 w-full items-center gap-1.5 rounded-xl border border-dashed border-line px-3 text-[11px] font-semibold text-muted active:border-accent"
           >
             <UserPlus className="h-3.5 w-3.5 shrink-0" />
             <span className="min-w-0 truncate">
@@ -913,7 +913,7 @@ function SquadPicker({
             type="button"
             onClick={() => setShowWalk((v) => !v)}
             aria-expanded={showWalk}
-            className="mt-3 flex min-h-11 w-full items-center gap-1.5 rounded-xl border border-dashed border-line px-3 text-xs font-semibold text-muted active:border-accent"
+            className="mt-3 flex min-h-11 w-full items-center gap-1.5 rounded-xl border border-dashed border-line px-3 text-[11px] font-semibold text-muted active:border-accent"
           >
             <UserPlus className="h-3.5 w-3.5 shrink-0" />
             <span className="min-w-0 truncate">
@@ -960,7 +960,7 @@ function PlayerRow({
       onClick={onToggle}
       aria-pressed={on}
       className={cn(
-        "flex min-h-11 w-full items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left text-sm transition",
+        "flex min-h-11 w-full items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left text-[13px] transition",
         on
           ? "border-accent bg-accent-soft text-accent-deep"
           : "border-line text-muted",

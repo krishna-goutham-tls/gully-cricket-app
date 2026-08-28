@@ -26,7 +26,7 @@ import { cn, errorMessage } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { ArrowLeft, ChevronDown, Sparkles } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 
 const LOG_PREVIEW = 8;
@@ -257,7 +257,7 @@ function BattingCard({
             career innings in the header, which also counts bowling. */}
         <p className="text-[28px] font-semibold leading-none text-ink">
           {b.runs}
-          <span className="ml-1.5 text-[12px] font-normal text-faint">
+          <span className="ml-1.5 text-[13px] font-normal text-faint">
             runs · {b.innings} batting inn{b.innings === 1 ? "" : "s"}
           </span>
         </p>
@@ -327,7 +327,7 @@ function BowlingCard({
             and balls/wkt below are all read against these. */}
         <p className="text-[28px] font-semibold leading-none text-ink">
           {b.wickets}
-          <span className="ml-1.5 text-[12px] font-normal text-faint">
+          <span className="ml-1.5 text-[13px] font-normal text-faint">
             wicket{b.wickets === 1 ? "" : "s"} · {b.innings} bowling inn
             {b.innings === 1 ? "" : "s"}
           </span>
@@ -380,6 +380,7 @@ function BowlingCard({
 
 export default function PlayerDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const userId = params.id as Id<"users">;
   const { token, activeOrgId, isAdmin } = useAuth();
   const togglePlayerTag = useMutation(api.players.togglePlayerTag);
@@ -411,7 +412,7 @@ export default function PlayerDetailPage() {
       <div className="px-5 py-8">
         <EmptyState
           title="Player not found"
-          body="They may have been removed from this group, or you followed an old link."
+          body="They may have been removed from this community, or you followed an old link."
           action={
             <Button href="/players">Back to players</Button>
           }
@@ -450,13 +451,14 @@ export default function PlayerDetailPage() {
       <header className="bg-ink px-5 pb-4 pt-[calc(var(--safe-top)+0.5rem)] text-bg">
         <div className="mx-auto max-w-md">
           <div className="flex items-center justify-between">
-            <Link
-              href="/players"
-              aria-label="Back to players"
-              className="-ml-2 flex h-11 w-11 items-center justify-center rounded-xl text-bg/70 active:bg-white/10"
+            <button
+              type="button"
+              aria-label="Back"
+              onClick={() => router.back()}
+              className="-ml-2 flex h-11 w-11 items-center justify-center rounded-lg text-bg/70 active:bg-white/10"
             >
               <ArrowLeft className="h-5 w-5" />
-            </Link>
+            </button>
             <div className="-mr-2 flex items-center gap-1">
               <Link
                 href={`/hero?playerId=${stats.userId}`}

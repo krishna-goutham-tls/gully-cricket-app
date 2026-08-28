@@ -10,6 +10,7 @@ import { errorMessage } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 function CapName({
@@ -56,17 +57,31 @@ function ordinal(n: number) {
  * nested. Play (Start match) stays above, outside this card.
  */
 export function SeasonStrip({ series }: { series?: SeriesRow | null }) {
-  const { token, activeOrgId, isAdmin, user } = useAuth();
-  const current = useQuery(
-    api.seasons.current,
-    token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
-  );
-  const seasons = useQuery(
-    api.seasons.list,
-    token && activeOrgId && isAdmin && current === null
-      ? { token, orgId: activeOrgId }
-      : "skip",
-  );
+  const {
+    token,
+    activeOrgId,
+    activeOrg,
+    isAdmin,
+    isSandbox,
+    user,
+    loading: authLoading,
+  } = useAuth();
+  const router = useRouter();
+  // Login already loaded this. Unknown (old cache / no org yet) is not empty.
+  const featured =
+    activeOrg && "featuredSeason" in activeOrg
+      ? activeOrg.featuredSeason
+      : undefined;
+  const seasonCount = activeOrg?.seasonCount;
+  const waiting = authLoading || !activeOrg || featured === undefined;
+  const shown = featured
+    ? {
+        id: featured.id,
+        name: featured.name,
+        status: featured.status,
+      }
+    : null;
+  const current = shown?.status === "active" ? shown : null;
   const board = useQuery(
     api.stats.leaderboard,
     token && activeOrgId && current
@@ -74,7 +89,7 @@ export function SeasonStrip({ series }: { series?: SeriesRow | null }) {
           token,
           orgId: activeOrgId,
           includeVisitorsAndJuniors: false,
-          seasonId: current._id,
+          seasonId: current.id,
         }
       : "skip",
   );
@@ -86,9 +101,9 @@ export function SeasonStrip({ series }: { series?: SeriesRow | null }) {
   const [error, setError] = useState<string | null>(null);
 
   const startName =
-    seasons === undefined
+    seasonCount === undefined
       ? "a season"
-      : `Season-${String((seasons ?? []).length + 1).padStart(2, "0")}`;
+      : `Season-${String(seasonCount + 1).padStart(2, "0")}`;
 
   const rank = useMemo(() => {
     if (!board || !user) return null;
@@ -109,10 +124,13 @@ export function SeasonStrip({ series }: { series?: SeriesRow | null }) {
     try {
       if (pending === "start") {
         await startSeason({ token, orgId: activeOrgId });
+        setPending(null);
       } else {
-        await endSeason({ token, orgId: activeOrgId });
+        const seasonId = await endSeason({ token, orgId: activeOrgId });
+        router.push(`/seasons/${String(seasonId)}/wrap`);
+        setPending(null);
+        return;
       }
-      setPending(null);
     } catch (e) {
       setError(
         errorMessage(
@@ -128,11 +146,22 @@ export function SeasonStrip({ series }: { series?: SeriesRow | null }) {
     }
   }
 
-  if (current === undefined) {
+  if (waiting && !shown) {
     return (
       <div className="mt-3 h-24 animate-pulse rounded-2xl bg-ink/[0.04]" />
     );
   }
+
+  // Practice room has no community season. Don't say the community has none.
+  if (isSandbox && !shown) {
+    return series ? (
+      <div className="mt-3">
+        <SeriesCard series={series} />
+      </div>
+    ) : null;
+  }
+
+  const inPlay = shown?.status === "active";
 
   return (
     <>
@@ -143,53 +172,73 @@ export function SeasonStrip({ series }: { series?: SeriesRow | null }) {
           </p>
         ) : null}
 
-        {current ? (
+        {shown ? (
           <>
             <Link
-              href={`/seasons/${current._id}`}
+              href={`/seasons/${shown.id}`}
               className="flex min-h-11 items-center gap-2 px-4 py-3 active:bg-bg"
             >
               <span className="min-w-0 flex-1">
                 <TruncText className="text-[15px] font-semibold text-ink">
-                  {current.name}
+                  {shown.name}
                 </TruncText>
-                {rank != null ? (
-                  <span className="mt-0.5 block text-[13px] text-muted">
-                    You · {ordinal(rank)} all-round
-                  </span>
-                ) : null}
+                <span className="mt-0.5 block text-[13px] text-muted">
+                  {inPlay
+                    ? rank != null
+                      ? `You · ${ordinal(rank)} all-round`
+                      : "Trophy shelf"
+                    : "Trophy shelf"}
+                </span>
               </span>
               <ChevronRight className="h-4 w-4 shrink-0 text-faint" />
             </Link>
-            {series ? (
+            {inPlay && series ? (
               <div className="px-3 pb-3">
                 <SeriesCard series={series} nested />
               </div>
             ) : null}
-            <div className="flex flex-wrap items-center gap-x-1 border-t border-line px-3">
+            {inPlay ? (
+              <div className="flex flex-wrap items-center gap-x-1 border-t border-line px-3">
+                <Link
+                  href="/leaderboard?cap=orange"
+                  className="inline-flex min-h-11 items-center px-1 text-[13px] leading-snug"
+                >
+                  <CapName
+                    label="Orange Cap"
+                    name={orange}
+                    loading={capsLoading}
+                  />
+                </Link>
+                <span className="text-muted">·</span>
+                <Link
+                  href="/leaderboard?cap=purple"
+                  className="inline-flex min-h-11 items-center px-1 text-[13px] leading-snug"
+                >
+                  <CapName
+                    label="Purple Cap"
+                    name={purple}
+                    loading={capsLoading}
+                  />
+                </Link>
+              </div>
+            ) : null}
+            <Link
+              href={`/seasons/${shown.id}/wrap`}
+              className="flex min-h-11 items-center justify-between border-t border-line px-4 text-[13px] font-semibold text-ink active:bg-bg"
+            >
+              {inPlay ? "Season cards so far" : "Season cards"}
+              <ChevronRight className="h-4 w-4 text-faint" />
+            </Link>
+            {(seasonCount ?? 0) > 1 ? (
               <Link
-                href="/leaderboard?cap=orange"
-                className="inline-flex min-h-11 items-center px-1 text-[13px] leading-snug"
+                href="/seasons"
+                className="flex min-h-11 items-center justify-between border-t border-line px-4 text-[13px] font-semibold text-muted active:bg-bg"
               >
-                <CapName
-                  label="Orange Cap"
-                  name={orange}
-                  loading={capsLoading}
-                />
+                All seasons
+                <ChevronRight className="h-4 w-4 text-faint" />
               </Link>
-              <span className="text-muted">·</span>
-              <Link
-                href="/leaderboard?cap=purple"
-                className="inline-flex min-h-11 items-center px-1 text-[13px] leading-snug"
-              >
-                <CapName
-                  label="Purple Cap"
-                  name={purple}
-                  loading={capsLoading}
-                />
-              </Link>
-            </div>
-            {isAdmin ? (
+            ) : null}
+            {isAdmin && inPlay ? (
               <button
                 type="button"
                 onClick={() => setPending("end")}
@@ -197,6 +246,13 @@ export function SeasonStrip({ series }: { series?: SeriesRow | null }) {
               >
                 End season
               </button>
+            ) : null}
+            {isAdmin && !inPlay && !waiting ? (
+              <div className="border-t border-line px-4 py-3">
+                <Button fullWidth onClick={() => setPending("start")}>
+                  Start season
+                </Button>
+              </div>
             ) : null}
           </>
         ) : (
@@ -230,7 +286,7 @@ export function SeasonStrip({ series }: { series?: SeriesRow | null }) {
         }
         description={
           pending === "end"
-            ? "Caps lock in. All-time stays."
+            ? "Caps lock in. Then the season cards."
             : "A fresh board. All-time stays."
         }
         confirmLabel={pending === "end" ? "End season" : "Start season"}

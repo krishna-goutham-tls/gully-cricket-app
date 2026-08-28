@@ -38,8 +38,8 @@ export default function PrivacyPage() {
             </li>
             <li>
               <span className="font-semibold text-ink">Your match data</span> —
-              every ball scored in your group&apos;s matches, which is the whole
-              product. It&apos;s visible to your group, not to anyone else.
+              every ball scored in your community&apos;s matches, which is the whole
+              product. It&apos;s visible to your community, not to anyone else.
             </li>
           </ul>
           <p>

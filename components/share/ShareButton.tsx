@@ -27,11 +27,14 @@ export function ShareButton({
   filename,
   className,
   tone = "dark",
+  label,
 }: {
   data: ShareData;
   filename: string;
   className?: string;
   tone?: "dark" | "light";
+  /** When set, this is a labelled button, not an icon. */
+  label?: string;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
@@ -59,15 +62,20 @@ export function ShareButton({
   }
 
   return (
-    <div className="relative">
+    <div className={cn("relative", label && "w-full")}>
       <button
         type="button"
         onClick={handleShare}
         disabled={busy}
-        aria-label="Share card"
+        aria-label={label ?? "Share card"}
         className={cn(
-          "flex h-11 w-11 items-center justify-center rounded-lg disabled:opacity-60",
-          BUTTON_TONE[tone],
+          "flex items-center justify-center disabled:opacity-60",
+          label
+            ? "min-h-12 gap-2 rounded-xl bg-bg px-5 text-[15px] font-semibold text-ink active:scale-[0.98]"
+            : cn(
+                "h-11 w-11 rounded-lg",
+                BUTTON_TONE[tone],
+              ),
           className,
         )}
       >
@@ -76,13 +84,14 @@ export function ShareButton({
         ) : (
           <Share2 className="h-5 w-5" />
         )}
+        {label}
       </button>
 
       {pill ? (
         <div
           role="status"
           className={cn(
-            "absolute right-0 top-12 z-20 max-w-[220px] rounded-xl px-3 py-2 text-[12px] font-semibold leading-snug",
+            "absolute right-0 top-12 z-20 max-w-[220px] rounded-xl px-3 py-2 text-[13px] font-semibold leading-snug",
             PILL_TONE[tone],
           )}
         >

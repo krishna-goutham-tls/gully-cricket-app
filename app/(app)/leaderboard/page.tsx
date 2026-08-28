@@ -47,7 +47,7 @@ type Tab = (typeof TABS)[number];
 const TAB_LABEL: Record<Tab, string> = {
   batting: "Batting",
   bowling: "Bowling",
-  players: "Players",
+  players: "All-round",
 };
 
 type MeasureKey =
@@ -470,7 +470,7 @@ export default function LeaderboardPage() {
   );
   // Default: visitors and juniors off the board. Anyone can flip Everyone.
   const [includeExtras, setIncludeExtras] = useState(false);
-  // Mixed board is how the group already argues. Tests / Lim overs is the slice.
+  // Mixed board is how the community already argues. Tests / ODI is the slice.
   const [format, setFormat] = useState<FormatScope>("all");
   // null = not chosen yet. Default This season when one is live, else All time.
   // A cap link from Home always means this season.
@@ -543,7 +543,7 @@ export default function LeaderboardPage() {
       format === "test"
         ? "Tests"
         : format === "limited"
-          ? "Lim overs"
+          ? "ODI"
           : null;
     const subtitle =
       usingSeason && current
@@ -672,12 +672,12 @@ export default function LeaderboardPage() {
         {!scrolled ? (
           <div className="mt-1 flex items-center justify-center">
             <WordToggle
-              ariaLabel="Test or limited overs"
+              ariaLabel="Test or ODI"
               value={format}
               onChange={setFormat}
               options={[
                 { id: "test", label: "Tests" },
-                { id: "limited", label: "Lim overs" },
+                { id: "limited", label: "ODI" },
                 { id: "all", label: "All" },
               ]}
             />
@@ -697,7 +697,7 @@ export default function LeaderboardPage() {
         {data === undefined ? (
           <div className="mt-3 space-y-2">
             {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="h-12 animate-pulse rounded-3xl bg-line" />
+              <div key={i} className="h-12 animate-pulse rounded-2xl bg-line" />
             ))}
           </div>
         ) : !hasData ? (
@@ -710,8 +710,8 @@ export default function LeaderboardPage() {
                     : "No Tests yet"
                   : format === "limited"
                     ? usingSeason
-                      ? "No limited games in this season yet"
-                      : "No limited-overs games yet"
+                      ? "No ODIs in this season yet"
+                      : "No ODIs yet"
                     : usingSeason
                       ? "No games in this season yet"
                       : "No completed matches yet"
@@ -720,7 +720,7 @@ export default function LeaderboardPage() {
                 format === "test"
                   ? "Play a Test. The board starts at zero."
                   : format === "limited"
-                    ? "Play a limited-overs match. The board starts at zero."
+                    ? "Play an ODI. The board starts at zero."
                     : usingSeason
                       ? "Play a match. The board starts at zero."
                       : "Leaderboards build up as matches finish."

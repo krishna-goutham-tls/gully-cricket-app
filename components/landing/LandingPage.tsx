@@ -261,7 +261,7 @@ function StoryScreen() {
           5th time <span className="text-accent">Imran</span> has got{" "}
           <span className="text-accent">Ashu</span>.
         </p>
-        <p className="mt-0.5 text-[10px] text-bg/60">
+        <p className="mt-0.5 text-[10px] text-bg/70">
           Nobody else has got him twice.
         </p>
       </div>
@@ -739,11 +739,11 @@ function Closer() {
             when the iOS app ships) — they're just not in the footer for now. */}
         <footer className="mt-16 flex flex-col items-center gap-3 border-t border-white/10 pt-8 text-center">
           <Logo size={28} />
-          <p className="text-sm text-bg/60">
+          <p className="text-sm text-bg/70">
             Gully Cricket — made by gully cricketers, with{" "}
             <span className="text-accent">♥</span>
           </p>
-          <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-bg/60">
+          <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-bg/70">
             <a href="/gully-rules" className="transition hover:text-bg">
               Rules
             </a>
@@ -755,7 +755,7 @@ function Closer() {
             href="https://github.com/krishna-goutham-tls/gully-cricket-app"
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm text-bg/60 transition hover:text-bg"
+            className="inline-flex items-center gap-1.5 text-sm text-bg/70 transition hover:text-bg"
           >
             <svg
               className="h-4 w-4"
