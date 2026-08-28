@@ -40,8 +40,8 @@ export function AskSheet({
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/40 sm:items-center">
       <div className="safe-bottom w-full max-w-sm px-4 sm:px-0">
-        <div className="mb-4 rounded-2xl bg-surface p-5 shadow-card sm:mb-0">
-          <p className="text-[15px] font-semibold text-ink">Ask for it</p>
+        <div className="mb-4 max-h-[85vh] overflow-y-auto rounded-2xl bg-surface p-5 shadow-card sm:mb-0">
+          <p className="text-[15px] font-semibold text-ink">Ask for a feature</p>
           <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
             Your community sees this and votes on it.
           </p>
@@ -49,7 +49,7 @@ export function AskSheet({
           <p className="mt-4 text-[13px] font-medium text-muted">
             What is it about?
           </p>
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="mt-2 grid grid-cols-2 gap-2">
             {WISHLIST_CATEGORIES.map((c) => (
               <button
                 key={c.key}
@@ -58,7 +58,7 @@ export function AskSheet({
                   setCategory(category === c.key ? null : c.key)
                 }
                 className={cn(
-                  "min-h-11 rounded-lg border px-3 text-[13px] font-semibold",
+                  "flex min-h-11 items-center justify-center rounded-lg border px-3 py-2 text-center text-[13px] font-semibold leading-snug",
                   category === c.key
                     ? "border-accent bg-accent-soft text-accent-deep"
                     : "border-line text-muted active:bg-bg",
@@ -73,7 +73,7 @@ export function AskSheet({
             value={text}
             maxLength={WISHLIST_TEXT_MAX}
             onChange={(e) => setText(e.target.value)}
-            rows={4}
+            rows={3}
             placeholder="What would you do with it?"
             className="mt-4 w-full resize-none rounded-xl border border-line bg-surface px-4 py-3 text-[16px] leading-relaxed text-ink outline-none transition placeholder:text-faint focus:border-accent focus:ring-2 focus:ring-accent/15"
           />

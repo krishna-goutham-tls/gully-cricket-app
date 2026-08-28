@@ -84,8 +84,15 @@ export default function WishlistPage() {
   const closed = (board?.closed ?? [])
     .map((s) => ({ ...s, cards: keep(s.cards) }))
     .filter((s) => s.cards.length > 0);
-  const nothingYet = board !== undefined && board !== null &&
-    board.live.length === 0 && board.closed.length === 0;
+  const nothingYet =
+    board !== undefined &&
+    board !== null &&
+    board.live.length === 0 &&
+    board.closed.length === 0;
+  const totalCards =
+    (board?.live ?? []).reduce((n, s) => n + s.cards.length, 0) +
+    (board?.closed ?? []).reduce((n, s) => n + s.cards.length, 0);
+
 
   return (
     <div className="bg-bg pb-6">
@@ -106,11 +113,30 @@ export default function WishlistPage() {
               What your community wants next
             </p>
           </div>
+          {/* Asking is the rare act — a quiet icon, not a bar over the board.
+              The board's primary action is the vote, and it is on every card. */}
+          <button
+            type="button"
+            aria-label="Ask for a feature"
+            onClick={() => {
+              setAskError(null);
+              setAskOpen(true);
+            }}
+            className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted active:bg-line/60"
+          >
+            <Plus className="h-5 w-5" strokeWidth={2.4} />
+          </button>
         </div>
 
         {/* Category filter. Scrolls sideways so six buckets never wrap the
-            header into two rows on a small phone. */}
-        <div className="-mx-5 mt-2 overflow-x-auto px-5">
+            header into two rows. Held back until the board is long enough to
+            need one — above the fold, the first card outranks the filter. */}
+        <div
+          className={cn(
+            "no-scrollbar -mx-5 mt-2 overflow-x-auto px-5",
+            totalCards <= 4 && "hidden",
+          )}
+        >
           <div className="mx-auto flex max-w-md gap-2 pb-1">
             <FilterChip
               label="All"
@@ -135,7 +161,7 @@ export default function WishlistPage() {
         {nothingYet ? (
           <EmptyState
             title="Nothing on the board"
-            body="Ask for the thing you keep wishing this app did. Your community votes on it."
+            body="Nobody has asked for anything yet."
           />
         ) : null}
 
@@ -196,24 +222,33 @@ export default function WishlistPage() {
               : null}
           </section>
         ) : null}
-      </main>
 
-      {/* One primary per screen, and it is the ask. */}
-      <div className="safe-bottom fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 px-5">
-        <div className="mx-auto max-w-md">
+        {/* The door out of reading and into asking. It sits after the board on
+            purpose: the player who read to the bottom is the one with
+            something to add. Dashed, so it never competes with a real ask. */}
+        {board ? (
           <button
             type="button"
             onClick={() => {
               setAskError(null);
               setAskOpen(true);
             }}
-            className="flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-ink text-[15px] font-semibold text-bg shadow-card transition active:scale-[0.98] active:bg-ink/90"
+            className="flex w-full items-center gap-3 rounded-2xl border border-dashed border-line bg-surface px-4 py-4 text-left active:bg-bg"
           >
-            <Plus className="h-5 w-5" strokeWidth={2.4} />
-            Ask for a feature
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-deep">
+              <Plus className="h-4 w-4" strokeWidth={2.4} />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[15px] font-semibold text-ink">
+                Ask for a feature
+              </span>
+              <span className="block text-[13px] text-muted">
+                Your community votes on it
+              </span>
+            </span>
           </button>
-        </div>
-      </div>
+        ) : null}
+      </main>
 
       <AskSheet
         open={askOpen}

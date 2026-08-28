@@ -10,6 +10,12 @@ import { ChevronDown, ChevronUp } from "lucide-react";
  * with a thumb that has just finished an over. The score between them is
  * the only number on the card, so it carries the colour.
  *
+ * `self-start` matters: left to stretch, the column grows with a three-line
+ * ask and the two arrows drift apart into a sparse ladder.
+ *
+ * A cast vote colours the chevron and nothing else. A filled tile behind it
+ * reads as a second button and fights the state badge for the same eye.
+ *
  * Tapping the arrow you already lit sends 0: a second tap takes the vote
  * back rather than stacking another one.
  */
@@ -25,7 +31,7 @@ export function VoteControl({
   onVote: (next: 1 | -1 | 0) => void;
 }) {
   return (
-    <div className="flex w-11 shrink-0 flex-col items-center">
+    <div className="flex w-11 shrink-0 flex-col items-center self-start">
       <button
         type="button"
         aria-label="I want this too"
@@ -33,13 +39,11 @@ export function VoteControl({
         disabled={busy}
         onClick={() => onVote(myVote === 1 ? 0 : 1)}
         className={cn(
-          "flex h-11 w-11 items-center justify-center rounded-lg transition active:scale-[0.98] disabled:opacity-40",
-          myVote === 1
-            ? "bg-accent-soft text-accent-deep"
-            : "text-faint active:bg-bg",
+          "flex h-11 w-11 items-center justify-center rounded-lg transition active:scale-[0.98] active:bg-bg disabled:opacity-40",
+          myVote === 1 ? "text-accent-deep" : "text-faint",
         )}
       >
-        <ChevronUp className="h-5 w-5" strokeWidth={2.4} />
+        <ChevronUp className="h-5 w-5" strokeWidth={myVote === 1 ? 3.2 : 2.4} />
       </button>
 
       <span
@@ -60,13 +64,11 @@ export function VoteControl({
         disabled={busy}
         onClick={() => onVote(myVote === -1 ? 0 : -1)}
         className={cn(
-          "flex h-11 w-11 items-center justify-center rounded-lg transition active:scale-[0.98] disabled:opacity-40",
-          myVote === -1
-            ? "bg-danger-soft text-danger"
-            : "text-faint active:bg-bg",
+          "flex h-11 w-11 items-center justify-center rounded-lg transition active:scale-[0.98] active:bg-bg disabled:opacity-40",
+          myVote === -1 ? "text-danger" : "text-faint",
         )}
       >
-        <ChevronDown className="h-5 w-5" strokeWidth={2.4} />
+        <ChevronDown className="h-5 w-5" strokeWidth={myVote === -1 ? 3.2 : 2.4} />
       </button>
     </div>
   );

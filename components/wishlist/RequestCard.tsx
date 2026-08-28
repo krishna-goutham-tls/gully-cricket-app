@@ -54,28 +54,29 @@ export function RequestCard({
       <div className="min-w-0 flex-1 pt-1.5">
         <p className="text-[15px] font-semibold leading-snug text-ink">{text}</p>
 
-        <p className="mt-1.5 text-[13px] text-muted">
-          {wishlistCategoryLabel(category)} ·{" "}
-          <span className={cn(isMine && "text-accent-deep")}>
-            {isMine ? "You" : authorName}
-          </span>
-        </p>
-
-        {/* `open` wears nothing. A board where every card is labelled is a
-            board nobody reads — the badge should mean something happened. */}
-        {state !== "open" ? (
-          <span
-            className={cn(
-              "mt-2 inline-flex rounded-lg px-2 py-1 text-[11px] font-semibold uppercase tracking-wide",
-              BADGE[state],
-            )}
-          >
-            {wishlistStateLabel(state)}
-          </span>
-        ) : null}
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+          {/* `open` wears nothing. A board where every card is labelled is a
+              board nobody reads — the badge should mean something happened. */}
+          {state !== "open" ? (
+            <span
+              className={cn(
+                "inline-flex rounded-lg px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide",
+                BADGE[state],
+              )}
+            >
+              {wishlistStateLabel(state)}
+            </span>
+          ) : null}
+          <p className="text-[13px] text-muted">
+            {wishlistCategoryLabel(category)} ·{" "}
+            <span className={cn(isMine && "text-accent-deep")}>
+              {isMine ? "You" : authorName}
+            </span>
+          </p>
+        </div>
 
         {canMove ? (
-          <div className="mt-2">
+          <div className="-mb-1 mt-0.5">
             <button
               type="button"
               onClick={() => setMoveOpen((v) => !v)}
