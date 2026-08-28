@@ -365,7 +365,7 @@ function WordToggle<T extends string>({
             aria-pressed={on}
             onClick={() => onChange(o.id)}
             className={cn(
-              "min-h-11 px-1.5 text-[13px] font-semibold active:opacity-70",
+              "min-h-11 whitespace-nowrap px-1 text-[13px] font-semibold active:opacity-70",
               on ? "text-ink" : "text-muted",
             )}
           >
@@ -670,41 +670,27 @@ export default function LeaderboardPage() {
         )}
 
         {!scrolled ? (
-          <div className="mt-1 px-1">
-            <div className="flex items-center gap-2">
-              <p className="min-w-0 flex-1 text-[11px] text-faint">
-                {data === undefined
-                  ? "Loading…"
-                  : data
-                    ? format === "test"
-                      ? `${data.matchCount} Test${data.matchCount === 1 ? "" : "s"}`
-                      : format === "limited"
-                        ? `${data.matchCount} limited`
-                        : `${data.matchCount} match${data.matchCount === 1 ? "" : "es"}`
-                    : null}
-              </p>
-              <WordToggle
-                ariaLabel="Who appears on the board"
-                value={includeExtras ? "everyone" : "regulars"}
-                onChange={(next) => setIncludeExtras(next === "everyone")}
-                options={[
-                  { id: "regulars", label: "Regulars" },
-                  { id: "everyone", label: "Everyone" },
-                ]}
-              />
-            </div>
-            <div className="flex justify-end">
-              <WordToggle
-                ariaLabel="Test or limited overs"
-                value={format}
-                onChange={setFormat}
-                options={[
-                  { id: "test", label: "Tests" },
-                  { id: "limited", label: "Lim overs" },
-                  { id: "all", label: "All" },
-                ]}
-              />
-            </div>
+          <div className="mt-1 flex items-center justify-center">
+            <WordToggle
+              ariaLabel="Test or limited overs"
+              value={format}
+              onChange={setFormat}
+              options={[
+                { id: "test", label: "Tests" },
+                { id: "limited", label: "Lim overs" },
+                { id: "all", label: "All" },
+              ]}
+            />
+            <span className="mx-1 h-4 w-px shrink-0 bg-line" aria-hidden />
+            <WordToggle
+              ariaLabel="Who appears on the board"
+              value={includeExtras ? "everyone" : "regulars"}
+              onChange={(next) => setIncludeExtras(next === "everyone")}
+              options={[
+                { id: "regulars", label: "Regulars" },
+                { id: "everyone", label: "Everyone" },
+              ]}
+            />
           </div>
         ) : null}
 
