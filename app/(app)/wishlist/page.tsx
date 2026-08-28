@@ -8,6 +8,7 @@ import { api } from "@/convex/_generated/api";
 import {
   WISHLIST_CATEGORIES,
   wishlistStateLabel,
+  wishlistWaitLabel,
   type WishlistCategory,
   type WishlistState,
 } from "@/convex/lib/wishlist";
@@ -89,6 +90,10 @@ export default function WishlistPage() {
     board !== null &&
     board.live.length === 0 &&
     board.closed.length === 0;
+  /* One ask a day. Known before the player types, so nobody writes a
+     paragraph and then gets told no. */
+  const waitMs = board?.nextAskAt ? board.nextAskAt - Date.now() : 0;
+  const canAsk = waitMs <= 0;
   const totalCards =
     (board?.live ?? []).reduce((n, s) => n + s.cards.length, 0) +
     (board?.closed ?? []).reduce((n, s) => n + s.cards.length, 0);
@@ -114,18 +119,22 @@ export default function WishlistPage() {
             </p>
           </div>
           {/* Asking is the rare act — a quiet icon, not a bar over the board.
-              The board's primary action is the vote, and it is on every card. */}
-          <button
-            type="button"
-            aria-label="Ask for a feature"
-            onClick={() => {
-              setAskError(null);
-              setAskOpen(true);
-            }}
-            className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted active:bg-line/60"
-          >
-            <Plus className="h-5 w-5" strokeWidth={2.4} />
-          </button>
+              The board's primary action is the vote, and it is on every card.
+              Spent your ask for today? The icon goes, rather than sitting
+              there dead — the card at the foot explains why. */}
+          {canAsk ? (
+            <button
+              type="button"
+              aria-label="Ask for a feature"
+              onClick={() => {
+                setAskError(null);
+                setAskOpen(true);
+              }}
+              className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted active:bg-line/60"
+            >
+              <Plus className="h-5 w-5" strokeWidth={2.4} />
+            </button>
+          ) : null}
         </div>
 
         {/* Category filter. Scrolls sideways so six buckets never wrap the
@@ -226,7 +235,7 @@ export default function WishlistPage() {
         {/* The door out of reading and into asking. It sits after the board on
             purpose: the player who read to the bottom is the one with
             something to add. Dashed, so it never competes with a real ask. */}
-        {board ? (
+        {board && canAsk ? (
           <button
             type="button"
             onClick={() => {
@@ -247,6 +256,16 @@ export default function WishlistPage() {
               </span>
             </span>
           </button>
+        ) : board ? (
+          <div className="rounded-2xl border border-dashed border-line px-4 py-4">
+            <p className="text-[15px] font-semibold text-muted">
+              One ask a day
+            </p>
+            <p className="mt-0.5 text-[13px] text-muted">
+              You have used yours. Vote on the board, and come back{" "}
+              {wishlistWaitLabel(waitMs)}.
+            </p>
+          </div>
         ) : null}
       </main>
 

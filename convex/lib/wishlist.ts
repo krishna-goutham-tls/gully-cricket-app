@@ -65,3 +65,19 @@ export function isClosedWishlistState(key: WishlistState) {
 
 /** One ask is one short paragraph, not an essay. */
 export const WISHLIST_TEXT_MAX = 500;
+
+/**
+ * One ask per player per day, per community.
+ *
+ * A rolling window, not a calendar day: the server has no idea what timezone
+ * the player is in, and "resets at midnight somewhere" is worse than "try
+ * again in four hours".
+ */
+export const WISHLIST_ASK_WINDOW_MS = 1000 * 60 * 60 * 24;
+
+/** Plain-English wait, for the error the player actually reads. */
+export function wishlistWaitLabel(msLeft: number) {
+  const hours = Math.ceil(msLeft / (1000 * 60 * 60));
+  if (hours <= 1) return "in an hour";
+  return `in ${hours} hours`;
+}

@@ -6,9 +6,11 @@ import {
   requirePlatformAdmin,
 } from "./lib/session";
 import {
+  WISHLIST_ASK_WINDOW_MS,
   WISHLIST_CLOSED_STATES,
   WISHLIST_LIVE_STATES,
   WISHLIST_TEXT_MAX,
+  wishlistWaitLabel,
   type WishlistState,
 } from "./lib/wishlist";
 import { wishlistCategory, wishlistState } from "./schema";
@@ -94,7 +96,23 @@ export const board = query({
         ),
     })).filter((s) => s.cards.length > 0);
 
-    return { live, closed, openCount: cards.filter((c) => c.state === "open").length };
+    const mine = await ctx.db
+      .query("wishlistRequests")
+      .withIndex("by_org_author", (q) =>
+        q.eq("orgId", args.orgId).eq("authorId", me),
+      )
+      .collect();
+    let lastAt = 0;
+    for (const r of mine) if (r.createdAt > lastAt) lastAt = r.createdAt;
+    const nextAskAt = lastAt ? lastAt + WISHLIST_ASK_WINDOW_MS : 0;
+
+    return {
+      live,
+      closed,
+      openCount: cards.filter((c) => c.state === "open").length,
+      /** 0 when the player may ask now. Otherwise the epoch ms to wait for. */
+      nextAskAt: nextAskAt > Date.now() ? nextAskAt : 0,
+    };
   },
 });
 
@@ -141,6 +159,24 @@ export const submit = mutation({
     }
 
     const now = Date.now();
+
+    // One ask a day. Enforced here and nowhere else — the board is a wishlist,
+    // not a suggestion box, and ten asks from one player in one sitting buries
+    // everybody else's.
+    const mine = await ctx.db
+      .query("wishlistRequests")
+      .withIndex("by_org_author", (q) =>
+        q.eq("orgId", args.orgId).eq("authorId", user._id),
+      )
+      .collect();
+    let lastAt = 0;
+    for (const r of mine) if (r.createdAt > lastAt) lastAt = r.createdAt;
+    const waitMs = lastAt + WISHLIST_ASK_WINDOW_MS - now;
+    if (waitMs > 0) {
+      throw new Error(
+        `You have already asked today. Try again ${wishlistWaitLabel(waitMs)}.`,
+      );
+    }
     const requestId = await ctx.db.insert("wishlistRequests", {
       orgId: args.orgId,
       authorId: user._id,
