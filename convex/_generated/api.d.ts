@@ -24,6 +24,7 @@ import type * as lib_scoring from "../lib/scoring.js";
 import type * as lib_session from "../lib/session.js";
 import type * as lib_teams from "../lib/teams.js";
 import type * as lib_tournamentLineup from "../lib/tournamentLineup.js";
+import type * as lib_wishlist from "../lib/wishlist.js";
 import type * as maintenance from "../maintenance.js";
 import type * as matches from "../matches.js";
 import type * as orgs from "../orgs.js";
@@ -33,6 +34,7 @@ import type * as seasons from "../seasons.js";
 import type * as stats from "../stats.js";
 import type * as story from "../story.js";
 import type * as tournaments from "../tournaments.js";
+import type * as wishlist from "../wishlist.js";
 
 import type {
   ApiFromModules,
@@ -57,6 +59,7 @@ declare const fullApi: ApiFromModules<{
   "lib/session": typeof lib_session;
   "lib/teams": typeof lib_teams;
   "lib/tournamentLineup": typeof lib_tournamentLineup;
+  "lib/wishlist": typeof lib_wishlist;
   maintenance: typeof maintenance;
   matches: typeof matches;
   orgs: typeof orgs;
@@ -66,6 +69,7 @@ declare const fullApi: ApiFromModules<{
   stats: typeof stats;
   story: typeof story;
   tournaments: typeof tournaments;
+  wishlist: typeof wishlist;
 }>;
 
 /**
