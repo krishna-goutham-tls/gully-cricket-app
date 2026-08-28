@@ -54,9 +54,9 @@ export default function JoinPage() {
     <main className="mx-auto max-w-md px-5 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-[calc(var(--safe-top)+1.5rem)]">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight text-ink">
-          {waiting ? "You’re in the queue" : "Join your group"}
+          {waiting ? "You’re in the queue" : "Join your community"}
         </h1>
-        <p className="mt-1.5 text-sm text-muted">
+        <p className="mt-1.5 text-[13px] text-muted">
           {waiting
             ? "One tap from an admin and you’re in."
             : "Pick your society or organiser. An admin approves you."}
@@ -75,23 +75,23 @@ export default function JoinPage() {
       ) : null}
 
       {waiting ? (
-        <section className="mb-6 rounded-3xl border border-accent/30 bg-accent-soft p-5">
+        <section className="mb-6 rounded-2xl border border-accent/30 bg-accent-soft p-5">
           <div className="flex items-center gap-2.5">
             <Clock className="h-5 w-5 shrink-0 text-accent-deep" />
             <p className="text-[15px] font-semibold text-accent-deep">
               Request sent to {waitingOn}
             </p>
           </div>
-          <ol className="mt-3.5 space-y-3 text-sm leading-relaxed text-ink">
+          <ol className="mt-3.5 space-y-3 text-[13px] leading-relaxed text-ink">
             {[
-              "Whoever runs the group has to approve you — usually the person who organises the matches.",
+              "Whoever runs the community has to approve you — usually the person who organises the matches.",
               "Playing today? Give them a nudge on WhatsApp. It’s one tap at their end.",
               "Nothing else to do here — this screen opens up the moment they say yes.",
             ].map((line, i) => (
               <li key={line} className="flex gap-2.5">
                 <span
                   aria-hidden
-                  className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent/40 text-xs font-bold text-accent-deep"
+                  className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent/40 text-[11px] font-bold text-accent-deep"
                 >
                   {i + 1}
                 </span>
@@ -103,7 +103,7 @@ export default function JoinPage() {
       ) : null}
 
       {waiting ? (
-        <p className="mb-3 text-sm font-semibold text-ink">Other groups</p>
+        <p className="mb-3 text-[13px] font-semibold text-ink">Other communities</p>
       ) : null}
 
       <div className="mb-4 space-y-3">
@@ -115,7 +115,7 @@ export default function JoinPage() {
       </div>
 
       {error ? (
-        <p className="mb-3 rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-sm text-danger">
+        <p className="mb-3 rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-[13px] text-danger">
           {error}
         </p>
       ) : null}
@@ -124,7 +124,7 @@ export default function JoinPage() {
         {orgs === undefined ? (
           <div className="space-y-3">
             {[0, 1].map((i) => (
-              <div key={i} className="h-20 animate-pulse rounded-3xl bg-line/60" />
+              <div key={i} className="h-20 animate-pulse rounded-2xl bg-line/60" />
             ))}
           </div>
         ) : list.length === 0 ? (
@@ -149,14 +149,14 @@ export default function JoinPage() {
           list.map((org) => (
             <div
               key={org._id}
-              className="flex items-center justify-between gap-3 rounded-3xl border border-line bg-surface p-4"
+              className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4"
             >
               <div className="min-w-0 flex-1">
                 <h2 className="truncate text-[15px] font-semibold text-ink">
                   {org.name}
                 </h2>
                 {org.location ? (
-                  <p className="mt-0.5 truncate text-sm text-muted">{org.location}</p>
+                  <p className="mt-0.5 truncate text-[13px] text-muted">{org.location}</p>
                 ) : null}
               </div>
               {org.membershipStatus === "active" ? (
@@ -168,7 +168,7 @@ export default function JoinPage() {
                   Open
                 </Button>
               ) : org.membershipStatus === "pending" ? (
-                <span className="shrink-0 rounded-full border border-accent/30 bg-accent-soft px-3 py-1.5 text-xs font-semibold text-accent-deep">
+                <span className="shrink-0 rounded-full border border-accent/30 bg-accent-soft px-3 py-1.5 text-[11px] font-semibold text-accent-deep">
                   Waiting
                 </span>
               ) : (
@@ -189,7 +189,7 @@ export default function JoinPage() {
         {canCreate ? (
           <Link
             href="/org/new"
-            className="flex min-h-11 items-center text-sm font-semibold text-accent-deep underline-offset-4 hover:underline"
+            className="flex min-h-11 items-center text-[13px] font-semibold text-accent-deep underline-offset-4 hover:underline"
           >
             Create your community
           </Link>
@@ -197,7 +197,7 @@ export default function JoinPage() {
         <button
           type="button"
           onClick={() => void logout().then(() => router.replace("/login"))}
-          className="min-h-11 px-4 text-sm text-muted underline-offset-4 hover:underline"
+          className="min-h-11 px-4 text-[13px] text-muted underline-offset-4 hover:underline"
         >
           Sign out
         </button>

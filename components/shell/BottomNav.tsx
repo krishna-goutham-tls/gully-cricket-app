@@ -67,7 +67,7 @@ export function BottomNav() {
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "relative flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 text-xs font-medium transition-colors",
+                "relative flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[11px] font-semibold transition-colors",
                 active ? "text-ink" : "text-faint",
               )}
             >
@@ -79,7 +79,7 @@ export function BottomNav() {
                 {count > 0 ? (
                   <span
                     aria-label={`${count} waiting for approval`}
-                    className="tabular absolute -right-3 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 text-xs font-bold leading-none text-white"
+                    className="tabular absolute -right-3 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 text-[11px] font-semibold leading-none text-bg"
                   >
                     {count > 9 ? "9+" : count}
                   </span>

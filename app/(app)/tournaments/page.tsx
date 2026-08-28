@@ -19,7 +19,7 @@ export default function TournamentsPage() {
 
   return (
     <div>
-      <AppHeader title="Tournaments" />
+      <AppHeader title="Series" />
       <main className="mx-auto max-w-md px-5 py-5">
         <p className="mb-4 text-[13px] text-muted">
           Fixed two-team series with core squads.
@@ -27,7 +27,7 @@ export default function TournamentsPage() {
 
         <Button href="/tournaments/new" fullWidth size="lg">
           <Plus className="h-5 w-5" strokeWidth={2.4} />
-          New tournament
+          New series
         </Button>
 
         <div className="mt-7 space-y-3">
@@ -36,13 +36,13 @@ export default function TournamentsPage() {
               {[0, 1].map((i) => (
                 <div
                   key={i}
-                  className="h-24 animate-pulse rounded-3xl bg-ink/[0.04]"
+                  className="h-24 animate-pulse rounded-2xl bg-ink/[0.04]"
                 />
               ))}
             </div>
           ) : tournaments.length === 0 ? (
             <EmptyState
-              title="No tournaments yet"
+              title="No series yet"
               body="Set up two teams, mark your core players, and play a series."
             />
           ) : (
@@ -53,7 +53,7 @@ export default function TournamentsPage() {
                   key={t._id}
                   href={`/tournaments/${t._id}`}
                   className={cn(
-                    "block rounded-3xl border bg-surface p-4 transition active:opacity-70",
+                    "block rounded-2xl border bg-surface p-4 transition active:opacity-70",
                     t.status === "active"
                       ? "border-accent/40 shadow-card"
                       : "border-line",
@@ -68,7 +68,7 @@ export default function TournamentsPage() {
                     </span>
                     <span
                       className={cn(
-                        "shrink-0 rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wide",
+                        "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide",
                         t.status === "active"
                           ? "bg-accent-soft text-accent-deep"
                           : t.status === "paused"
@@ -79,14 +79,14 @@ export default function TournamentsPage() {
                       {STATUS_LABEL[t.status] ?? t.status}
                     </span>
                   </div>
-                  <p className="tabular mt-2 text-sm text-muted">
+                  <p className="tabular mt-2 text-[13px] text-muted">
                     {t.sideAName}{" "}
                     <span className="font-semibold text-ink">{t.winsA}</span>
                     <span className="text-muted"> — </span>
                     <span className="font-semibold text-ink">{t.winsB}</span>{" "}
                     {t.sideBName}
                   </p>
-                  <p className="mt-1 text-xs text-muted">
+                  <p className="mt-1 text-[11px] text-muted">
                     {t.format === "limited" ? "ODI" : "Test"} ·{" "}
                     {ranLong
                       ? `${t.played} played of ${t.matchCount} planned`
@@ -96,7 +96,7 @@ export default function TournamentsPage() {
                     {t.winnerText ? ` · ${t.winnerText}` : ""}
                   </p>
                   {ranLong && t.status !== "complete" ? (
-                    <p className="mt-1.5 text-xs font-medium text-accent-deep">
+                    <p className="mt-1.5 text-[11px] font-medium text-accent-deep">
                       Series has run past its planned length.
                     </p>
                   ) : null}

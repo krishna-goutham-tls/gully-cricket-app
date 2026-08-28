@@ -392,7 +392,7 @@ export default function NewMatchPage() {
   );
 
   const errorBanner = error ? (
-    <p className="rounded-2xl border border-danger/20 bg-danger-soft px-4 py-3 text-sm text-danger">
+    <p className="rounded-2xl border border-danger/20 bg-danger-soft px-4 py-3 text-[13px] text-danger">
       {error}
     </p>
   ) : null;
@@ -407,7 +407,7 @@ export default function NewMatchPage() {
             <button
               type="button"
               onClick={reuseLastTeams}
-              className="flex w-full items-center gap-3 rounded-3xl border border-accent/40 bg-accent-soft px-4 py-3.5 text-left active:scale-[0.98]"
+              className="flex w-full items-center gap-3 rounded-2xl border border-accent/40 bg-accent-soft px-4 py-3.5 text-left active:scale-[0.98]"
             >
               <History className="h-5 w-5 shrink-0 text-accent-deep" />
               <span className="min-w-0">
@@ -422,12 +422,12 @@ export default function NewMatchPage() {
             </button>
           ) : null}
 
-          <section className="rounded-3xl border border-line bg-surface p-4">
+          <section className="rounded-2xl border border-line bg-surface p-4">
             <div className="mb-3 flex items-center justify-between">
               <p className="text-[15px] font-medium text-ink">
                 Tap everyone who’s here
               </p>
-              <span className="tabular shrink-0 rounded-full bg-bg px-2.5 py-1 text-xs font-semibold text-muted">
+              <span className="tabular shrink-0 rounded-full bg-bg px-2.5 py-1 text-[11px] font-semibold text-muted">
                 {available.length}
               </span>
             </div>
@@ -488,7 +488,7 @@ export default function NewMatchPage() {
       {header}
       <main className="mx-auto w-full max-w-md flex-1 space-y-4 px-5 py-4 pb-32">
         {draftPool.length > 0 ? (
-          <p className="text-sm text-muted">
+          <p className="text-[13px] text-muted">
             Tap a player to add them to the highlighted team.
           </p>
         ) : null}
@@ -500,10 +500,10 @@ export default function NewMatchPage() {
         >
           <Scale className="h-4 w-4 shrink-0 text-accent-deep" />
           <span className="min-w-0">
-            <span className="text-[14px] font-semibold text-ink">
+            <span className="text-[15px] font-semibold text-ink">
               Auto form teams
             </span>
-            <span className="ml-1.5 text-[12px] text-muted">
+            <span className="ml-1.5 text-[13px] text-muted">
               {!levelsReady
                 ? "reading the leaderboard…"
                 : hasForm
@@ -513,7 +513,7 @@ export default function NewMatchPage() {
           </span>
         </button>
 
-        <p className="text-sm text-muted">
+        <p className="text-[13px] text-muted">
           First player on a side is its captain — tap{" "}
           <Crown className="inline h-3.5 w-3.5 align-text-bottom text-faint" />{" "}
           to change.
@@ -542,7 +542,7 @@ export default function NewMatchPage() {
               key={side}
               onClick={() => setActiveTarget(side)}
               className={cn(
-                "rounded-3xl border bg-surface p-3 transition",
+                "rounded-2xl border bg-surface p-3 transition",
                 activeTarget === side
                   ? "border-accent ring-2 ring-accent/40"
                   : "border-line",
@@ -558,13 +558,13 @@ export default function NewMatchPage() {
                   enterKeyHint="done"
                   className="min-w-0 flex-1 bg-transparent py-2 text-[15px] font-semibold text-ink outline-none placeholder:text-faint"
                 />
-                <span className="tabular shrink-0 rounded-full bg-bg px-2 py-0.5 text-xs font-semibold text-muted">
+                <span className="tabular shrink-0 rounded-full bg-bg px-2 py-0.5 text-[11px] font-semibold text-muted">
                   {count}
                 </span>
               </div>
               <div className="space-y-1">
                 {count === 0 ? (
-                  <p className="px-2.5 py-2 text-xs text-faint">
+                  <p className="px-2.5 py-2 text-[11px] text-faint">
                     Tap players to add
                   </p>
                 ) : null}
@@ -584,7 +584,7 @@ export default function NewMatchPage() {
                       {nameOf(id)}
                     </button>
                     {idx === 0 ? (
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center text-xs font-bold text-accent-deep">
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center text-[11px] font-bold text-accent-deep">
                         C
                       </span>
                     ) : (
@@ -613,7 +613,7 @@ export default function NewMatchPage() {
                     className="flex min-h-11 w-full items-center justify-between gap-1 rounded-xl bg-accent-soft px-2.5 py-2 text-left text-[13px] font-medium text-accent-deep"
                   >
                     <span className="truncate">{nameOf(id)}</span>
-                    <span className="shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-xs font-bold text-ink">
+                    <span className="shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[11px] font-bold text-ink">
                       both
                     </span>
                   </button>
@@ -627,7 +627,7 @@ export default function NewMatchPage() {
           type="button"
           onClick={() => setActiveTarget("common")}
           className={cn(
-            "flex w-full items-center gap-2.5 rounded-3xl border px-4 py-3 text-left transition",
+            "flex w-full items-center gap-2.5 rounded-2xl border px-4 py-3 text-left transition",
             activeTarget === "common"
               ? "border-accent bg-accent-soft ring-2 ring-accent/40"
               : "border-dashed border-line bg-surface",
@@ -635,17 +635,17 @@ export default function NewMatchPage() {
         >
           <Users className="h-4 w-4 shrink-0 text-accent-deep" />
           <span className="min-w-0">
-            <span className="block text-[14px] font-semibold text-ink">
+            <span className="block text-[15px] font-semibold text-ink">
               Plays both sides
             </span>
-            <span className="block text-[12px] text-muted">
+            <span className="block text-[13px] text-muted">
               Odd numbers? Add the common player here — they join both teams.
             </span>
           </span>
         </button>
 
         {draftPool.length > 0 ? (
-          <section className="rounded-3xl border border-line bg-surface p-4">
+          <section className="rounded-2xl border border-line bg-surface p-4">
             <p className="mb-2.5 text-[13px] font-medium text-muted">
               Still to pick ({draftPool.length})
             </p>
@@ -664,7 +664,7 @@ export default function NewMatchPage() {
           </section>
         ) : null}
 
-        <div className="rounded-3xl border border-line bg-surface p-4">
+        <div className="rounded-2xl border border-line bg-surface p-4">
           <div className="flex items-center justify-between gap-3">
             <p className="text-[15px] font-medium text-ink">Format</p>
             <div className="flex rounded-2xl border border-line p-1">
@@ -696,7 +696,7 @@ export default function NewMatchPage() {
           </p>
         </div>
 
-        <div className="flex items-center justify-between gap-3 rounded-3xl border border-line bg-surface p-4">
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4">
           <p className="text-[15px] font-medium text-ink">Overs per innings</p>
           <input
             type="number"
@@ -720,13 +720,13 @@ export default function NewMatchPage() {
         </div>
 
         {format === "limited" ? (
-          <div className="rounded-3xl border border-line bg-surface p-4">
+          <div className="rounded-2xl border border-line bg-surface p-4">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[15px] font-medium text-ink">
                   Overs per player
                 </p>
-                <p className="mt-0.5 text-xs text-muted">
+                <p className="mt-0.5 text-[11px] text-muted">
                   Bat &amp; bowl cap · common players get half.
                 </p>
               </div>
@@ -755,7 +755,7 @@ export default function NewMatchPage() {
           </div>
         ) : null}
 
-        <div className="rounded-3xl border border-line bg-surface p-4">
+        <div className="rounded-2xl border border-line bg-surface p-4">
           <div className="flex items-center justify-between gap-3">
             <p className="text-[15px] font-medium text-ink">Batters at a time</p>
             <div className="flex rounded-2xl border border-line p-1">
@@ -791,7 +791,7 @@ export default function NewMatchPage() {
         {/* Only meaningful with two batters — single mode is last-man by
             definition, so the toggle hides rather than lying. */}
         {battingMode === "double" ? (
-          <div className="rounded-3xl border border-line bg-surface p-4">
+          <div className="rounded-2xl border border-line bg-surface p-4">
             <div className="flex items-center justify-between gap-3">
               <p className="text-[15px] font-medium text-ink">
                 Last man stands

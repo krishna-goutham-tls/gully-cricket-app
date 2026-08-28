@@ -175,19 +175,19 @@ export default function PlayersPage() {
       <AppHeader title="Players" />
       <main className="mx-auto max-w-md space-y-4 px-5 py-5">
         {error ? (
-          <p className="rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-sm text-danger">
+          <p className="rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-[13px] text-danger">
             {error}
           </p>
         ) : null}
 
         {isAdmin && (joinRequests.length > 0 || resets.length > 0) ? (
-          <section className="overflow-hidden rounded-3xl border border-accent/40 bg-surface shadow-card">
+          <section className="overflow-hidden rounded-2xl border border-accent/40 bg-surface shadow-card">
             <div className="flex items-center justify-between gap-3 border-b border-accent/20 bg-accent-soft px-4 py-3">
-              <p className="text-sm font-semibold text-accent-deep">
+              <p className="text-[13px] font-semibold text-accent-deep">
                 {waitingCount > 0 ? "Waiting on you" : "Handed out already"}
               </p>
               {waitingCount > 0 ? (
-                <span className="tabular rounded-full bg-accent px-2.5 py-0.5 text-xs font-bold text-ink">
+                <span className="tabular rounded-full bg-accent px-2.5 py-0.5 text-[11px] font-bold text-ink">
                   {waitingCount}
                 </span>
               ) : null}
@@ -202,7 +202,7 @@ export default function PlayersPage() {
                   <p className="truncate text-[15px] font-semibold text-ink">
                     {req.displayName}
                   </p>
-                  <p className="mt-0.5 text-xs text-muted">
+                  <p className="mt-0.5 text-[11px] text-muted">
                     Wants to join · {req.phoneMasked}
                   </p>
                   <div className="mt-3 grid grid-cols-2 gap-2">
@@ -232,7 +232,7 @@ export default function PlayersPage() {
                   <p className="truncate text-[15px] font-semibold text-ink">
                     {r.displayName}
                   </p>
-                  <p className="mt-0.5 text-xs text-muted">
+                  <p className="mt-0.5 text-[11px] text-muted">
                     {r.status === "pending"
                       ? "Forgot their PIN"
                       : "Has a temporary PIN — waiting to sign in"}
@@ -257,7 +257,7 @@ export default function PlayersPage() {
                   ) : null}
                   {r.tempPin ? (
                     <div className="mt-3 rounded-xl bg-accent-soft px-3.5 py-3">
-                      <p className="text-xs leading-relaxed text-accent-deep">
+                      <p className="text-[11px] leading-relaxed text-accent-deep">
                         Give {r.displayName} this temporary PIN — they’ll set
                         their own after signing in.
                       </p>
@@ -303,7 +303,7 @@ export default function PlayersPage() {
         </div>
 
         {guestOpen ? (
-          <div className="space-y-2 rounded-3xl border border-line bg-surface p-4">
+          <div className="space-y-2 rounded-2xl border border-line bg-surface p-4">
             <Input
               value={guestName}
               onChange={(e) => setGuestName(e.target.value)}
@@ -332,7 +332,7 @@ export default function PlayersPage() {
         {players === undefined ? (
           <div className="space-y-2">
             {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="h-14 animate-pulse rounded-3xl bg-line/60" />
+              <div key={i} className="h-14 animate-pulse rounded-2xl bg-line/60" />
             ))}
           </div>
         ) : filtered.length === 0 ? (
@@ -355,13 +355,13 @@ export default function PlayersPage() {
           />
         ) : (
           <>
-            <p className="px-1 text-xs font-medium text-muted">
+            <p className="px-1 text-[11px] font-medium text-muted">
               {search.trim()
                 ? `${filtered.length} of ${(players ?? []).length} players`
                 : `${filtered.length} player${filtered.length === 1 ? "" : "s"}`}
               {isAdmin ? " · tap Visitor or Junior to tag" : ""}
             </p>
-            <div className="overflow-hidden rounded-3xl border border-line bg-surface">
+            <div className="overflow-hidden rounded-2xl border border-line bg-surface">
               {filtered.map((p) => (
                 <div
                   key={String(p.userId)}
@@ -373,7 +373,7 @@ export default function PlayersPage() {
                   >
                     {/* Same face as the Records screen's holder chip — the two
                         directories read as one system. */}
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-ink/[0.05] text-[12px] font-bold text-muted">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-ink/[0.05] text-[13px] font-bold text-muted">
                       {initials(p.displayName)}
                     </span>
                     <span className="min-w-0 flex-1">
@@ -385,12 +385,12 @@ export default function PlayersPage() {
                           {p.displayName}
                         </span>
                         {p.isAdmin ? (
-                          <span className="shrink-0 rounded-full bg-ink/[0.06] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                          <span className="shrink-0 rounded-full bg-ink/[0.06] px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
                             Admin
                           </span>
                         ) : null}
                       </span>
-                      <span className="tabular mt-0.5 block truncate text-[12px] text-muted">
+                      <span className="tabular mt-0.5 block truncate text-[13px] text-muted">
                         {summary.get(String(p.userId)) ?? "Yet to play"}
                       </span>
                     </span>

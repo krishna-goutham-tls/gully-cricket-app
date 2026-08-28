@@ -90,11 +90,23 @@ export type HeroShareData = {
   miniLines: HeroMiniLine[];
 };
 
+/** One slide of a closed season — honour, roast, or the book. */
+export type SeasonShareData = {
+  kind: "season";
+  seasonName: string;
+  kicker: string;
+  headline: string;
+  stat?: { value: string; label: string };
+  line: string;
+  tone: "gold" | "roast" | "ink";
+};
+
 export type ShareData =
   | PlayerShareData
   | MatchShareData
   | LeaderboardShareData
-  | HeroShareData;
+  | HeroShareData
+  | SeasonShareData;
 
 // Hex values copied from tailwind.config.ts — html-to-image clones computed
 // styles and chokes on oklch()/CSS custom properties, so every colour on this
@@ -105,6 +117,7 @@ const ACCENT = "#f0b429";
 const ACCENT_SOFT = "#fdf4de";
 const ACCENT_DEEP = "#8a5a0b";
 const LINE_ON_INK = "rgba(250, 248, 244, 0.12)";
+const BG_70 = "rgba(250, 248, 244, 0.7)";
 const BG_60 = "rgba(250, 248, 244, 0.6)";
 const BG_40 = "rgba(250, 248, 244, 0.4)";
 const GOLD_WASH = "rgba(240, 180, 41, 0.14)";
@@ -156,6 +169,21 @@ export const ShareCard = forwardRef<HTMLDivElement, { data: ShareData }>(
         </Frame>
       );
     }
+    if (data.kind === "season") {
+      return (
+        <Frame
+          ref={ref}
+          mark="GULLY"
+          footerLeft={
+            <span style={{ fontSize: 24, fontWeight: 500, color: BG_70 }}>
+              {data.seasonName}
+            </span>
+          }
+        >
+          <SeasonLayout data={data} />
+        </Frame>
+      );
+    }
     return (
       <Frame ref={ref}>
         <LeaderboardLayout data={data} />
@@ -170,8 +198,8 @@ export const ShareCard = forwardRef<HTMLDivElement, { data: ShareData }>(
  * player card uses it, for the matches-played count). */
 const Frame = forwardRef<
   HTMLDivElement,
-  { children: ReactNode; footerLeft?: ReactNode }
->(function Frame({ children, footerLeft }, ref) {
+  { children: ReactNode; footerLeft?: ReactNode; mark?: string }
+>(function Frame({ children, footerLeft, mark = "BOUNDARY" }, ref) {
   return (
       <div
         ref={ref}
@@ -224,7 +252,7 @@ const Frame = forwardRef<
               color: BG,
             }}
           >
-            BOUNDARY
+            {mark}
           </span>
         </div>
 
@@ -240,7 +268,7 @@ const Frame = forwardRef<
           }}
         >
           {footerLeft}
-          <span style={{ fontSize: 24, fontWeight: 500, color: BG_40 }}>
+          <span style={{ fontSize: 24, fontWeight: 500, color: BG_70 }}>
             gullycricket.space
           </span>
         </div>
@@ -716,9 +744,93 @@ function HeroLayout({ data }: { data: HeroShareData }) {
 /** The Hero card's own footer-left fragment: how many matches that day. */
 function HeroFooterLeft({ data }: { data: HeroShareData }) {
   return (
-    <span style={{ fontSize: 24, color: BG_40 }}>
+    <span style={{ fontSize: 24, color: BG_70 }}>
       {data.matchCount} match{data.matchCount === 1 ? "" : "es"} that day
     </span>
+  );
+}
+
+function SeasonLayout({ data }: { data: SeasonShareData }) {
+  const gold = data.tone === "gold";
+  const roast = data.tone === "roast";
+  return (
+    <>
+      <div style={{ marginTop: 72 }}>
+        <span
+          style={{
+            display: "inline-block",
+            fontSize: 24,
+            fontWeight: 600,
+            letterSpacing: 3,
+            textTransform: "uppercase",
+            color: roast ? BG_70 : ACCENT,
+          }}
+        >
+          {data.kicker}
+        </span>
+      </div>
+      <p
+        style={{
+          marginTop: 28,
+          fontSize: data.headline.length > 18 ? 56 : 72,
+          lineHeight: 1.05,
+          fontWeight: 700,
+          color: BG,
+          wordBreak: "break-word",
+        }}
+      >
+        {data.headline}
+      </p>
+      {data.stat ? (
+        <div
+          style={{
+            marginTop: 56,
+            padding: "40px 44px",
+            borderRadius: 32,
+            background: roast ? "rgba(192,57,43,0.16)" : GOLD_WASH,
+            border: roast
+              ? "2px solid rgba(192,57,43,0.45)"
+              : `2px solid ${GOLD_RING}`,
+          }}
+        >
+          <p
+            style={{
+              fontSize: 96,
+              lineHeight: 0.95,
+              fontWeight: 700,
+              color: roast ? BG : ACCENT,
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {data.stat.value}
+          </p>
+          <p
+            style={{
+              marginTop: 12,
+              fontSize: 26,
+              fontWeight: 600,
+              letterSpacing: 2,
+              textTransform: "uppercase",
+              color: BG_70,
+            }}
+          >
+            {data.stat.label}
+          </p>
+        </div>
+      ) : null}
+      <p
+        style={{
+          marginTop: "auto",
+          paddingTop: 48,
+          fontSize: 32,
+          lineHeight: 1.35,
+          fontWeight: 500,
+          color: gold || roast ? BG : BG_70,
+        }}
+      >
+        {data.line}
+      </p>
+    </>
   );
 }
 

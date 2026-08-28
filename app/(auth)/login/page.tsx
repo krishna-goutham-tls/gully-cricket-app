@@ -142,7 +142,7 @@ export default function LoginPage() {
     <main className="flex min-h-dvh flex-col justify-center px-5 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-[calc(var(--safe-top)+2rem)]">
       <div className="rise-in mb-9 flex flex-col items-center text-center">
         <Logo size={68} className="shadow-lift" />
-        <h1 className="mt-5 text-[2rem] font-semibold leading-none tracking-tight text-ink">
+        <h1 className="mt-5 text-2xl font-semibold leading-none tracking-tight text-ink">
           Gully Cricket
         </h1>
         <p className="mt-3 max-w-[17rem] text-[15px] leading-relaxed text-muted">
@@ -150,7 +150,7 @@ export default function LoginPage() {
         </p>
       </div>
 
-      <div className="rise-in rounded-3xl border border-line bg-surface p-6 shadow-card">
+      <div className="rise-in rounded-2xl border border-line bg-surface p-6 shadow-card">
         {step === "phone" ? (
           <div className="space-y-5">
             <Input
@@ -171,7 +171,7 @@ export default function LoginPage() {
             </Button>
             <button
               type="button"
-              className="flex min-h-11 w-full items-center justify-center text-sm font-medium text-muted underline-offset-4 hover:text-ink hover:underline"
+              className="flex min-h-11 w-full items-center justify-center text-[13px] font-medium text-muted underline-offset-4 hover:text-ink hover:underline"
               onClick={() => setStep("signup-name")}
             >
               New here? Create account
@@ -183,7 +183,7 @@ export default function LoginPage() {
           <div className="space-y-5">
             <div className="text-center">
               <p className="text-[15px] font-semibold text-ink">Welcome back</p>
-              <p className="mt-0.5 text-sm text-muted">{phone}</p>
+              <p className="mt-0.5 text-[13px] text-muted">{phone}</p>
             </div>
             <PinPad
               value={pin}
@@ -197,7 +197,7 @@ export default function LoginPage() {
               {wrongPin ? (
                 <button
                   type="button"
-                  className="flex min-h-11 w-full items-center justify-center text-sm font-semibold text-accent-deep underline-offset-4 hover:underline"
+                  className="flex min-h-11 w-full items-center justify-center text-[13px] font-semibold text-accent-deep underline-offset-4 hover:underline"
                   onClick={() => {
                     setError(null);
                     setStep("forgot");
@@ -208,7 +208,7 @@ export default function LoginPage() {
               ) : null}
               <button
                 type="button"
-                className="flex min-h-11 w-full items-center justify-center text-sm text-muted underline-offset-4 hover:text-ink hover:underline"
+                className="flex min-h-11 w-full items-center justify-center text-[13px] text-muted underline-offset-4 hover:text-ink hover:underline"
                 onClick={() => {
                   setStep("phone");
                   setPin("");
@@ -227,7 +227,7 @@ export default function LoginPage() {
               <p className="text-[15px] font-semibold text-ink">
                 No account on this number
               </p>
-              <p className="mt-2 text-sm leading-relaxed text-muted">
+              <p className="mt-2 text-[13px] leading-relaxed text-muted">
                 We couldn’t find anyone signed up as{" "}
                 <span className="font-medium text-ink">{phone}</span>. If you’ve
                 played before, one digit is probably off — fix it and try again.
@@ -260,7 +260,7 @@ export default function LoginPage() {
             </Button>
             <button
               type="button"
-              className="flex min-h-11 w-full items-center justify-center text-sm font-medium text-muted underline-offset-4 hover:text-ink hover:underline"
+              className="flex min-h-11 w-full items-center justify-center text-[13px] font-medium text-muted underline-offset-4 hover:text-ink hover:underline"
               onClick={() => {
                 setError(null);
                 setStep("signup-name");
@@ -279,7 +279,7 @@ export default function LoginPage() {
                   <p className="text-[15px] font-semibold text-ink">
                     Request sent
                   </p>
-                  <p className="mt-2 text-sm leading-relaxed text-muted">
+                  <p className="mt-2 text-[13px] leading-relaxed text-muted">
                     An admin of{" "}
                     <span className="font-medium text-ink">{resetSent}</span>{" "}
                     will reset your PIN and give you a temporary one. Sign in
@@ -304,11 +304,11 @@ export default function LoginPage() {
                   <p className="text-[15px] font-semibold text-ink">
                     Reset your PIN
                   </p>
-                  <p className="mt-2 text-sm leading-relaxed text-muted">
-                    We’ll ask an admin of your group to reset it. They’ll hand
+                  <p className="mt-2 text-[13px] leading-relaxed text-muted">
+                    We’ll ask an admin of your community to reset it. They’ll hand
                     you a temporary PIN — no SMS involved.
                   </p>
-                  <p className="mt-2 text-sm text-muted">{phone}</p>
+                  <p className="mt-2 text-[13px] text-muted">{phone}</p>
                 </div>
                 <Button
                   fullWidth
@@ -319,7 +319,7 @@ export default function LoginPage() {
                 </Button>
                 <button
                   type="button"
-                  className="flex min-h-11 w-full items-center justify-center text-sm text-muted underline-offset-4 hover:text-ink hover:underline"
+                  className="flex min-h-11 w-full items-center justify-center text-[13px] text-muted underline-offset-4 hover:text-ink hover:underline"
                   onClick={() => {
                     setError(null);
                     setStep("signin-pin");
@@ -337,10 +337,10 @@ export default function LoginPage() {
           <div className="space-y-5">
             <div className="text-center">
               <p className="text-[15px] font-semibold text-ink">Create account</p>
-              {phone ? <p className="mt-0.5 text-sm text-muted">{phone}</p> : null}
+              {phone ? <p className="mt-0.5 text-[13px] text-muted">{phone}</p> : null}
             </div>
             {notice ? (
-              <p className="rounded-2xl bg-accent-soft px-4 py-3 text-sm leading-relaxed text-accent-deep">
+              <p className="rounded-2xl bg-accent-soft px-4 py-3 text-[13px] leading-relaxed text-accent-deep">
                 {notice}
               </p>
             ) : null}
@@ -382,7 +382,7 @@ export default function LoginPage() {
           <div className="space-y-5">
             <div className="text-center">
               <p className="text-[15px] font-semibold text-ink">Set a 4-digit PIN</p>
-              <p className="mt-0.5 text-sm text-muted">
+              <p className="mt-0.5 text-[13px] text-muted">
                 You’ll use this every time. No SMS codes.
               </p>
             </div>
@@ -404,7 +404,7 @@ export default function LoginPage() {
           <div className="space-y-5">
             <div className="text-center">
               <p className="text-[15px] font-semibold text-ink">Confirm PIN</p>
-              <p className="mt-0.5 text-sm text-muted">
+              <p className="mt-0.5 text-[13px] text-muted">
                 Enter the same 4 digits again.
               </p>
             </div>
@@ -427,7 +427,7 @@ export default function LoginPage() {
         ) : null}
 
         {error ? (
-          <p className="mt-4 rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-center text-sm text-danger">
+          <p className="mt-4 rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-center text-[13px] text-danger">
             {error}
           </p>
         ) : null}

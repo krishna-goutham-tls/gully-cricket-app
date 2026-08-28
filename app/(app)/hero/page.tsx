@@ -1,13 +1,8 @@
 "use client";
 
 import { useAuth } from "@/components/providers/AuthProvider";
-import {
-  CARD_HEIGHT,
-  CARD_WIDTH,
-  ShareCard,
-  type HeroShareData,
-  type ShareStat,
-} from "@/components/share/ShareCard";
+import { PosterPreview } from "@/components/share/PosterPreview";
+import { type HeroShareData, type ShareStat } from "@/components/share/ShareCard";
 import { ShareButton } from "@/components/share/ShareButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
@@ -17,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { ArrowLeft } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 /**
  * "Hero" — one player's flex for one DAY (a day is often several matches),
@@ -48,48 +43,11 @@ function dayBounds(ts: number) {
   return { dayStart: start, dayEnd: start + 24 * 60 * 60 * 1000 };
 }
 
-/** Scales the fixed 1080×1350 ShareCard down to whatever width its
- * container gives it, instead of guessing a viewport size up front — the
- * same card the exported PNG uses, just shown live on screen. */
-function PosterPreview({ data }: { data: HeroShareData }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(0);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const update = () => setScale(el.clientWidth / CARD_WIDTH);
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  return (
-    <div
-      ref={containerRef}
-      className="w-full overflow-hidden rounded-[28px] shadow-lift"
-      style={{ aspectRatio: `${CARD_WIDTH} / ${CARD_HEIGHT}` }}
-    >
-      <div
-        style={{
-          width: CARD_WIDTH,
-          height: CARD_HEIGHT,
-          transform: `scale(${scale})`,
-          transformOrigin: "top left",
-        }}
-      >
-        <ShareCard data={data} />
-      </div>
-    </div>
-  );
-}
-
 function HeroPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectPlayerId = searchParams.get("playerId");
-  const { token, activeOrgId } = useAuth();
+  const { token, activeOrgId, user } = useAuth();
 
   const days = useQuery(
     api.hero.heroDays,
@@ -134,6 +92,34 @@ function HeroPageInner() {
   }, [dayGroups]);
 
   const activeDay = dayGroups.find((d) => d.key === dayKey) ?? null;
+
+  const shares = useQuery(
+    api.hero.dayShares,
+    token && activeOrgId && activeDay
+      ? {
+          token,
+          orgId: activeOrgId,
+          dayStart: activeDay.dayStart,
+          dayEnd: activeDay.dayEnd,
+        }
+      : "skip",
+  );
+
+  const ranked = useMemo(() => {
+    const pts = new Map(
+      (shares ?? []).map((s) => [String(s.id), s.points] as const),
+    );
+    return [...(activeDay?.players ?? [])]
+      .map((p) => ({
+        id: String(p.id),
+        name: p.name,
+        points: pts.get(String(p.id)) ?? 0,
+      }))
+      .sort(
+        (a, b) =>
+          b.points - a.points || a.name.localeCompare(b.name),
+      );
+  }, [activeDay, shares]);
 
   const hero = useQuery(
     api.hero.heroDay,
@@ -224,7 +210,7 @@ function HeroPageInner() {
                   if (!d.players.some((p) => String(p.id) === playerId)) setPlayerId(null);
                 }}
                 className={cn(
-                  "min-h-11 shrink-0 whitespace-nowrap rounded-full px-4 text-[13px] font-semibold",
+                  "min-h-11 shrink-0 whitespace-nowrap rounded-lg px-4 text-[13px] font-semibold",
                   d.key === dayKey
                     ? "bg-accent text-ink"
                     : "border border-white/10 text-bg/70 active:bg-white/10",
@@ -252,26 +238,60 @@ function HeroPageInner() {
         ) : !activeDay ? null : !playerId || !heroData ? (
           <>
             <p className="mb-3 px-1 text-[13px] text-bg/70">
-              Who had the day? {activeDay.matchCount} match
-              {activeDay.matchCount === 1 ? "" : "es"} on {activeDay.label.toLowerCase()}.
+              Who had the day? Bigger tile, bigger share of the points.
             </p>
-            <div className="grid grid-cols-3 gap-2.5">
-              {activeDay.players.map((p) => (
-                <button
-                  key={String(p.id)}
-                  type="button"
-                  onClick={() => setPlayerId(String(p.id))}
-                  className="flex flex-col items-center gap-2 rounded-2xl border border-white/10 px-2 py-3.5 text-center active:bg-white/5"
-                >
-                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-[15px] font-semibold text-accent">
-                    {initials(p.name)}
-                  </span>
-                  <span className="line-clamp-2 text-[12px] font-medium leading-tight text-bg/80">
-                    {p.name}
-                  </span>
-                </button>
-              ))}
-            </div>
+            {shares === undefined ? (
+              <div className="grid grid-cols-2 gap-2">
+                {[0, 1, 2, 3].map((i) => (
+                  <div key={i} className="h-24 animate-pulse rounded-2xl bg-white/5" />
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {ranked.map((p) => {
+                  const max = Math.max(ranked[0]?.points ?? 1, 1);
+                  const t = p.points / max;
+                  const box = 44 + Math.round(t * 36);
+                  const you = user && String(user._id) === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setPlayerId(p.id)}
+                      style={{
+                        flexGrow: Math.max(p.points, 1),
+                        flexBasis: `${5.5 + t * 5}rem`,
+                      }}
+                      className="flex min-h-14 flex-col items-center justify-center gap-2 rounded-2xl border border-white/10 px-2 py-3 text-center active:bg-white/5"
+                    >
+                      <span
+                        className="flex items-center justify-center rounded-2xl bg-accent/15 font-semibold text-accent"
+                        style={{
+                          width: box,
+                          height: box,
+                          fontSize: t > 0.6 ? 20 : 15,
+                        }}
+                      >
+                        {initials(p.name)}
+                      </span>
+                      <span
+                        className={cn(
+                          "line-clamp-2 font-semibold leading-tight",
+                          t > 0.5 ? "text-[15px] text-bg" : "text-[13px] text-bg/70",
+                        )}
+                      >
+                        {p.name}
+                      </span>
+                      {you ? (
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-bg/70">
+                          You
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             {hero === null ? (
               <p className="mt-4 text-center text-[13px] text-bg/70">
                 Nothing to show for that pick — try another player.
@@ -286,7 +306,7 @@ function HeroPageInner() {
               <button
                 type="button"
                 onClick={() => setPlayerId(null)}
-                className="min-h-11 rounded-2xl border border-white/10 px-4 text-[13px] font-semibold text-bg/70 active:bg-white/10"
+                className="min-h-11 rounded-xl border border-white/10 px-4 text-[13px] font-semibold text-bg/70 active:bg-white/10"
               >
                 Change player
               </button>

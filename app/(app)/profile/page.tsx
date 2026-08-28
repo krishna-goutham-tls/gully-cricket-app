@@ -96,7 +96,7 @@ export default function ProfilePage() {
         {user?._id ? (
           <Link
             href={`/players/${user._id}`}
-            className="flex min-h-12 items-center gap-3 rounded-3xl border border-line bg-surface px-4 py-3 active:bg-bg"
+            className="flex min-h-12 items-center gap-3 rounded-2xl border border-line bg-surface px-4 py-3 active:bg-bg"
           >
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-deep">
               <BarChart3 className="h-4 w-4" strokeWidth={2.2} />
@@ -105,7 +105,7 @@ export default function ProfilePage() {
               <span className="block text-[15px] font-semibold text-ink">
                 My stats
               </span>
-              <span className="block text-[12px] text-muted">
+              <span className="block text-[13px] text-muted">
                 Runs, wickets, form & match-ups
               </span>
             </span>
@@ -117,7 +117,7 @@ export default function ProfilePage() {
 
         {/* Everything else is a settings list — one card, thin rows, expand only
             what you actually came to change, so the page opens on one screen. */}
-        <div className="overflow-hidden rounded-3xl border border-line bg-surface">
+        <div className="overflow-hidden rounded-2xl border border-line bg-surface">
           <div className="flex items-center gap-3 px-4 py-4">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent-soft text-lg font-semibold text-accent-deep">
               {initial}
@@ -175,9 +175,9 @@ export default function ProfilePage() {
                   ))}
                 </div>
               </div>
-              {error ? <p className="text-sm text-danger">{error}</p> : null}
+              {error ? <p className="text-[13px] text-danger">{error}</p> : null}
               {message ? (
-                <p className="text-sm text-accent-deep">{message}</p>
+                <p className="text-[13px] text-accent-deep">{message}</p>
               ) : null}
               <Button fullWidth disabled={busy} onClick={() => void onSave()}>
                 {busy ? "Saving…" : "Save"}
@@ -220,7 +220,7 @@ export default function ProfilePage() {
                   setNewPin(e.target.value.replace(/\D/g, "").slice(0, 4))
                 }
               />
-              {pinError ? <p className="text-sm text-danger">{pinError}</p> : null}
+              {pinError ? <p className="text-[13px] text-danger">{pinError}</p> : null}
               <Button
                 fullWidth
                 disabled={
@@ -310,7 +310,7 @@ function WishlistRow() {
   return (
     <Link
       href="/wishlist"
-      className="flex min-h-12 items-center gap-3 rounded-3xl border border-line bg-surface px-4 py-3 active:bg-bg"
+      className="flex min-h-12 items-center gap-3 rounded-2xl border border-line bg-surface px-4 py-3 active:bg-bg"
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-deep">
         <Lightbulb className="h-4 w-4" strokeWidth={2.2} />
@@ -319,7 +319,7 @@ function WishlistRow() {
         <span className="block text-[15px] font-semibold text-ink">
           Wishlist
         </span>
-        <span className="block text-[12px] text-muted">
+        <span className="block text-[13px] text-muted">
           {open > 0
             ? `${open} open ask${open === 1 ? "" : "s"} \u00b7 ask for a feature`
             : "Ask for a feature, vote on others"}
@@ -342,11 +342,11 @@ function AccessRequestsRow() {
   return (
     <Link
       href="/admin/requests"
-      className="flex min-h-14 items-center justify-between gap-3 rounded-3xl border border-line bg-surface px-4 py-3"
+      className="flex min-h-14 items-center justify-between gap-3 rounded-2xl border border-line bg-surface px-4 py-3"
     >
       <div className="min-w-0">
         <p className="text-[15px] font-semibold text-ink">Access requests</p>
-        <p className="mt-0.5 text-xs text-muted">
+        <p className="mt-0.5 text-[11px] text-muted">
           {waiting > 0
             ? `${waiting} community${waiting === 1 ? "" : "s"} waiting on you`
             : "Nobody waiting"}
@@ -354,7 +354,7 @@ function AccessRequestsRow() {
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {waiting > 0 ? (
-          <span className="tabular flex h-6 min-w-6 items-center justify-center rounded-full bg-danger px-1.5 text-xs font-bold text-bg">
+          <span className="tabular flex h-6 min-w-6 items-center justify-center rounded-full bg-danger px-1.5 text-[11px] font-bold text-bg">
             {waiting}
           </span>
         ) : null}
@@ -415,7 +415,7 @@ function SandboxRow() {
       <div className="flex min-h-12 items-center gap-3 px-4 py-2.5">
         <div className="min-w-0 flex-1">
           <p className="text-[15px] font-medium text-ink">Sandbox mode</p>
-          <p className="text-[12px] leading-snug text-muted">
+          <p className="text-[13px] leading-snug text-muted">
             A practice space — matches here don&apos;t count towards stats.
           </p>
         </div>
@@ -453,7 +453,7 @@ function SandboxRow() {
         </button>
       ) : null}
 
-      {err ? <p className="px-4 pb-3 text-sm text-danger">{err}</p> : null}
+      {err ? <p className="px-4 pb-3 text-[13px] text-danger">{err}</p> : null}
 
       <ConfirmDialog
         open={confirmReset}

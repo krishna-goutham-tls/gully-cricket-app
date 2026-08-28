@@ -10,6 +10,7 @@ import { errorMessage } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 function CapName({
@@ -57,13 +58,14 @@ function ordinal(n: number) {
  */
 export function SeasonStrip({ series }: { series?: SeriesRow | null }) {
   const { token, activeOrgId, isAdmin, user } = useAuth();
+  const router = useRouter();
   const current = useQuery(
     api.seasons.current,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
   );
   const seasons = useQuery(
     api.seasons.list,
-    token && activeOrgId && isAdmin && current === null
+    token && activeOrgId && current === null
       ? { token, orgId: activeOrgId }
       : "skip",
   );
@@ -109,10 +111,13 @@ export function SeasonStrip({ series }: { series?: SeriesRow | null }) {
     try {
       if (pending === "start") {
         await startSeason({ token, orgId: activeOrgId });
+        setPending(null);
       } else {
-        await endSeason({ token, orgId: activeOrgId });
+        const seasonId = await endSeason({ token, orgId: activeOrgId });
+        setPending(null);
+        router.push(`/seasons/${seasonId}/wrap`);
+        return;
       }
-      setPending(null);
     } catch (e) {
       setError(
         errorMessage(
@@ -201,10 +206,37 @@ export function SeasonStrip({ series }: { series?: SeriesRow | null }) {
           </>
         ) : (
           <div className="px-4 py-3">
-            <p className="text-[15px] font-semibold text-ink">No season yet</p>
-            <p className="mt-0.5 text-[13px] leading-relaxed text-muted">
-              Start one to open a fresh board. All-time stays.
-            </p>
+            {(() => {
+              const last = (seasons ?? []).find((s) => s.status === "complete");
+              if (last) {
+                return (
+                  <Link
+                    href={`/seasons/${last._id}`}
+                    className="flex min-h-11 items-center gap-2 active:opacity-80"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <TruncText className="text-[15px] font-semibold text-ink">
+                        {last.name}
+                      </TruncText>
+                      <span className="mt-0.5 block text-[13px] text-muted">
+                        The trophies
+                      </span>
+                    </span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-faint" />
+                  </Link>
+                );
+              }
+              return (
+                <>
+                  <p className="text-[15px] font-semibold text-ink">
+                    No season yet
+                  </p>
+                  <p className="mt-0.5 text-[13px] leading-relaxed text-muted">
+                    Start one to open a fresh board. All-time stays.
+                  </p>
+                </>
+              );
+            })()}
             {isAdmin ? (
               <div className="mt-3">
                 <Button fullWidth onClick={() => setPending("start")}>
@@ -230,7 +262,7 @@ export function SeasonStrip({ series }: { series?: SeriesRow | null }) {
         }
         description={
           pending === "end"
-            ? "Caps lock in. All-time stays."
+            ? "Caps lock in. Then the season cards."
             : "A fresh board. All-time stays."
         }
         confirmLabel={pending === "end" ? "End season" : "Start season"}

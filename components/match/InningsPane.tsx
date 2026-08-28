@@ -104,17 +104,27 @@ function battingFigure(b: InningsCard["batting"][number]) {
   return `${b.runs}${b.out ? "" : b.retired ? "r" : "*"}`;
 }
 
+function YouMark() {
+  return (
+    <span className="shrink-0 rounded-full bg-ink/[0.07] px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
+      You
+    </span>
+  );
+}
+
 export function InningsPane({
   inn,
   card,
   label,
   className,
+  youId,
 }: {
   inn: InningsCard;
   card: Scorecard;
   /** e.g. "1st innings" (limited) or "2nd innings · Test" context line. */
   label: string;
   className?: string;
+  youId?: string;
 }) {
   const [full, setFull] = useState(false);
 
@@ -152,7 +162,7 @@ export function InningsPane({
   return (
     <section
       className={cn(
-        "overflow-hidden rounded-3xl border border-line bg-surface",
+        "overflow-hidden rounded-2xl border border-line bg-surface",
         className,
       )}
     >
@@ -223,6 +233,7 @@ export function InningsPane({
           <ul className="mt-1.5 space-y-1">
             {inn.batting.map((b) => {
               const top = topBat?.userId === b.userId;
+              const mine = youId && String(b.userId) === String(youId);
               return (
                 <li
                   key={String(b.userId)}
@@ -230,15 +241,18 @@ export function InningsPane({
                 >
                   <span
                     className={cn(
-                      "min-w-0 truncate",
+                      "flex min-w-0 items-baseline gap-1",
                       top
                         ? "font-semibold text-accent-deep"
-                        : b.out
-                          ? "text-muted"
-                          : "font-medium text-ink",
+                        : mine
+                          ? "font-semibold text-ink"
+                          : b.out
+                            ? "text-muted"
+                            : "font-medium text-ink",
                     )}
                   >
-                    {b.displayName}
+                    <span className="min-w-0 truncate">{b.displayName}</span>
+                    {mine ? <YouMark /> : null}
                   </span>
                   <span
                     className={cn(
@@ -283,6 +297,7 @@ export function InningsPane({
           <ul className="mt-1.5 space-y-1">
             {inn.bowling.map((b) => {
               const top = topBowl?.userId === b.userId;
+              const mine = youId && String(b.userId) === String(youId);
               return (
                 <li
                   key={String(b.userId)}
@@ -290,13 +305,16 @@ export function InningsPane({
                 >
                   <span
                     className={cn(
-                      "min-w-0 truncate",
+                      "flex min-w-0 items-baseline gap-1",
                       top
                         ? "font-semibold text-accent-deep"
-                        : "font-medium text-ink",
+                        : mine
+                          ? "font-semibold text-ink"
+                          : "font-medium text-ink",
                     )}
                   >
-                    {b.displayName}
+                    <span className="min-w-0 truncate">{b.displayName}</span>
+                    {mine ? <YouMark /> : null}
                   </span>
                   <span
                     className={cn(
@@ -321,7 +339,7 @@ export function InningsPane({
         </div>
       </div>
 
-      {full ? <FullTables inn={inn} /> : null}
+      {full ? <FullTables inn={inn} youId={youId} /> : null}
     </section>
   );
 }
@@ -330,13 +348,13 @@ export function InningsPane({
  * The classic five-column card. Only rendered on demand, so it can afford
  * roomy rows, dismissal text and 44px-safe profile links.
  */
-function FullTables({ inn }: { inn: InningsCard }) {
+function FullTables({ inn, youId }: { inn: InningsCard; youId?: string }) {
   return (
     <div className="border-t border-line px-4 py-3">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[17rem] table-fixed text-[13px]">
           <thead>
-            <tr className="text-left text-xs uppercase tracking-wide text-muted">
+            <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
               <th className="pb-2 font-medium">Batting</th>
               <th className="w-10 pb-2 text-right font-medium">R</th>
               <th className="w-9 pb-2 text-right font-medium">B</th>
@@ -351,10 +369,15 @@ function FullTables({ inn }: { inn: InningsCard }) {
                   {/* Both lines sit inside the link so the tap target
                       clears 44px in a dense table. */}
                   <Link href={`/players/${b.userId}`} className="-my-2 block py-2">
-                    <span className="block truncate font-medium text-ink">
-                      {b.displayName}
+                    <span className="flex min-w-0 items-baseline gap-1">
+                      <span className="block min-w-0 truncate font-medium text-ink">
+                        {b.displayName}
+                      </span>
+                      {youId && String(b.userId) === String(youId) ? (
+                        <YouMark />
+                      ) : null}
                     </span>
-                    <span className="block truncate text-xs text-muted">
+                    <span className="block truncate text-[11px] text-muted">
                       {b.out
                         ? b.dismissal
                         : b.retired
@@ -380,7 +403,7 @@ function FullTables({ inn }: { inn: InningsCard }) {
       </div>
 
       {inn.fallOfWickets.length > 0 ? (
-        <p className="mt-2.5 text-xs leading-relaxed text-muted">
+        <p className="mt-2.5 text-[11px] leading-relaxed text-muted">
           <span className="font-medium text-ink">FOW </span>
           {inn.fallOfWickets
             .map(
@@ -394,7 +417,7 @@ function FullTables({ inn }: { inn: InningsCard }) {
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[17rem] table-fixed text-[13px]">
             <thead>
-              <tr className="text-left text-xs uppercase tracking-wide text-muted">
+              <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
                 <th className="pb-2 font-medium">Bowling</th>
                 <th className="w-10 pb-2 text-right font-medium">O</th>
                 <th className="w-7 pb-2 text-right font-medium">M</th>
@@ -409,9 +432,12 @@ function FullTables({ inn }: { inn: InningsCard }) {
                   <td className="py-3 pr-2">
                     <Link
                       href={`/players/${b.userId}`}
-                      className="-my-3 block truncate py-3 font-medium text-ink"
+                      className="-my-3 flex items-baseline gap-1 truncate py-3 font-medium text-ink"
                     >
-                      {b.displayName}
+                      <span className="min-w-0 truncate">{b.displayName}</span>
+                      {youId && String(b.userId) === String(youId) ? (
+                        <YouMark />
+                      ) : null}
                     </Link>
                   </td>
                   <td className="py-3 text-right text-muted">{b.overs}</td>

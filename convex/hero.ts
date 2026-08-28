@@ -692,3 +692,104 @@ function buildInsights(d: {
     .slice(0, 5)
     .map((c) => c.text);
 }
+
+/**
+ * One day's all-round points per player — same 1/20/8 + bonuses as POTM
+ * and Leaders. Used to size the Hero picker. Zero-point players stay in
+ * the list so a quiet day is still pickable.
+ */
+export const dayShares = query({
+  args: {
+    token: v.optional(v.string()),
+    orgId: v.id("orgs"),
+    dayStart: v.number(),
+    dayEnd: v.number(),
+  },
+  handler: async (ctx, args) => {
+    try {
+      await requireActiveMembership(ctx, args.token, args.orgId);
+    } catch {
+      return null;
+    }
+
+    const allCompleted = await ctx.db
+      .query("matches")
+      .withIndex("by_org_status", (q) =>
+        q.eq("orgId", args.orgId).eq("status", "completed"),
+      )
+      .collect();
+    const dayMatches = allCompleted.filter(
+      (m) => m.createdAt >= args.dayStart && m.createdAt < args.dayEnd,
+    );
+
+    const seen = new Set<string>();
+    for (const m of dayMatches) {
+      for (const id of [...m.sideAPlayerIds, ...m.sideBPlayerIds]) {
+        seen.add(String(id));
+      }
+    }
+
+    const names = new Map<string, string>();
+    const points = new Map<string, number>();
+    await Promise.all(
+      Array.from(seen).map(async (key) => {
+        const u = await ctx.db.get(key as Id<"users">);
+        if (u && "displayName" in u) names.set(key, u.displayName as string);
+        points.set(key, 0);
+      }),
+    );
+
+    for (const match of dayMatches) {
+      const balls = await ctx.db
+        .query("balls")
+        .withIndex("by_match", (q) => q.eq("matchId", match._id))
+        .collect();
+      const innRuns = new Map<string, number>();
+      const wkts = new Map<string, number>();
+      const catches = new Map<string, number>();
+      const bump = (m: Map<string, number>, k: string, by = 1) =>
+        m.set(k, (m.get(k) ?? 0) + by);
+
+      for (const b of balls) {
+        if (b.isRetire) continue;
+        bump(innRuns, `${b.inningsId}:${b.strikerId}`, b.runsBat);
+        if (b.isWicket && b.playerOutId) {
+          if (b.wicketType !== "runout") bump(wkts, String(b.bowlerId));
+          if (b.wicketType === "caught" && b.fielderId) {
+            bump(catches, String(b.fielderId));
+          }
+        }
+      }
+
+      const pRuns = new Map<string, number>();
+      const pBonus = new Map<string, number>();
+      for (const [key, score] of Array.from(innRuns.entries())) {
+        const pid = key.slice(key.indexOf(":") + 1);
+        bump(pRuns, pid, score);
+        bump(pBonus, pid, battingMilestoneBonus(score));
+      }
+      const ids = new Set<string>([
+        ...Array.from(pRuns.keys()),
+        ...Array.from(wkts.keys()),
+        ...Array.from(catches.keys()),
+      ]);
+      for (const id of Array.from(ids)) {
+        const p =
+          basePoints(
+            pRuns.get(id) ?? 0,
+            wkts.get(id) ?? 0,
+            catches.get(id) ?? 0,
+          ) +
+          (pBonus.get(id) ?? 0) +
+          bowlingHaulBonus(wkts.get(id) ?? 0);
+        points.set(id, (points.get(id) ?? 0) + p);
+      }
+    }
+
+    return Array.from(seen).map((id) => ({
+      id: id as Id<"users">,
+      name: names.get(id) ?? "Player",
+      points: points.get(id) ?? 0,
+    }));
+  },
+});

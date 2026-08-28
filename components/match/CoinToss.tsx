@@ -109,8 +109,8 @@ export function CoinToss({
           <h1 className="text-2xl font-semibold tracking-tight text-ink">
             Who bats first?
           </h1>
-          <p className="mt-1.5 text-sm text-muted">Tap the batting team.</p>
-          {error ? <p className="mt-4 text-sm text-danger">{error}</p> : null}
+          <p className="mt-1.5 text-[13px] text-muted">Tap the batting team.</p>
+          {error ? <p className="mt-4 text-[13px] text-danger">{error}</p> : null}
           <div className="mt-8 space-y-3">
             {teams.map((s) => (
               <button
@@ -118,7 +118,7 @@ export function CoinToss({
                 type="button"
                 disabled={busy}
                 onClick={() => onPickBatting(s.side)}
-                className="flex min-h-16 w-full items-center rounded-3xl border border-line bg-surface px-5 text-left transition active:scale-[0.98] active:border-accent"
+                className="flex min-h-16 w-full items-center rounded-2xl border border-line bg-surface px-5 text-left transition active:scale-[0.98] active:border-accent"
               >
                 <span className="text-lg font-semibold text-ink">{s.name}</span>
               </button>
@@ -148,7 +148,7 @@ export function CoinToss({
       <h1 className="shrink-0 text-2xl font-semibold tracking-tight text-ink">
         {landed && winner ? `${name(winner)} won` : "Toss"}
       </h1>
-      <p className="mt-1.5 min-h-5 shrink-0 text-sm text-muted">
+      <p className="mt-1.5 min-h-5 shrink-0 text-[13px] text-muted">
         {landed
           ? result === "heads"
             ? "Heads."
@@ -158,7 +158,7 @@ export function CoinToss({
             : "Caller picks a side, then toss."}
       </p>
       {error ? (
-        <p className="mt-2 shrink-0 text-sm text-danger">{error}</p>
+        <p className="mt-2 shrink-0 text-[13px] text-danger">{error}</p>
       ) : null}
 
       {picking ? (
@@ -251,13 +251,13 @@ export function CoinToss({
 
       {landed && winner ? (
         <div className="shrink-0 space-y-3">
-          <p className="text-center text-sm text-muted">{name(winner)} picks</p>
+          <p className="text-center text-[13px] text-muted">{name(winner)} picks</p>
           <div className="grid grid-cols-2 gap-3">
             <button
               type="button"
               disabled={busy}
               onClick={() => onPickBatting(winner)}
-              className="flex min-h-16 items-center justify-center rounded-3xl border border-line bg-surface text-lg font-semibold text-ink transition active:scale-[0.98] active:border-accent"
+              className="flex min-h-16 items-center justify-center rounded-2xl border border-line bg-surface text-lg font-semibold text-ink transition active:scale-[0.98] active:border-accent"
             >
               Bat
             </button>
@@ -265,7 +265,7 @@ export function CoinToss({
               type="button"
               disabled={busy}
               onClick={() => onPickBatting(other(winner))}
-              className="flex min-h-16 items-center justify-center rounded-3xl border border-line bg-surface text-lg font-semibold text-ink transition active:scale-[0.98] active:border-accent"
+              className="flex min-h-16 items-center justify-center rounded-2xl border border-line bg-surface text-lg font-semibold text-ink transition active:scale-[0.98] active:border-accent"
             >
               Bowl
             </button>

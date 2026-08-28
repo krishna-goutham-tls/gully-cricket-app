@@ -2,17 +2,32 @@
 
 import { MatchCard, SeriesCard, type MatchRow } from "@/components/home/HomeCards";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState } from "@/components/ui/EmptyState";
+import {
+  RECORD_MIN_BALLS,
+  RECORD_MIN_INNINGS,
+} from "@/components/leaderboard/records";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { groupByDay } from "@/lib/dates";
+import { type SeasonAwardKind } from "@/lib/trophies";
 import { errorMessage } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
+
+const AWARD_LABEL: Record<SeasonAwardKind, string> = {
+  pots: "Player of the season",
+  orange_cap: "Orange Cap",
+  purple_cap: "Purple Cap",
+  most_sixes: "Most sixes",
+  highest_sr: "Highest strike rate",
+  best_economy: "Best economy",
+};
 
 type PendingAction =
   | { kind: "end"; matchId: string; label: string }
@@ -103,9 +118,76 @@ export default function SeasonPage() {
     };
   }, [seasonMatches]);
 
-  const orange = board?.batting[0]?.displayName ?? null;
-  const purple = board?.bowling[0]?.displayName ?? null;
-  const capsLoading = season != null && board === undefined;
+  const trophies = useMemo(() => {
+    if (!board) return [];
+    const out: Array<{
+      kind: SeasonAwardKind;
+      name: string;
+      display: string;
+    }> = [];
+    const pots = board.allRound[0];
+    if (pots)
+      out.push({
+        kind: "pots",
+        name: pots.displayName,
+        display: String(pots.points),
+      });
+    const orange = board.batting[0];
+    if (orange && orange.runs > 0)
+      out.push({
+        kind: "orange_cap",
+        name: orange.displayName,
+        display: String(orange.runs),
+      });
+    const purple = board.bowling[0];
+    if (purple && purple.wickets > 0)
+      out.push({
+        kind: "purple_cap",
+        name: purple.displayName,
+        display: String(purple.wickets),
+      });
+    const sixes = [...board.batting].sort((a, b) => b.sixes - a.sixes)[0];
+    if (sixes && sixes.sixes > 0)
+      out.push({
+        kind: "most_sixes",
+        name: sixes.displayName,
+        display: String(sixes.sixes),
+      });
+    const srPool = board.batting.filter(
+      (r) => r.balls >= RECORD_MIN_BALLS && r.innings >= RECORD_MIN_INNINGS,
+    );
+    const sr = [...srPool].sort((a, b) => b.strikeRate - a.strikeRate)[0];
+    if (sr)
+      out.push({
+        kind: "highest_sr",
+        name: sr.displayName,
+        display: sr.strikeRate.toFixed(1),
+      });
+    const econPool = board.bowling.filter(
+      (r) =>
+        r.legalBalls >= RECORD_MIN_BALLS && r.innings >= RECORD_MIN_INNINGS,
+    );
+    const econ = [...econPool].sort((a, b) => a.economy - b.economy)[0];
+    if (econ)
+      out.push({
+        kind: "best_economy",
+        name: econ.displayName,
+        display: econ.economy.toFixed(1),
+      });
+    return out;
+  }, [board]);
+
+  const locked = useMemo(() => {
+    if (!season || season.status !== "complete") return [];
+    return (season.awards ?? []).map((a) => ({
+      kind: a.kind,
+      name: a.displayName,
+      display: a.display,
+    }));
+  }, [season]);
+
+  const shelf = locked.length > 0 ? locked : trophies;
+  const capsLoading = season != null && board === undefined && locked.length === 0;
 
   function endMatch(matchId: string, label: string) {
     setMenuFor(null);
@@ -186,31 +268,40 @@ export default function SeasonPage() {
           </p>
         ) : null}
 
-        <div className="mt-3 flex flex-wrap items-center gap-x-1 border-b border-line pb-1">
-          <Link
-            href="/leaderboard?cap=orange"
-            className="inline-flex min-h-11 items-center px-1 text-[13px] leading-snug"
-          >
-            <span className="font-semibold text-accent-deep">Orange Cap</span>
-            {capsLoading ? (
-              <span className="ml-1 inline-block h-3 w-14 animate-pulse rounded-md bg-ink/[0.08]" />
-            ) : orange ? (
-              <span className="text-ink"> {orange}</span>
-            ) : null}
-          </Link>
-          <span className="text-muted">·</span>
-          <Link
-            href="/leaderboard?cap=purple"
-            className="inline-flex min-h-11 items-center px-1 text-[13px] leading-snug"
-          >
-            <span className="font-semibold text-accent-deep">Purple Cap</span>
-            {capsLoading ? (
-              <span className="ml-1 inline-block h-3 w-14 animate-pulse rounded-md bg-ink/[0.08]" />
-            ) : purple ? (
-              <span className="text-ink"> {purple}</span>
-            ) : null}
-          </Link>
-        </div>
+        {season?.status === "complete" ? (
+          <div className="mt-3">
+            <Button href={`/seasons/${season._id}/wrap`} fullWidth>
+              Share this season
+            </Button>
+          </div>
+        ) : null}
+
+        {capsLoading ? (
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="h-24 animate-pulse rounded-2xl bg-ink/[0.04]" />
+            ))}
+          </div>
+        ) : shelf.length > 0 ? (
+          <ul className="mt-3 grid grid-cols-2 gap-2">
+            {shelf.map((a) => (
+              <li
+                key={a.kind}
+                className="rounded-2xl border border-line bg-surface px-3.5 py-3 shadow-card"
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">
+                  {AWARD_LABEL[a.kind]}
+                </p>
+                <p className="mt-1 text-[15px] font-semibold leading-snug text-ink">
+                  {a.name}
+                </p>
+                <p className="tabular mt-1 text-2xl font-semibold text-accent-deep">
+                  {a.display}
+                </p>
+              </li>
+            ))}
+          </ul>
+        ) : null}
 
         {series.length > 0 ? (
           <div className="mt-3 space-y-2">

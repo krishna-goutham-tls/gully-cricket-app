@@ -288,7 +288,7 @@ export const requestPinReset = mutation({
     const active = memberships.filter((m) => m.status === "active");
     if (active.length === 0) {
       throw new Error(
-        "You are not in a group yet. Ask your group admin to add you.",
+        "You are not in a community yet. Ask your community admin to add you.",
       );
     }
 
@@ -304,7 +304,7 @@ export const requestPinReset = mutation({
 
     const org = await ctx.db.get(preferred.orgId);
     if (existing) {
-      return { alreadyPending: true, orgName: org?.name ?? "your group" };
+      return { alreadyPending: true, orgName: org?.name ?? "your community" };
     }
 
     await ctx.db.insert("pinResets", {
@@ -314,7 +314,7 @@ export const requestPinReset = mutation({
       requestedAt: Date.now(),
     });
 
-    return { alreadyPending: false, orgName: org?.name ?? "your group" };
+    return { alreadyPending: false, orgName: org?.name ?? "your community" };
   },
 });
 

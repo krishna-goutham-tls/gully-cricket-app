@@ -426,7 +426,7 @@ export default function ScorePage() {
         {error ? <p className="mt-4 text-[13px] text-danger">{error}</p> : null}
         <div className="mt-6 space-y-4">
           {isBreak && bi?.canChooseSide && bi.followOnSide ? (
-            <div className="rounded-3xl border border-line bg-surface p-4">
+            <div className="rounded-2xl border border-line bg-surface p-4">
               <p className="text-[13px] font-medium text-muted">
                 Who bats innings 3?
               </p>
@@ -1644,7 +1644,7 @@ function Picker({
   onSelect: (id: string) => void;
 }) {
   return (
-    <div className="rounded-3xl border border-line bg-surface p-4">
+    <div className="rounded-2xl border border-line bg-surface p-4">
       <p className="text-[13px] font-medium text-muted">{label}</p>
       <div className="mt-3 grid grid-cols-2 gap-2">
         {players.map((p) => {
