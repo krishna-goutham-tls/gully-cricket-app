@@ -90,15 +90,32 @@ export type HeroShareData = {
   miniLines: HeroMiniLine[];
 };
 
-/** One slide of a closed season — honour, roast, or the book. */
+export type SeasonShareRow = { name: string; value: string };
+export type SeasonShareBoardRow = {
+  rank: number;
+  name: string;
+  value: string;
+  pct: number;
+};
+export type SeasonShareRoast = {
+  name: string;
+  label: string;
+  value: string;
+};
+
+/** One slide of a season. Variant owns the layout — do not reuse one template. */
 export type SeasonShareData = {
   kind: "season";
   seasonName: string;
+  variant: "title" | "pots" | "caps" | "board" | "roast" | "book";
   kicker: string;
-  headline: string;
+  headline?: string;
   stat?: { value: string; label: string };
-  line: string;
-  tone: "gold" | "roast" | "ink";
+  line?: string;
+  caps?: { orange: SeasonShareRow; purple: SeasonShareRow };
+  board?: SeasonShareBoardRow[];
+  roasts?: SeasonShareRoast[];
+  book?: Array<{ value: string; label: string }>;
 };
 
 export type ShareData =
@@ -173,7 +190,7 @@ export const ShareCard = forwardRef<HTMLDivElement, { data: ShareData }>(
       return (
         <Frame
           ref={ref}
-          mark="GULLY"
+          art={SEASON_ART[data.variant]}
           footerLeft={
             <span style={{ fontSize: 24, fontWeight: 500, color: BG_70 }}>
               {data.seasonName}
@@ -196,10 +213,19 @@ export const ShareCard = forwardRef<HTMLDivElement, { data: ShareData }>(
  * layout renders its own content in the middle via `children`; `footerLeft`
  * is an optional extra fragment shown at the footer's left edge (only the
  * player card uses it, for the matches-played count). */
+const SEASON_ART: Record<SeasonShareData["variant"], string> = {
+  title: "/share/season-title.jpg",
+  pots: "/share/season-pots.jpg",
+  caps: "/share/season-caps.jpg",
+  board: "/share/season-board.jpg",
+  roast: "/share/season-roast.jpg",
+  book: "/share/season-book.jpg",
+};
+
 const Frame = forwardRef<
   HTMLDivElement,
-  { children: ReactNode; footerLeft?: ReactNode; mark?: string }
->(function Frame({ children, footerLeft, mark = "BOUNDARY" }, ref) {
+  { children: ReactNode; footerLeft?: ReactNode; art?: string }
+>(function Frame({ children, footerLeft, art }, ref) {
   return (
       <div
         ref={ref}
@@ -217,8 +243,34 @@ const Frame = forwardRef<
           boxSizing: "border-box",
         }}
       >
-        {/* Faint gold glow, top-right — the one bit of ornament, kept behind
-            everything else so it never touches contrast. */}
+        {art ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={art}
+              alt=""
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                zIndex: 0,
+                filter: "brightness(0.55)",
+              }}
+            />
+            <div
+              aria-hidden
+              style={{
+                position: "absolute",
+                inset: 0,
+                zIndex: 0,
+                background:
+                  "linear-gradient(180deg, rgba(24,24,27,0.82) 0%, rgba(24,24,27,0.70) 38%, rgba(24,24,27,0.88) 72%, rgba(24,24,27,0.96) 100%)",
+              }}
+            />
+          </>
+        ) : (
         <div
           aria-hidden
           style={{
@@ -232,30 +284,32 @@ const Frame = forwardRef<
               "radial-gradient(circle, rgba(240,180,41,0.16) 0%, rgba(240,180,41,0) 70%)",
           }}
         />
+        )}
 
-        {/* Brand row */}
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        {/* Brand row — same lockup as the landing header. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 16, position: "relative", zIndex: 1 }}>
           {/* eslint-disable-next-line @next/next/no-img-element -- html-to-image
               needs a real <img>; next/image renders lazily and can't be captured. */}
           <img
             src="/icons/icon-512.png"
-            width={64}
-            height={64}
+            width={72}
+            height={72}
             alt=""
-            style={{ borderRadius: 14, display: "block" }}
+            style={{ borderRadius: "22%", display: "block" }}
           />
           <span
             style={{
-              fontSize: 30,
+              fontSize: 36,
               fontWeight: 700,
-              letterSpacing: 3,
+              letterSpacing: -0.8,
               color: BG,
             }}
           >
-            {mark}
+            Gully Cricket
           </span>
         </div>
 
+        <div style={{ position: "relative", zIndex: 1, flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
         {children}
 
         {/* Footer */}
@@ -271,6 +325,7 @@ const Frame = forwardRef<
           <span style={{ fontSize: 24, fontWeight: 500, color: BG_70 }}>
             gullycricket.space
           </span>
+        </div>
         </div>
       </div>
   );
@@ -535,132 +590,175 @@ const RESULT_LABEL: Record<HeroMiniLine["result"], string | null> = {
 
 function HeroLayout({ data }: { data: HeroShareData }) {
   const { displayName, dayLabel, headline, stats, miniLines, insights } = data;
-  // A poster, not a scrollable feed — cap both strips so the card never
-  // overflows its fixed 1080×1350 canvas. The insight stack is the reason
-  // someone shares this, so the per-match strip gives way to it, not the
-  // other way round.
   const shownLines = miniLines.slice(0, 3);
   const extraLines = miniLines.length - shownLines.length;
   const shownStats = stats.slice(0, 4);
+  const signature = stats.find((s) => s.accent) ?? stats[0];
+  const restInsights = insights.slice(0, 4);
 
   return (
     <>
-      {/* Day tag */}
-      <div style={{ marginTop: 52 }}>
-        <span
-          style={{
-            display: "inline-block",
-            fontSize: 24,
-            fontWeight: 600,
-            letterSpacing: 2,
-            textTransform: "uppercase",
-            color: BG_40,
-          }}
-        >
-          {dayLabel}
-        </span>
-      </div>
-
-      {/* Identity + headline */}
-      <div style={{ marginTop: 10 }}>
-        <p
-          style={{
-            fontSize: 64,
-            lineHeight: 1.05,
-            fontWeight: 700,
-            color: BG,
-            wordBreak: "break-word",
-          }}
-        >
-          {displayName}
-        </p>
-        <p
-          style={{
-            marginTop: 10,
-            fontSize: 30,
-            fontWeight: 700,
-            lineHeight: 1.25,
-            color: ACCENT,
-          }}
-        >
-          {headline}
-        </p>
-      </div>
-
-      {/* Insight stack — the card's centerpiece. Reads like commentary, not
-          a scoreboard: the strongest line leads, gold and larger; the rest
-          are warm white with a small gold tick, all roomy. */}
       <div
         style={{
-          marginTop: 44,
+          marginTop: 36,
           display: "flex",
-          flexDirection: "column",
-          gap: 26,
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 24,
         }}
       >
-        {insights.map((line, i) => {
-          const lead = i === 0;
-          return (
-            <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 18 }}>
-              <span
-                aria-hidden
-                style={{
-                  flexShrink: 0,
-                  marginTop: lead ? 16 : 13,
-                  width: lead ? 14 : 10,
-                  height: 3,
-                  borderRadius: 2,
-                  background: ACCENT,
-                }}
-              />
-              <p
-                style={{
-                  fontSize: lead ? 44 : 32,
-                  fontWeight: lead ? 700 : 600,
-                  lineHeight: 1.28,
-                  color: lead ? ACCENT : BG,
-                  wordBreak: "break-word",
-                }}
-              >
-                {line}
-              </p>
-            </div>
-          );
-        })}
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <span
+            style={{
+              display: "inline-block",
+              fontSize: 22,
+              fontWeight: 600,
+              letterSpacing: 2,
+              textTransform: "uppercase",
+              color: BG_70,
+            }}
+          >
+            {dayLabel}
+          </span>
+          <p
+            style={{
+              marginTop: 8,
+              fontSize: 56,
+              lineHeight: 1.05,
+              fontWeight: 700,
+              color: BG,
+              wordBreak: "break-word",
+            }}
+          >
+            {displayName}
+          </p>
+          <p
+            style={{
+              marginTop: 10,
+              fontSize: 28,
+              fontWeight: 600,
+              lineHeight: 1.25,
+              color: ACCENT,
+            }}
+          >
+            {headline}
+          </p>
+        </div>
+        {signature ? (
+          <div
+            style={{
+              flexShrink: 0,
+              minWidth: 220,
+              padding: "28px 32px",
+              borderRadius: 28,
+              background: GOLD_WASH,
+              border: `2px solid ${GOLD_RING}`,
+              textAlign: "center",
+            }}
+          >
+            <p
+              style={{
+                fontSize: signature.value.length > 4 ? 64 : 96,
+                lineHeight: 0.9,
+                fontWeight: 700,
+                color: ACCENT,
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {signature.value}
+            </p>
+            <p
+              style={{
+                marginTop: 10,
+                fontSize: 20,
+                fontWeight: 600,
+                letterSpacing: 2,
+                textTransform: "uppercase",
+                color: BG_70,
+              }}
+            >
+              {signature.label}
+            </p>
+          </div>
+        ) : null}
       </div>
 
-      {/* Compact stat strip — numbers demoted to a footer-style row, one
-          line, small. The insights above are the flex; this is the receipt. */}
       <div
         style={{
-          marginTop: "auto",
-          paddingTop: 32,
-          borderTop: `1px solid ${LINE_ON_INK}`,
+          marginTop: 36,
           display: "flex",
-          justifyContent: "space-between",
+          flexDirection: "column",
+          gap: 18,
+        }}
+      >
+        {restInsights.map((line, i) => (
+          <div
+            key={i}
+            style={{ display: "flex", alignItems: "flex-start", gap: 16 }}
+          >
+            <span
+              aria-hidden
+              style={{
+                flexShrink: 0,
+                marginTop: 14,
+                width: 12,
+                height: 3,
+                borderRadius: 2,
+                background: ACCENT,
+              }}
+            />
+            <p
+              style={{
+                fontSize: 30,
+                fontWeight: 600,
+                lineHeight: 1.3,
+                color: BG,
+                wordBreak: "break-word",
+              }}
+            >
+              {line}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div
+        style={{
+          marginTop: 40,
+          display: "grid",
+          gridTemplateColumns: `repeat(${Math.min(shownStats.length, 4)}, 1fr)`,
           gap: 16,
         }}
       >
         {shownStats.map((s) => (
-          <div key={s.label} style={{ minWidth: 0 }}>
+          <div
+            key={s.label}
+            style={{
+              padding: "20px 18px",
+              borderRadius: 20,
+              background: s.accent ? GOLD_WASH : "rgba(250,248,244,0.05)",
+              border: s.accent ? `1px solid ${GOLD_RING}` : `1px solid ${LINE_ON_INK}`,
+            }}
+          >
             <p
               style={{
-                fontSize: 17,
+                fontSize: 16,
                 fontWeight: 600,
                 letterSpacing: 1.2,
                 textTransform: "uppercase",
-                color: BG_40,
+                color: BG_70,
               }}
             >
               {s.label}
             </p>
             <p
               style={{
-                marginTop: 4,
-                fontSize: 30,
+                marginTop: 6,
+                fontSize: 40,
                 lineHeight: 1,
                 fontWeight: 700,
                 color: s.accent ? ACCENT : BG,
+                fontVariantNumeric: "tabular-nums",
               }}
             >
               {s.value}
@@ -669,10 +767,9 @@ function HeroLayout({ data }: { data: HeroShareData }) {
         ))}
       </div>
 
-      {/* Per-match strip */}
       <div
         style={{
-          marginTop: 32,
+          marginTop: 28,
           display: "flex",
           flexDirection: "column",
           gap: 12,
@@ -685,8 +782,8 @@ function HeroLayout({ data }: { data: HeroShareData }) {
               key={i}
               style={{
                 borderRadius: 22,
-                padding: "18px 24px",
-                background: "rgba(250,248,244,0.04)",
+                padding: "20px 26px",
+                background: "rgba(250,248,244,0.05)",
                 border: `1px solid ${LINE_ON_INK}`,
                 display: "flex",
                 alignItems: "center",
@@ -699,7 +796,7 @@ function HeroLayout({ data }: { data: HeroShareData }) {
                   style={{
                     fontSize: 20,
                     fontWeight: 600,
-                    color: BG_60,
+                    color: BG_70,
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -707,9 +804,17 @@ function HeroLayout({ data }: { data: HeroShareData }) {
                 >
                   v {line.opponent}
                 </p>
-                <p style={{ marginTop: 3, fontSize: 24, fontWeight: 700, color: BG }}>
-                  {[line.battingFigure, line.bowlingFigure].filter(Boolean).join("  ·  ") ||
-                    "Fielded"}
+                <p
+                  style={{
+                    marginTop: 4,
+                    fontSize: 28,
+                    fontWeight: 700,
+                    color: BG,
+                  }}
+                >
+                  {[line.battingFigure, line.bowlingFigure]
+                    .filter(Boolean)
+                    .join("  ·  ") || "Fielded"}
                 </p>
               </div>
               {label ? (
@@ -717,11 +822,11 @@ function HeroLayout({ data }: { data: HeroShareData }) {
                   style={{
                     flexShrink: 0,
                     borderRadius: 999,
-                    padding: "7px 14px",
+                    padding: "8px 16px",
                     fontSize: 18,
                     fontWeight: 700,
                     letterSpacing: 1,
-                    color: line.result === "won" ? ACCENT_DEEP : BG_60,
+                    color: line.result === "won" ? ACCENT_DEEP : BG_70,
                     background: line.result === "won" ? ACCENT_SOFT : LINE_ON_INK,
                   }}
                 >
@@ -732,7 +837,14 @@ function HeroLayout({ data }: { data: HeroShareData }) {
           );
         })}
         {extraLines > 0 ? (
-          <p style={{ textAlign: "center", fontSize: 20, fontWeight: 600, color: BG_40 }}>
+          <p
+            style={{
+              textAlign: "center",
+              fontSize: 20,
+              fontWeight: 600,
+              color: BG_70,
+            }}
+          >
             +{extraLines} more that day
           </p>
         ) : null}
@@ -750,55 +862,130 @@ function HeroFooterLeft({ data }: { data: HeroShareData }) {
   );
 }
 
-function SeasonLayout({ data }: { data: SeasonShareData }) {
-  const gold = data.tone === "gold";
-  const roast = data.tone === "roast";
+function SeasonKicker({
+  children,
+  roast,
+}: {
+  children: ReactNode;
+  roast?: boolean;
+}) {
   return (
-    <>
-      <div style={{ marginTop: 72 }}>
-        <span
-          style={{
-            display: "inline-block",
-            fontSize: 24,
-            fontWeight: 600,
-            letterSpacing: 3,
-            textTransform: "uppercase",
-            color: roast ? BG_70 : ACCENT,
-          }}
-        >
-          {data.kicker}
-        </span>
-      </div>
-      <p
+    <span
+      style={{
+        display: "inline-block",
+        fontSize: 22,
+        fontWeight: 600,
+        letterSpacing: 3,
+        textTransform: "uppercase",
+        color: roast ? BG_70 : ACCENT,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function SeasonLayout({ data }: { data: SeasonShareData }) {
+  if (data.variant === "title") {
+    return (
+      <div
         style={{
-          marginTop: 28,
-          fontSize: data.headline.length > 18 ? 56 : 72,
-          lineHeight: 1.05,
-          fontWeight: 700,
-          color: BG,
-          wordBreak: "break-word",
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          marginTop: 40,
         }}
       >
-        {data.headline}
-      </p>
-      {data.stat ? (
+        <SeasonKicker>{data.kicker}</SeasonKicker>
+        <p
+          style={{
+            marginTop: 16,
+            fontSize: 48,
+            fontWeight: 700,
+            lineHeight: 1.1,
+            color: BG,
+          }}
+        >
+          {data.headline}
+        </p>
+        <div style={{ flex: 1, display: "flex", alignItems: "center" }}>
+          <div>
+            <p
+              style={{
+                fontSize: 200,
+                lineHeight: 0.85,
+                fontWeight: 700,
+                color: ACCENT,
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {data.stat?.value}
+            </p>
+            <p
+              style={{
+                marginTop: 8,
+                fontSize: 36,
+                fontWeight: 600,
+                letterSpacing: 4,
+                textTransform: "uppercase",
+                color: BG,
+              }}
+            >
+              {data.stat?.label}
+            </p>
+          </div>
+        </div>
+        {data.line ? (
+          <p style={{ fontSize: 28, fontWeight: 500, color: BG_70 }}>
+            {data.line}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (data.variant === "pots" && data.headline && data.stat) {
+    return (
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          marginTop: 40,
+        }}
+      >
+        <SeasonKicker>{data.kicker}</SeasonKicker>
+        <p
+          style={{
+            marginTop: 20,
+            fontSize: data.headline.length > 12 ? 64 : 88,
+            fontWeight: 700,
+            lineHeight: 1.05,
+            color: BG,
+            wordBreak: "break-word",
+          }}
+        >
+          {data.headline}
+        </p>
         <div
           style={{
-            marginTop: 56,
-            padding: "40px 44px",
+            flex: 1,
+            marginTop: 32,
             borderRadius: 32,
-            background: roast ? "rgba(192,57,43,0.16)" : GOLD_WASH,
-            border: roast
-              ? "2px solid rgba(192,57,43,0.45)"
-              : `2px solid ${GOLD_RING}`,
+            background: GOLD_WASH,
+            border: `2px solid ${GOLD_RING}`,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            padding: 48,
           }}
         >
           <p
             style={{
-              fontSize: 96,
-              lineHeight: 0.95,
+              fontSize: 160,
+              lineHeight: 0.9,
               fontWeight: 700,
-              color: roast ? BG : ACCENT,
+              color: ACCENT,
               fontVariantNumeric: "tabular-nums",
             }}
           >
@@ -807,7 +994,7 @@ function SeasonLayout({ data }: { data: SeasonShareData }) {
           <p
             style={{
               marginTop: 12,
-              fontSize: 26,
+              fontSize: 28,
               fontWeight: 600,
               letterSpacing: 2,
               textTransform: "uppercase",
@@ -817,21 +1004,336 @@ function SeasonLayout({ data }: { data: SeasonShareData }) {
             {data.stat.label}
           </p>
         </div>
-      ) : null}
-      <p
+      </div>
+    );
+  }
+
+  if (data.variant === "caps" && data.caps) {
+    const col = (title: string, row: { name: string; value: string }) => (
+      <div
         style={{
-          marginTop: "auto",
-          paddingTop: 48,
-          fontSize: 32,
-          lineHeight: 1.35,
-          fontWeight: 500,
-          color: gold || roast ? BG : BG_70,
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          padding: 36,
+          minWidth: 0,
         }}
       >
-        {data.line}
-      </p>
-    </>
-  );
+        <p
+          style={{
+            fontSize: 20,
+            fontWeight: 600,
+            letterSpacing: 2,
+            textTransform: "uppercase",
+            color: ACCENT,
+          }}
+        >
+          {title}
+        </p>
+        <p
+          style={{
+            marginTop: 16,
+            fontSize: row.name.length > 10 ? 40 : 52,
+            fontWeight: 700,
+            lineHeight: 1.1,
+            color: BG,
+            wordBreak: "break-word",
+          }}
+        >
+          {row.name}
+        </p>
+        <p
+          style={{
+            marginTop: 20,
+            fontSize: 72,
+            fontWeight: 700,
+            color: ACCENT,
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {row.value}
+        </p>
+      </div>
+    );
+    return (
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          marginTop: 40,
+        }}
+      >
+        <SeasonKicker>{data.kicker}</SeasonKicker>
+        <div
+          style={{
+            flex: 1,
+            marginTop: 28,
+            display: "flex",
+            borderRadius: 32,
+            overflow: "hidden",
+            border: `1px solid ${LINE_ON_INK}`,
+          }}
+        >
+          <div style={{ flex: 1, background: GOLD_WASH }}>
+            {col("Orange Cap", data.caps.orange)}
+          </div>
+          <div style={{ width: 1, background: LINE_ON_INK }} />
+          <div style={{ flex: 1, background: "rgba(250,248,244,0.04)" }}>
+            {col("Purple Cap", data.caps.purple)}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (data.variant === "board" && data.board) {
+    return (
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          marginTop: 40,
+        }}
+      >
+        <SeasonKicker>{data.kicker}</SeasonKicker>
+        <div
+          style={{
+            flex: 1,
+            marginTop: 28,
+            display: "flex",
+            flexDirection: "column",
+            gap: 18,
+          }}
+        >
+          {data.board.map((row) => {
+            const lead = row.rank === 1;
+            return (
+              <div
+                key={row.rank}
+                style={{
+                  flex: lead ? 1.4 : 1,
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "center",
+                  padding: lead ? "28px 32px" : "20px 28px",
+                  borderRadius: 24,
+                  background: lead ? GOLD_WASH : "rgba(250,248,244,0.05)",
+                  border: lead
+                    ? `2px solid ${GOLD_RING}`
+                    : `1px solid ${LINE_ON_INK}`,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "baseline",
+                    justifyContent: "space-between",
+                    gap: 16,
+                  }}
+                >
+                  <p
+                    style={{
+                      fontSize: lead ? 44 : 32,
+                      fontWeight: 700,
+                      color: BG,
+                      minWidth: 0,
+                    }}
+                  >
+                    <span style={{ color: BG_70, marginRight: 12 }}>
+                      {row.rank}
+                    </span>
+                    {row.name}
+                  </p>
+                  <p
+                    style={{
+                      fontSize: lead ? 48 : 32,
+                      fontWeight: 700,
+                      color: lead ? ACCENT : BG,
+                      fontVariantNumeric: "tabular-nums",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {row.value}
+                  </p>
+                </div>
+                <div
+                  style={{
+                    marginTop: 12,
+                    height: 8,
+                    borderRadius: 99,
+                    background: LINE_ON_INK,
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${row.pct}%`,
+                      height: "100%",
+                      borderRadius: 99,
+                      background: lead ? ACCENT : "rgba(250,248,244,0.35)",
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  if (data.variant === "roast" && data.roasts) {
+    return (
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          marginTop: 40,
+        }}
+      >
+        <SeasonKicker roast>{data.kicker}</SeasonKicker>
+        <div
+          style={{
+            flex: 1,
+            marginTop: 28,
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
+          }}
+        >
+          {data.roasts.map((r) => (
+            <div
+              key={`${r.label}-${r.name}`}
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                padding: "28px 36px",
+                borderRadius: 28,
+                background: "rgba(24,24,27,0.72)",
+                border: "1px solid rgba(192,57,43,0.55)",
+              }}
+            >
+              <p
+                style={{
+                  fontSize: 20,
+                  fontWeight: 600,
+                  letterSpacing: 2,
+                  textTransform: "uppercase",
+                  color: BG_70,
+                }}
+              >
+                {r.label}
+              </p>
+              <div
+                style={{
+                  marginTop: 8,
+                  display: "flex",
+                  alignItems: "baseline",
+                  justifyContent: "space-between",
+                  gap: 16,
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: 44,
+                    fontWeight: 700,
+                    color: BG,
+                    minWidth: 0,
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {r.name}
+                </p>
+                <p
+                  style={{
+                    fontSize: 56,
+                    fontWeight: 700,
+                    color: BG,
+                    fontVariantNumeric: "tabular-nums",
+                    flexShrink: 0,
+                  }}
+                >
+                  {r.value}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (data.variant === "book" && data.book) {
+    return (
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          marginTop: 40,
+        }}
+      >
+        <SeasonKicker>{data.kicker}</SeasonKicker>
+        <div
+          style={{
+            flex: 1,
+            marginTop: 24,
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
+          }}
+        >
+          {data.book.map((item, i) => (
+            <div
+              key={item.label}
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "8px 8px 8px 28px",
+                borderRadius: 28,
+                background: i === 0 ? GOLD_WASH : "rgba(250,248,244,0.05)",
+                border:
+                  i === 0 ? `2px solid ${GOLD_RING}` : `1px solid ${LINE_ON_INK}`,
+              }}
+            >
+              <p
+                style={{
+                  fontSize: 28,
+                  fontWeight: 600,
+                  letterSpacing: 2,
+                  textTransform: "uppercase",
+                  color: BG_70,
+                }}
+              >
+                {item.label}
+              </p>
+              <p
+                style={{
+                  fontSize: 96,
+                  fontWeight: 700,
+                  lineHeight: 1,
+                  color: i === 0 ? ACCENT : BG,
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {item.value}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 function LeaderboardLayout({ data }: { data: LeaderboardShareData }) {

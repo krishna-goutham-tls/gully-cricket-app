@@ -4,11 +4,10 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { PosterPreview } from "@/components/share/PosterPreview";
 import { ShareButton } from "@/components/share/ShareButton";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Button } from "@/components/ui/Button";
 import { buildRecords } from "@/components/leaderboard/records";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { buildSeasonCards } from "@/lib/seasonWrap";
+import { buildSeasonCards, liveAwardsFromBoard } from "@/lib/seasonWrap";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { ArrowLeft } from "lucide-react";
@@ -29,34 +28,41 @@ export default function SeasonWrapPage() {
   );
   const board = useQuery(
     api.stats.leaderboard,
-    token && activeOrgId && season
+    token && activeOrgId
       ? {
           token,
           orgId: activeOrgId,
           includeVisitorsAndJuniors: false,
-          seasonId: season._id,
+          seasonId,
         }
       : "skip",
   );
 
   const cards = useMemo(() => {
-    if (!season || season.status !== "complete" || !board) return [];
+    if (!season || !board) return [];
+    const locked = (season.awards ?? []).map((a) => ({
+      kind: a.kind,
+      displayName: a.displayName,
+      display: a.display,
+    }));
+    const awards =
+      season.status === "complete" && locked.length > 0
+        ? locked
+        : liveAwardsFromBoard(board);
     const records = buildRecords(board, { season: true });
     const sixes = board.batting.reduce((n, r) => n + r.sixes, 0);
     const wickets = board.bowling.reduce((n, r) => n + r.wickets, 0);
     return buildSeasonCards({
       seasonName: season.name,
       startedAt: season.startedAt,
-      endedAt: season.endedAt ?? season.startedAt,
+      endedAt: season.endedAt ?? Date.now(),
       matchCount: board.matchCount,
-      awards: (season.awards ?? []).map((a) => ({
-        kind: a.kind,
-        displayName: a.displayName,
-        display: a.display,
-      })),
+      awards,
       records,
       sixes,
       wickets,
+      allRound: board.allRound,
+      soFar: season.status !== "complete",
     });
   }, [season, board]);
 
@@ -69,28 +75,28 @@ export default function SeasonWrapPage() {
     setActive(i);
   }
 
-  if (season === undefined || (season && season.status === "complete" && board === undefined)) {
-    return <div className="min-h-dvh bg-ink" />;
+  if (season === undefined || (season && board === undefined)) {
+    return (
+      <div className="flex min-h-dvh flex-col bg-ink px-5 pt-[calc(var(--safe-top)+0.5rem)]">
+        <button
+          type="button"
+          aria-label="Back"
+          onClick={() => router.push(`/seasons/${seasonId}`)}
+          className="-ml-2 flex h-11 w-11 items-center justify-center rounded-lg text-bg/70 active:bg-white/10"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+        <p className="mt-8 text-center text-[13px] text-bg/70">
+          Putting the season on cards…
+        </p>
+      </div>
+    );
   }
 
   if (season === null) {
     return (
       <div className="min-h-dvh bg-bg px-5 pt-[calc(var(--safe-top)+1rem)]">
         <EmptyState title="Season not found" />
-      </div>
-    );
-  }
-
-  if (season.status !== "complete") {
-    return (
-      <div className="min-h-dvh bg-bg px-5 pt-[calc(var(--safe-top)+1rem)]">
-        <EmptyState
-          title="This season is still open"
-          body="The wrap shows up after you end it."
-          action={
-            <Button href={`/seasons/${season._id}`}>Open the season</Button>
-          }
-        />
       </div>
     );
   }
@@ -118,7 +124,7 @@ export default function SeasonWrapPage() {
         <div className="px-5 pt-8">
           <EmptyState
             title="Nothing to wrap yet"
-            body="Play a match in this season, then end it again."
+            body="Play a match in this season."
           />
         </div>
       ) : (
@@ -134,7 +140,7 @@ export default function SeasonWrapPage() {
           >
             {cards.map((c, i) => (
               <div
-                key={`${c.kicker}-${c.headline}-${i}`}
+                key={`${c.variant}-${c.kicker}-${i}`}
                 className="w-full shrink-0 snap-center px-5"
               >
                 <PosterPreview data={c} />

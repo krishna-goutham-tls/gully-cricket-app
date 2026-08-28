@@ -268,10 +268,12 @@ export default function SeasonPage() {
           </p>
         ) : null}
 
-        {season?.status === "complete" ? (
+        {season ? (
           <div className="mt-3">
             <Button href={`/seasons/${season._id}/wrap`} fullWidth>
-              Share this season
+              {season.status === "complete"
+                ? "Season cards"
+                : "Season cards so far"}
             </Button>
           </div>
         ) : null}

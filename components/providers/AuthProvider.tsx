@@ -49,6 +49,13 @@ type Membership = {
   requestedAt: number;
   isSandbox?: boolean;
   sandboxForOrgId?: Id<"orgs">;
+  /** Absent on auth caches written before this field existed. */
+  featuredSeason?: {
+    id: Id<"seasons">;
+    name: string;
+    status: "active" | "complete";
+  } | null;
+  seasonCount?: number;
 };
 
 type Bootstrap = { user: User; memberships: Membership[] } | null;
@@ -83,9 +90,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setTokenState(getSessionToken());
+    const snap = getAuthCache<NonNullable<Bootstrap>>();
+    setCached(snap);
     const stored = getActiveOrgId();
-    if (stored) setActiveOrgState(stored as Id<"orgs">);
-    setCached(getAuthCache<NonNullable<Bootstrap>>());
+    if (stored) {
+      const row = snap?.memberships.find((m) => m.orgId === stored);
+      // Sandbox is a practice room. Refresh must land in the real community.
+      if (!row?.isSandbox) setActiveOrgState(stored as Id<"orgs">);
+    }
     setHydrated(true);
   }, []);
 
@@ -132,26 +144,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!memberships) return;
+    const real = activeMemberships.filter((m) => !m.isSandbox);
     if (activeOrgId) {
       const stillActive = activeMemberships.find((m) => m.orgId === activeOrgId);
       if (stillActive) {
-        if (pendingOrgRef.current === activeOrgId) pendingOrgRef.current = null;
-        return;
+        if (pendingOrgRef.current === activeOrgId) {
+          pendingOrgRef.current = null;
+          return;
+        }
+        // Keep a real community. Kick a restored sandbox so Home is not empty.
+        if (!stillActive.isSandbox) return;
       }
-      // An org we just switched into deliberately (entering the sandbox creates
-      // the membership) won't be in this list until bootstrap refetches.
-      // Without this the fallback below would yank us straight back out.
       if (pendingOrgRef.current === activeOrgId) return;
     }
     if (user?.preferredOrgId) {
-      const preferred = activeMemberships.find((m) => m.orgId === user.preferredOrgId);
+      const preferred = real.find((m) => m.orgId === user.preferredOrgId);
       if (preferred) {
         setActiveOrgState(preferred.orgId);
         setActiveOrgId(preferred.orgId);
         return;
       }
     }
-    if (activeMemberships[0]) {
+    if (real[0]) {
+      setActiveOrgState(real[0].orgId);
+      setActiveOrgId(real[0].orgId);
+    } else if (activeMemberships[0]) {
       setActiveOrgState(activeMemberships[0].orgId);
       setActiveOrgId(activeMemberships[0].orgId);
     } else {
@@ -183,10 +200,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!token) return;
       pendingOrgRef.current = orgId;
       setActiveOrgState(orgId);
-      setActiveOrgId(orgId);
-      // Sandbox is deliberately not remembered as the preferred org —
-      // opening the app on a match day must never land you in the sandbox.
-      if (opts?.remember !== false) await setPreferredOrg({ token, orgId });
+      // Sandbox is a practice room. Do not persist it as the landing community.
+      if (opts?.remember !== false) {
+        setActiveOrgId(orgId);
+        await setPreferredOrg({ token, orgId });
+      }
     },
     [setPreferredOrg, token],
   );
@@ -216,8 +234,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    */
   const verifiedOrgId = useMemo(() => {
     if (!activeOrgId) return null;
-    if (activeMemberships.some((m) => m.orgId === activeOrgId))
+    const mem = activeMemberships.find((m) => m.orgId === activeOrgId);
+    if (mem) {
+      // A leftover sandbox id in localStorage is not a real landing org.
+      if (mem.isSandbox && pendingOrgRef.current !== activeOrgId) return null;
       return activeOrgId;
+    }
     // A deliberate switch (entering the sandbox creates the membership) isn't
     // in the list until bootstrap refetches — trust it for that window.
     if (pendingOrgRef.current === activeOrgId) return activeOrgId;

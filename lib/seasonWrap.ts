@@ -1,58 +1,21 @@
-import type { FeatRecord, RecordGroup } from "@/components/leaderboard/records";
+import {
+  RECORD_MIN_BALLS,
+  RECORD_MIN_INNINGS,
+  type FeatRecord,
+  type RecordGroup,
+} from "@/components/leaderboard/records";
 import type { SeasonAwardKind } from "@/lib/trophies";
 import type { SeasonShareData } from "@/components/share/ShareCard";
+import { api } from "@/convex/_generated/api";
+import type { FunctionReturnType } from "convex/server";
+
+type Board = NonNullable<FunctionReturnType<typeof api.stats.leaderboard>>;
 
 type NamedAward = {
   kind: SeasonAwardKind;
   displayName: string;
   display: string;
 };
-
-const AWARD_CARD: Record<
-  SeasonAwardKind,
-  { kicker: string; statLabel: string; line: (name: string) => string }
-> = {
-  pots: {
-    kicker: "Player of the season",
-    statLabel: "all-round points",
-    line: (name) =>
-      `${name} led the board that this community actually argues on — runs, wickets, and catches, counted together.`,
-  },
-  orange_cap: {
-    kicker: "Orange Cap",
-    statLabel: "runs",
-    line: (name) => `${name} scored more runs than anyone else this season.`,
-  },
-  purple_cap: {
-    kicker: "Purple Cap",
-    statLabel: "wickets",
-    line: (name) => `${name} took more wickets than anyone else this season.`,
-  },
-  most_sixes: {
-    kicker: "Most sixes",
-    statLabel: "sixes",
-    line: (name) => `${name} cleared the rope more often than the rest.`,
-  },
-  highest_sr: {
-    kicker: "Highest strike rate",
-    statLabel: "strike rate",
-    line: (name) => `${name} scored faster than anyone who faced enough balls to count.`,
-  },
-  best_economy: {
-    kicker: "Best economy",
-    statLabel: "economy",
-    line: (name) => `${name} was the hardest to score off, among bowlers who sent down a real spell.`,
-  },
-};
-
-const AWARD_ORDER: SeasonAwardKind[] = [
-  "pots",
-  "orange_cap",
-  "purple_cap",
-  "most_sixes",
-  "highest_sr",
-  "best_economy",
-];
 
 const ROAST_PICK = [
   "Most ducks",
@@ -62,12 +25,72 @@ const ROAST_PICK = [
 ];
 
 function monthDay(ts: number) {
-  return new Date(ts).toLocaleDateString([], { month: "short", day: "numeric" });
+  return new Date(ts).toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+/** Live leaders for a season that is still open — same kinds as locked awards. */
+export function liveAwardsFromBoard(board: Board): NamedAward[] {
+  const out: NamedAward[] = [];
+  const pots = board.allRound[0];
+  if (pots)
+    out.push({
+      kind: "pots",
+      displayName: pots.displayName,
+      display: String(pots.points),
+    });
+  const orange = board.batting[0];
+  if (orange && orange.runs > 0)
+    out.push({
+      kind: "orange_cap",
+      displayName: orange.displayName,
+      display: String(orange.runs),
+    });
+  const purple = board.bowling[0];
+  if (purple && purple.wickets > 0)
+    out.push({
+      kind: "purple_cap",
+      displayName: purple.displayName,
+      display: String(purple.wickets),
+    });
+  const sixes = [...board.batting].sort((a, b) => b.sixes - a.sixes)[0];
+  if (sixes && sixes.sixes > 0)
+    out.push({
+      kind: "most_sixes",
+      displayName: sixes.displayName,
+      display: String(sixes.sixes),
+    });
+  const sr = [...board.batting]
+    .filter(
+      (r) => r.balls >= RECORD_MIN_BALLS && r.innings >= RECORD_MIN_INNINGS,
+    )
+    .sort((a, b) => b.strikeRate - a.strikeRate)[0];
+  if (sr)
+    out.push({
+      kind: "highest_sr",
+      displayName: sr.displayName,
+      display: sr.strikeRate.toFixed(1),
+    });
+  const econ = [...board.bowling]
+    .filter(
+      (r) =>
+        r.legalBalls >= RECORD_MIN_BALLS && r.innings >= RECORD_MIN_INNINGS,
+    )
+    .sort((a, b) => a.economy - b.economy)[0];
+  if (econ)
+    out.push({
+      kind: "best_economy",
+      displayName: econ.displayName,
+      display: econ.economy.toFixed(1),
+    });
+  return out;
 }
 
 /**
- * One idea per card. Order is celebrate, then roast, then the book.
- * Empty feats drop out so a short season does not show hollow slides.
+ * At most six posters, each a different composition.
+ * No per-award slideshow.
  */
 export function buildSeasonCards(args: {
   seasonName: string;
@@ -78,36 +101,73 @@ export function buildSeasonCards(args: {
   records: RecordGroup[];
   sixes: number;
   wickets: number;
+  allRound: Array<{ displayName: string; points: number }>;
+  soFar?: boolean;
 }): SeasonShareData[] {
   const cards: SeasonShareData[] = [];
-  const range = `${monthDay(args.startedAt)} – ${monthDay(args.endedAt)}`;
+  const byKind = new Map(args.awards.map((a) => [a.kind, a]));
+  const range = args.soFar
+    ? `from ${monthDay(args.startedAt)}`
+    : `${monthDay(args.startedAt)} – ${monthDay(args.endedAt)}`;
 
   cards.push({
     kind: "season",
+    variant: "title",
     seasonName: args.seasonName,
-    kicker: "Season closed",
+    kicker: args.soFar ? "Season so far" : "Season closed",
     headline: args.seasonName,
     stat: {
       value: String(args.matchCount),
       label: args.matchCount === 1 ? "match" : "matches",
     },
-    line: `The book for this stretch of cricket, ${range}.`,
-    tone: "gold",
+    line: range,
   });
 
-  const byKind = new Map(args.awards.map((a) => [a.kind, a]));
-  for (const kind of AWARD_ORDER) {
-    const a = byKind.get(kind);
-    if (!a) continue;
-    const copy = AWARD_CARD[kind];
+  const pots = byKind.get("pots");
+  if (pots) {
     cards.push({
       kind: "season",
+      variant: "pots",
       seasonName: args.seasonName,
-      kicker: copy.kicker,
-      headline: a.displayName,
-      stat: { value: a.display, label: copy.statLabel },
-      line: copy.line(a.displayName),
-      tone: "gold",
+      kicker: "Player of the season",
+      headline: pots.displayName,
+      stat: { value: pots.display, label: "all-round points" },
+    });
+  }
+
+  const orange = byKind.get("orange_cap");
+  const purple = byKind.get("purple_cap");
+  if (orange || purple) {
+    cards.push({
+      kind: "season",
+      variant: "caps",
+      seasonName: args.seasonName,
+      kicker: "The caps",
+      caps: {
+        orange: orange
+          ? { name: orange.displayName, value: orange.display }
+          : { name: "—", value: "—" },
+        purple: purple
+          ? { name: purple.displayName, value: purple.display }
+          : { name: "—", value: "—" },
+      },
+    });
+  }
+
+  const top = args.allRound.filter((r) => r.points > 0).slice(0, 5);
+  const maxPts = top[0]?.points ?? 1;
+  if (top.length >= 2) {
+    cards.push({
+      kind: "season",
+      variant: "board",
+      seasonName: args.seasonName,
+      kicker: "The board",
+      board: top.map((r, i) => ({
+        rank: i + 1,
+        name: r.displayName,
+        value: String(r.points),
+        pct: Math.round((r.points / maxPts) * 100),
+      })),
     });
   }
 
@@ -118,29 +178,36 @@ export function buildSeasonCards(args: {
       if (ROAST_PICK.includes(item.label)) roastItems.push(item);
     }
   }
-  for (const item of roastItems.slice(0, 3)) {
+  if (roastItems.length > 0) {
     cards.push({
       kind: "season",
+      variant: "roast",
       seasonName: args.seasonName,
       kicker: "The roast",
-      headline: item.holder,
-      stat: { value: item.value, label: item.label.replace(" 🧈", "") },
-      line: `${item.holder} takes this one. The numbers are on the card.`,
-      tone: "roast",
+      roasts: roastItems.slice(0, 3).map((item) => ({
+        name: item.holder,
+        label: item.label.replace(" 🧈", ""),
+        value: item.value,
+      })),
     });
   }
 
   if (args.matchCount > 0) {
-    const bits = [`${args.matchCount} match${args.matchCount === 1 ? "" : "es"}`];
-    if (args.wickets > 0) bits.push(`${args.wickets} wickets`);
-    if (args.sixes > 0) bits.push(`${args.sixes} sixes`);
+    const book: Array<{ value: string; label: string }> = [
+      {
+        value: String(args.matchCount),
+        label: args.matchCount === 1 ? "match" : "matches",
+      },
+    ];
+    if (args.wickets > 0)
+      book.push({ value: String(args.wickets), label: "wickets" });
+    if (args.sixes > 0) book.push({ value: String(args.sixes), label: "sixes" });
     cards.push({
       kind: "season",
+      variant: "book",
       seasonName: args.seasonName,
       kicker: "The book",
-      headline: "What we played",
-      line: `${bits.join(". ")}. Same ball log. Same community.`,
-      tone: "ink",
+      book,
     });
   }
 

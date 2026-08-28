@@ -10,6 +10,7 @@ import {
 } from "./lib/session";
 import { playerRole } from "./schema";
 import { resolvePlayerTags, sortTags } from "./lib/playerLabel";
+import { featuredSeasonForOrg } from "./lib/seasons";
 
 const MAX_FAILED = 8;
 const LOCK_MS = 1000 * 60 * 15;
@@ -58,6 +59,7 @@ export const bootstrap = query({
       memberships.map(async (m) => {
         const org = await ctx.db.get(m.orgId);
         if (!org) return null;
+        const featured = await featuredSeasonForOrg(ctx, org._id);
         return {
           membershipId: m._id,
           orgId: org._id,
@@ -70,6 +72,16 @@ export const bootstrap = query({
           // and works off the localStorage cache on a warm start.
           isSandbox: org.isSandbox ?? false,
           sandboxForOrgId: org.sandboxForOrgId,
+          // Home paints the season folder from this. A second seasons query
+          // used to land after auth and flash "No season yet" on refresh.
+          featuredSeason: featured
+            ? {
+                id: featured.id,
+                name: featured.name,
+                status: featured.status,
+              }
+            : null,
+          seasonCount: featured?.seasonCount ?? 0,
         };
       }),
     );

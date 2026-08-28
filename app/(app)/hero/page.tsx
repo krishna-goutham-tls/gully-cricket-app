@@ -137,21 +137,40 @@ function HeroPageInner() {
   const heroData: HeroShareData | null = useMemo(() => {
     if (!hero) return null;
     const n = hero.numbers;
+    const bowlLed = n.wickets >= 3 && n.wickets * 20 >= n.runs;
     const stats: ShareStat[] = [{ label: "Matches", value: String(n.matches) }];
-    if (n.ballsFaced > 0) {
-      stats.push({ label: "Runs", value: String(n.runs), accent: true });
-      stats.push({ label: "SR", value: n.strikeRate.toFixed(1) });
-    }
-    if (n.fours > 0 || n.sixes > 0) {
-      stats.push({ label: "4s / 6s", value: `${n.fours}/${n.sixes}` });
-    }
-    if (n.ballsBowled > 0) {
+    if (bowlLed && n.ballsBowled > 0) {
       stats.push({
         label: "Wickets",
         value: String(n.wickets),
-        accent: n.ballsFaced === 0,
+        accent: true,
       });
-      stats.push({ label: "Economy", value: n.economy !== null ? n.economy.toFixed(1) : "—" });
+      stats.push({
+        label: "Economy",
+        value: n.economy !== null ? n.economy.toFixed(1) : "—",
+      });
+      if (n.ballsFaced > 0) {
+        stats.push({ label: "Runs", value: String(n.runs) });
+      }
+    } else {
+      if (n.ballsFaced > 0) {
+        stats.push({
+          label: "Runs",
+          value: String(n.runs),
+          accent: true,
+        });
+        stats.push({ label: "SR", value: n.strikeRate.toFixed(1) });
+      }
+      if (n.ballsBowled > 0) {
+        stats.push({
+          label: "Wickets",
+          value: String(n.wickets),
+          accent: n.ballsFaced === 0,
+        });
+      }
+    }
+    if (n.fours > 0 || n.sixes > 0) {
+      stats.push({ label: "4s / 6s", value: `${n.fours}/${n.sixes}` });
     }
     if (n.catches > 0) {
       stats.push({ label: "Catches", value: String(n.catches) });
@@ -200,7 +219,7 @@ function HeroPageInner() {
       <main className="mx-auto max-w-md px-5 pb-8 pt-2">
         {/* Day chips */}
         {dayGroups.length > 0 ? (
-          <div className="-mx-5 mb-4 flex gap-2 overflow-x-auto px-5 pb-1">
+          <div className="no-scrollbar -mx-5 mb-4 flex gap-2 overflow-x-auto px-5">
             {dayGroups.map((d) => (
               <button
                 key={d.key}
@@ -237,56 +256,64 @@ function HeroPageInner() {
           </div>
         ) : !activeDay ? null : !playerId || !heroData ? (
           <>
-            <p className="mb-3 px-1 text-[13px] text-bg/70">
-              Who had the day? Bigger tile, bigger share of the points.
-            </p>
+            <p className="mb-3 px-1 text-[13px] text-bg/70">Who had the day</p>
             {shares === undefined ? (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
                 {[0, 1, 2, 3].map((i) => (
-                  <div key={i} className="h-24 animate-pulse rounded-2xl bg-white/5" />
+                  <div key={i} className="h-14 animate-pulse rounded-2xl bg-white/5" />
                 ))}
               </div>
             ) : (
-              <div className="flex flex-wrap gap-2">
-                {ranked.map((p) => {
+              <div className="space-y-1.5">
+                {ranked.map((p, i) => {
                   const max = Math.max(ranked[0]?.points ?? 1, 1);
-                  const t = p.points / max;
-                  const box = 44 + Math.round(t * 36);
+                  const pct = Math.max(0, Math.round((p.points / max) * 100));
+                  const lead = i === 0 && p.points > 0;
                   const you = user && String(user._id) === p.id;
                   return (
                     <button
                       key={p.id}
                       type="button"
                       onClick={() => setPlayerId(p.id)}
-                      style={{
-                        flexGrow: Math.max(p.points, 1),
-                        flexBasis: `${5.5 + t * 5}rem`,
-                      }}
-                      className="flex min-h-14 flex-col items-center justify-center gap-2 rounded-2xl border border-white/10 px-2 py-3 text-center active:bg-white/5"
+                      className={cn(
+                        "flex min-h-12 w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left active:bg-white/5",
+                        lead
+                          ? "border-accent/40 bg-accent/10"
+                          : "border-white/10",
+                      )}
                     >
                       <span
-                        className="flex items-center justify-center rounded-2xl bg-accent/15 font-semibold text-accent"
-                        style={{
-                          width: box,
-                          height: box,
-                          fontSize: t > 0.6 ? 20 : 15,
-                        }}
+                        className={cn(
+                          "flex shrink-0 items-center justify-center rounded-xl bg-accent/15 font-semibold text-accent",
+                          lead ? "h-12 w-12 text-[15px]" : "h-11 w-11 text-[13px]",
+                        )}
                       >
                         {initials(p.name)}
                       </span>
-                      <span
-                        className={cn(
-                          "line-clamp-2 font-semibold leading-tight",
-                          t > 0.5 ? "text-[15px] text-bg" : "text-[13px] text-bg/70",
-                        )}
-                      >
-                        {p.name}
-                      </span>
-                      {you ? (
-                        <span className="text-[11px] font-semibold uppercase tracking-wide text-bg/70">
-                          You
+                      <span className="min-w-0 flex-1">
+                        <span className="flex min-w-0 items-baseline gap-1.5">
+                          <span className="min-w-0 truncate text-[15px] font-semibold text-bg">
+                            {p.name}
+                          </span>
+                          {you ? (
+                            <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-bg/70">
+                              You
+                            </span>
+                          ) : null}
                         </span>
-                      ) : null}
+                        <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-white/10">
+                          <span
+                            className={cn(
+                              "block h-full rounded-full",
+                              lead ? "bg-accent" : "bg-white/35",
+                            )}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </span>
+                      </span>
+                      <span className="tabular shrink-0 text-[15px] font-semibold text-bg">
+                        {p.points}
+                      </span>
                     </button>
                   );
                 })}
