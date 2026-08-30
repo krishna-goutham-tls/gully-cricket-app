@@ -20,6 +20,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { PlayerTagEditor, PlayerTagList } from "@/components/player/LabelTag";
+import { TrophyCabinet } from "@/components/player/TrophyCabinet";
 import type { PlayerTag } from "@/lib/playerLabel";
 import { computeSeasonTrophies, computeTrophies, type Trophy } from "@/lib/trophies";
 import { cn, errorMessage } from "@/lib/utils";
@@ -399,6 +400,10 @@ export default function PlayerDetailPage() {
     api.seasons.list,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
   );
+  const cabinet = useQuery(
+    api.stats.cabinet,
+    token && activeOrgId ? { token, orgId: activeOrgId, userId } : "skip",
+  );
 
   if (stats === undefined) {
     return (
@@ -437,6 +442,9 @@ export default function PlayerDetailPage() {
     ...computeSeasonTrophies(seasons ?? [], String(stats.userId)),
     ...computeTrophies(stats),
   ];
+  // Names the season the empty cabinet is inviting them into.
+  const liveSeasonName =
+    seasons?.find((s) => s.status === "active")?.name ?? null;
   const hasBothDisciplines = Boolean(stats.batting && stats.bowling);
   const activeDiscipline = discipline ?? defaultDiscipline(stats);
   const shareData = buildShareData(stats, trophies[0]);
@@ -609,6 +617,27 @@ export default function PlayerDetailPage() {
         ) : null}
 
         <TrophyShelf trophies={trophies} />
+
+        {/* What a season actually awarded them, under what their career
+            numbers say about them — the same question, one settled by the
+            group's own seasons. Above the batting/bowling block on purpose:
+            a trophy is the reason somebody opened this page. */}
+        {cabinet ? (
+          <Section title="Cabinet">
+            <TrophyCabinet
+              entries={cabinet.map((e) => ({
+                seasonId: String(e.seasonId),
+                seasonName: e.seasonName,
+                kind: e.kind,
+                display: e.display,
+                tone: e.tone,
+                provisional: e.provisional,
+              }))}
+              displayName={stats.displayName}
+              liveSeasonName={liveSeasonName}
+            />
+          </Section>
+        ) : null}
 
         {/* High on the page deliberately — rivalries are the most human thing
             here, and they land in the first fold. */}

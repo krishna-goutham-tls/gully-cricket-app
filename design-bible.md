@@ -115,6 +115,14 @@ Cards: `rounded-2xl border border-line bg-surface shadow-card`.
 2. **PIN pad**
 3. **Coin toss** — the coin is the control. Bat / Bowl stay large and **equal**.
 4. **Landing / rules / legal** — gold fills, bigger type, DemoPad miniature keys.
+5. **Trophy Shelf** (`/shelf`, the cabinet on a profile, the trophy share card) —
+   the photograph is the surface. It **may**: run the trophy renders full-bleed
+   and opaque, edge to edge, with their own baked backgrounds; flip a whole
+   band to `bg-ink` for the roasts; use `accent-soft` washes and gold rings on
+   ink. It **may not**: leave the tokens, add a type size that is not on the
+   scale, or drop a tap under 44px. The renders carry a watermark in the
+   bottom-right — every window that shows one is `512 / 472` with the image
+   pinned to the top, which crops it. Square one off and the watermark is back.
 
 ---
 
