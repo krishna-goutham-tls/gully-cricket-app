@@ -38,9 +38,24 @@ export default function SeasonWrapPage() {
         }
       : "skip",
   );
+  // Awards are regulars-only above — a cap should not go to a one-off walk-on.
+  // The Book is the season's whole ledger, so its totals come off this second
+  // board with everyone in. Both boards are gated together below: nothing
+  // paints until both have landed, so no card repaints under the reader.
+  const totalsBoard = useQuery(
+    api.stats.leaderboard,
+    token && activeOrgId
+      ? {
+          token,
+          orgId: activeOrgId,
+          includeVisitorsAndJuniors: true,
+          seasonId,
+        }
+      : "skip",
+  );
 
   const cards = useMemo(() => {
-    if (!season || !board) return [];
+    if (!season || !board || !totalsBoard) return [];
     const locked = (season.awards ?? []).map((a) => ({
       kind: a.kind,
       displayName: a.displayName,
@@ -51,8 +66,6 @@ export default function SeasonWrapPage() {
         ? locked
         : liveAwardsFromBoard(board);
     const records = buildRecords(board, { season: true });
-    const sixes = board.batting.reduce((n, r) => n + r.sixes, 0);
-    const wickets = board.bowling.reduce((n, r) => n + r.wickets, 0);
     return buildSeasonCards({
       seasonName: season.name,
       startedAt: season.startedAt,
@@ -60,12 +73,11 @@ export default function SeasonWrapPage() {
       matchCount: board.matchCount,
       awards,
       records,
-      sixes,
-      wickets,
+      totalsBoard,
       allRound: board.allRound,
       soFar: season.status !== "complete",
     });
-  }, [season, board]);
+  }, [season, board, totalsBoard]);
 
   const card = cards[active] ?? null;
   // Records is the long version of the awards slides, so the door opens once
@@ -83,7 +95,10 @@ export default function SeasonWrapPage() {
     setActive(i);
   }
 
-  if (season === undefined || (season && board === undefined)) {
+  if (
+    season === undefined ||
+    (season && (board === undefined || totalsBoard === undefined))
+  ) {
     return (
       <div className="flex min-h-dvh flex-col bg-ink px-5 pt-[calc(var(--safe-top)+0.5rem)]">
         <button

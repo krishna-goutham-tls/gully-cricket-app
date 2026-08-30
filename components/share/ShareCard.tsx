@@ -1313,6 +1313,11 @@ function SeasonLayout({ data }: { data: SeasonShareData }) {
   }
 
   if (data.variant === "book" && data.book) {
+    // Two columns, rows sized 1fr so the grid always fills the card whether a
+    // season has six totals or two. An odd count makes the last tile span both
+    // columns — the ledger never ends on a ragged half-row.
+    const book = data.book.slice(0, 6);
+    const odd = book.length % 2 === 1;
     return (
       <div
         style={{
@@ -1327,50 +1332,65 @@ function SeasonLayout({ data }: { data: SeasonShareData }) {
           style={{
             flex: 1,
             marginTop: 24,
-            display: "flex",
-            flexDirection: "column",
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gridAutoRows: "1fr",
             gap: 16,
           }}
         >
-          {data.book.map((item, i) => (
-            <div
-              key={item.label}
-              style={{
-                flex: 1,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "8px 8px 8px 28px",
-                borderRadius: 28,
-                background: i === 0 ? GOLD_WASH : "rgba(250,248,244,0.05)",
-                border:
-                  i === 0 ? `2px solid ${GOLD_RING}` : `1px solid ${LINE_ON_INK}`,
-              }}
-            >
-              <p
+          {book.map((item, i) => {
+            const wide = odd && i === book.length - 1;
+            const accent = i === 0;
+            return (
+              <div
+                key={item.label}
                 style={{
-                  fontSize: 28,
-                  fontWeight: 600,
-                  letterSpacing: 2,
-                  textTransform: "uppercase",
-                  color: BG_70,
+                  gridColumn: wide ? "span 2" : undefined,
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "center",
+                  padding: "24px 36px",
+                  borderRadius: 28,
+                  background: accent ? GOLD_WASH : "rgba(250,248,244,0.05)",
+                  border: accent
+                    ? `2px solid ${GOLD_RING}`
+                    : `1px solid ${LINE_ON_INK}`,
                 }}
               >
-                {item.label}
-              </p>
-              <p
-                style={{
-                  fontSize: 96,
-                  fontWeight: 700,
-                  lineHeight: 1,
-                  color: i === 0 ? ACCENT : BG,
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                {item.value}
-              </p>
-            </div>
-          ))}
+                <p
+                  style={{
+                    // 388px of usable column after padding, so a four-digit
+                    // season total still gets to be enormous. Longer figures
+                    // step down rather than run out of the tile.
+                    fontSize:
+                      item.value.length >= 6
+                        ? 96
+                        : item.value.length === 5
+                          ? 116
+                          : 140,
+                    fontWeight: 700,
+                    lineHeight: 1,
+                    color: accent ? ACCENT : BG,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {item.value}
+                </p>
+                <p
+                  style={{
+                    marginTop: 12,
+                    fontSize: 26,
+                    fontWeight: 600,
+                    letterSpacing: 2,
+                    textTransform: "uppercase",
+                    color: BG_70,
+                  }}
+                >
+                  {item.label}
+                </p>
+              </div>
+            );
+          })}
         </div>
       </div>
     );
