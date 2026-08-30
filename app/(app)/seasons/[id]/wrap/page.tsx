@@ -68,13 +68,13 @@ export default function SeasonWrapPage() {
   }, [season, board]);
 
   const card = cards[active] ?? null;
-  // The shelf is the long version of the awards slides, so the door opens once
+  // Records is the long version of the awards slides, so the door opens once
   // the reader has reached them — offering it over the title card would be
   // asking them to leave before the wrap has said anything.
   const firstAwardCard = cards.findIndex((c) =>
     c.variant === "pots" || c.variant === "caps" || c.variant === "roast",
   );
-  const showShelfDoor = firstAwardCard >= 0 && active >= firstAwardCard;
+  const showRecordsDoor = firstAwardCard >= 0 && active >= firstAwardCard;
 
   function goTo(i: number) {
     const el = railRef.current;
@@ -181,12 +181,12 @@ export default function SeasonWrapPage() {
                 className="w-full"
               />
             ) : null}
-            {showShelfDoor ? (
+            {showRecordsDoor ? (
               <Link
-                href="/shelf"
+                href="/records"
                 className="mt-2 flex min-h-11 items-center justify-center rounded-xl text-[13px] font-semibold text-bg/70 active:bg-white/10"
               >
-                See the full shelf ›
+                See all the trophies ›
               </Link>
             ) : null}
             <p className="mt-2 text-center text-[13px] text-bg/70">

@@ -8,7 +8,7 @@ import {
   ModeLine,
   NemesisCard,
   StatTile,
-  TrophyShelf,
+  FeatChips,
   type LogRow,
   type Profile,
 } from "@/components/player/ProfileParts";
@@ -616,14 +616,14 @@ export default function PlayerDetailPage() {
           </Section>
         ) : null}
 
-        <TrophyShelf trophies={trophies} />
+        <FeatChips trophies={trophies} />
 
         {/* What a season actually awarded them, under what their career
             numbers say about them — the same question, one settled by the
             group's own seasons. Above the batting/bowling block on purpose:
             a trophy is the reason somebody opened this page. */}
         {cabinet ? (
-          <Section title="Cabinet">
+          <Section title="Trophies">
             <TrophyCabinet
               entries={cabinet.map((e) => ({
                 seasonId: String(e.seasonId),

@@ -183,11 +183,11 @@ export function SeasonStrip({ series }: { series?: SeriesRow | null }) {
                   {shown.name}
                 </TruncText>
                 <span className="mt-0.5 block text-[13px] text-muted">
-                  {inPlay
-                    ? rank != null
-                      ? `You · ${ordinal(rank)} all-round`
-                      : "Trophy shelf"
-                    : "Trophy shelf"}
+                  {/* This opens the season folder — its matches and its caps.
+                      Not the trophies; those live on Records. */}
+                  {inPlay && rank != null
+                    ? `You · ${ordinal(rank)} all-round`
+                    : "Matches and caps"}
                 </span>
               </span>
               <ChevronRight className="h-4 w-4 shrink-0 text-faint" />

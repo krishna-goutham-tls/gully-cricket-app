@@ -119,7 +119,7 @@ export default function ProfilePage() {
           </Link>
         ) : null}
 
-        <ShelfRow />
+        <RecordsRow />
 
         <WishlistRow />
 
@@ -301,18 +301,19 @@ function Row({
  * CSS, it never renders.
  */
 /**
- * The shelf doorway. The shelf has no tab of its own — it is a place you go
- * looking for, once, after a match day, so it lives here beside the other two
- * doors rather than costing the tab bar a fifth slot.
+ * The Records doorway — trophies and the record book, one page. It has no tab
+ * of its own: it is a place you go looking for, once, after a match day, so it
+ * lives here beside the other two doors rather than costing the tab bar a
+ * fifth slot.
  */
-function ShelfRow() {
+function RecordsRow() {
   const { activeOrgId } = useAuth();
 
   if (!activeOrgId) return null;
 
   return (
     <Link
-      href="/shelf"
+      href="/records"
       className="flex min-h-12 items-center gap-3 rounded-2xl border border-line bg-surface px-4 py-3 active:bg-bg"
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-deep">
@@ -320,7 +321,7 @@ function ShelfRow() {
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-[15px] font-semibold text-ink">
-          Trophy shelf
+          Records
         </span>
         <span className="block text-[13px] text-muted">
           Twelve trophies, one owner each

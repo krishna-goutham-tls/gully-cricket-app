@@ -9,7 +9,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 /**
- * The same 512/472 window the shelf uses. The renders carry a "Grok" watermark
+ * The same 512/472 window Records uses. The renders carry a "Grok" watermark
  * in the bottom-right corner; pinning the image to the top of a window this
  * shape crops the bottom 40 source pixels, which is the watermark and nothing
  * else. Do not square this off.
@@ -138,9 +138,9 @@ function CabinetRow({
 }
 
 /**
- * Everything this player has won, newest season first. It sits under the
- * trophy chips because the two answer the same question — the chips are what
- * the career numbers say about them, this is what a season awarded them.
+ * Every trophy a season has stamped on this player, newest first. It sits under
+ * the feat chips because the two answer the same question from opposite ends —
+ * the chips are what their career numbers say, this is what a season awarded.
  */
 export function TrophyCabinet({
   entries,
@@ -166,10 +166,10 @@ export function TrophyCabinet({
           Twelve trophies, one owner each. Three of them nobody wants.
         </p>
         <Link
-          href="/shelf"
+          href="/records"
           className="mt-3 flex min-h-11 items-center justify-center rounded-xl border border-line bg-bg text-[13px] font-semibold text-ink active:bg-line/60"
         >
-          See what&apos;s on the shelf ›
+          See all twelve ›
         </Link>
       </div>
     );

@@ -137,14 +137,17 @@ const TROPHY_ICON: Record<string, LucideIcon> = {
 };
 
 /**
- * The trophy shelf — a single horizontal-scroll row of medal chips so the
- * biggest scroll problem on this page (stacking sections top to bottom)
- * never gains one more section. Gold chips are the rare, first-tap feats
- * (rank-1s, centuries, five-fors); silver is everything solid but not
- * headline. Renders nothing when the player hasn't earned anything yet —
- * an empty shelf reads as failure, not a section worth keeping.
+ * This player's own feats, derived from their career numbers — a single
+ * horizontal-scroll row of chips so the biggest scroll problem on this page
+ * (stacking sections top to bottom) never gains one more section. Gold chips
+ * are the rare, first-tap feats (rank-1s, centuries, five-fors); silver is
+ * everything solid but not headline. Renders nothing when there is nothing —
+ * an empty row reads as failure, not a section worth keeping.
+ *
+ * Not the trophies. Those are awarded by a season, live on `/records`, and
+ * appear on this page below, in the Cabinet.
  */
-export function TrophyShelf({ trophies }: { trophies: Trophy[] }) {
+export function FeatChips({ trophies }: { trophies: Trophy[] }) {
   if (trophies.length === 0) return null;
   return (
     <div className="-mx-5 overflow-x-auto px-5">

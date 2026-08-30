@@ -23,7 +23,7 @@ import Link from "next/link";
  */
 const WINDOW_RATIO = "512 / 472";
 
-/** One award as it lands on the shelf, already flattened for the card. */
+/** One award as it lands on Records, already flattened for the card. */
 export type ShelfCardAward = {
   kind: string;
   userId: string;
@@ -275,13 +275,17 @@ export function TrophyEmptySlot({
       >
         {copy.earn}
       </p>
+      {/* A roast is landed on you, never earned — the honour-verb is wrong
+          here, and the five-match bar is the only qualification the app ever
+          says out loud, because an unclaimed roast is the one place it
+          explains why a name is missing. */}
       <p
         className={cn(
           "mt-1 text-[11px] leading-snug",
           onInk ? "text-bg/70" : "text-faint",
         )}
       >
-        Nobody has earned this yet.
+        {onInk ? "Nobody has this yet. Five matches to qualify." : "Nobody has earned this yet."}
       </p>
     </div>
   );

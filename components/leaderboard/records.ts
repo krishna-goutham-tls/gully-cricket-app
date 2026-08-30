@@ -33,6 +33,28 @@ export const RECORD_MIN_BALLS = 24;
 export const RECORD_MIN_INNINGS = 3;
 
 /**
+ * Records a photographed trophy already says, by label. The Records page drops
+ * these — a row repeating what the picture above it just said is noise, and the
+ * trophy wins because it is the shareable one.
+ *
+ * Only exact overlaps are here. "Most fours" stays (Boundary King counts runs in
+ * boundaries, not fours) and "Mr. Defensive" stays (a dot *percentage*, where Dot
+ * Magnet is a dot count) — a different measure is a different argument.
+ *
+ * The filter is not applied inside `buildRecords` on purpose: the season wrap
+ * reads the same builder and still wants the whole book.
+ */
+export const TROPHY_OWNED_RECORDS = new Set([
+  "Most runs", // Run Machine
+  "Most sixes", // Six Machine
+  "Most wickets", // Wicket Taker
+  "Most dots", // The Miser
+  "Most catches", // Safe Hands
+  "Most ducks", // Duck Collector
+  "Butterfingers 🧈", // Butterfingers
+]);
+
+/**
  * Best of a measure, with an explicit tie-break.
  *
  * Ties are the whole point of this helper. Without one the winner was simply

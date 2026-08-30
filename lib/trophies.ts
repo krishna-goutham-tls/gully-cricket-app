@@ -2,7 +2,7 @@ import type { Profile } from "@/components/player/ProfileParts";
 
 export type Trophy = {
   id: string;
-  /** A lucide-react icon name (see components/player/ProfileParts.tsx TrophyShelf). */
+  /** A lucide-react icon name (see components/player/ProfileParts.tsx FeatChips). */
   icon: string;
   label: string;
   value?: string;
@@ -19,7 +19,8 @@ export type SeasonAwardKind =
   | "best_economy";
 
 /**
- * Everything a season can stamp: the six caps above plus the trophy shelf.
+ * Everything a season can stamp: the six caps above plus the twelve
+ * photographed trophies.
  * The shelf kinds have no copy in this file — they are the trophy page's, and
  * anything reading a stamped award has to cope with a kind it can't name.
  */

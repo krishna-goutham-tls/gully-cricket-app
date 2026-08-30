@@ -115,8 +115,14 @@ Cards: `rounded-2xl border border-line bg-surface shadow-card`.
 2. **PIN pad**
 3. **Coin toss** — the coin is the control. Bat / Bowl stay large and **equal**.
 4. **Landing / rules / legal** — gold fills, bigger type, DemoPad miniature keys.
-5. **Trophy Shelf** (`/shelf`, the cabinet on a profile, the trophy share card) —
-   the photograph is the surface. It **may**: run the trophy renders full-bleed
+5. **Trophy Shelf** (`/records`, the Cabinet on a profile, the trophy share
+   card) — the app's only "trophy shelf": the twelve photographed trophies.
+   The chips on a player profile are `FeatChips`, not this. `/shelf` is gone,
+   redirected in `next.config.mjs`. On `/records` the top-level split is tone —
+   **Honours** on paper, **The Roast** on an ink band — and each holds its
+   trophies first, then its record rows. Section headings are plain nouns with
+   no explainer line under them, and a roast is never "earned".
+   The photograph is the surface. It **may**: run the trophy renders full-bleed
    and opaque, edge to edge, with their own baked backgrounds; flip a whole
    band to `bg-ink` for the roasts; use `accent-soft` washes and gold rings on
    ink. It **may not**: leave the tokens, add a type size that is not on the
