@@ -1398,13 +1398,13 @@ const TROPHY_WINDOW_H = 708;
  * One trophy, one number, one name. Everything on this card is sized to
  * survive WhatsApp's thumbnail: the photograph is the subject, the figure is
  * the headline, and the first name is the only word that has to be read at
- * 200px. The kicker is the one place the two tones differ in voice — an honour
- * states how it was earned, a roast says nobody wanted it.
+ * 200px. The kicker states what the number counts and nothing else — the tone
+ * is carried by the colour and the trophy, not by a line of commentary.
  */
 function TrophyLayout({ data }: { data: TrophyShareData }) {
   const { award, earn, name, value, unit, awardKind, tone } = data;
   const roast = tone === "roast";
-  const kicker = roast ? `${earn} · nobody wanted it` : earn;
+  const kicker = earn;
 
   return (
     <>
