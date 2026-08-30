@@ -161,26 +161,6 @@ export const list = query({
   },
 });
 
-/**
- * One round-trip for Home. current + list used to land on different ticks:
- * "no active season" arrived first and Home painted "No season yet" while
- * Season-01 was still in flight. This payload is all-or-nothing.
- */
-export const forHome = query({
-  args: {
-    token: v.optional(v.string()),
-    orgId: v.id("orgs"),
-  },
-  handler: async (ctx, args) => {
-    await requireActiveMembership(ctx, args.token, args.orgId);
-    const seasons = await seasonsForOrg(ctx, args.orgId);
-    const current =
-      seasons.find((s) => s.status === "active") ?? null;
-    const featured = current ?? seasons[0] ?? null;
-    return { seasons, current, featured };
-  },
-});
-
 export const get = query({
   args: {
     token: v.optional(v.string()),
