@@ -1,3 +1,4 @@
+import { trophyImage } from "@/lib/awardCopy";
 import type { Trophy } from "@/lib/trophies";
 import {
   Award,
@@ -118,12 +119,38 @@ export type SeasonShareData = {
   book?: Array<{ value: string; label: string }>;
 };
 
+/**
+ * One trophy off the shelf, the way it lands in a WhatsApp group. Deliberately
+ * flat strings: the shelf and this card both read the same words
+ * out of `lib/awardCopy`, so the card never has to know an award's shape.
+ *
+ * `name` is the winner's FIRST name — the group knows who Naman is, and one
+ * word is the only thing that survives a thumbnail. `scope` is the season
+ * label, or "All time".
+ */
+export type TrophyShareData = {
+  kind: "trophy";
+  /** The award id, e.g. `run_machine` — this picks the photograph. */
+  awardKind: string;
+  /** "Run Machine" */
+  award: string;
+  /** "Most runs" — how it was earned. */
+  earn: string;
+  name: string;
+  value: string;
+  /** "runs", "dots faced" — what the number counts. */
+  unit: string;
+  scope: string;
+  tone: "honor" | "roast";
+};
+
 export type ShareData =
   | PlayerShareData
   | MatchShareData
   | LeaderboardShareData
   | HeroShareData
-  | SeasonShareData;
+  | SeasonShareData
+  | TrophyShareData;
 
 // Hex values copied from tailwind.config.ts — html-to-image clones computed
 // styles and chokes on oklch()/CSS custom properties, so every colour on this
@@ -139,6 +166,8 @@ const BG_60 = "rgba(250, 248, 244, 0.6)";
 const BG_40 = "rgba(250, 248, 244, 0.4)";
 const GOLD_WASH = "rgba(240, 180, 41, 0.14)";
 const GOLD_RING = "rgba(240, 180, 41, 0.35)";
+// The roast ring — same danger edge the season roast slide already uses.
+const DANGER_RING = "rgba(192, 57, 43, 0.55)";
 
 const TROPHY_ICON: Record<string, LucideIcon> = {
   Crown,
@@ -198,6 +227,20 @@ export const ShareCard = forwardRef<HTMLDivElement, { data: ShareData }>(
           }
         >
           <SeasonLayout data={data} />
+        </Frame>
+      );
+    }
+    if (data.kind === "trophy") {
+      return (
+        <Frame
+          ref={ref}
+          footerLeft={
+            <span style={{ fontSize: 24, fontWeight: 500, color: BG_70 }}>
+              {data.scope}
+            </span>
+          }
+        >
+          <TrophyLayout data={data} />
         </Frame>
       );
     }
@@ -1270,6 +1313,11 @@ function SeasonLayout({ data }: { data: SeasonShareData }) {
   }
 
   if (data.variant === "book" && data.book) {
+    // Two columns, rows sized 1fr so the grid always fills the card whether a
+    // season has six totals or two. An odd count makes the last tile span both
+    // columns — the ledger never ends on a ragged half-row.
+    const book = data.book.slice(0, 6);
+    const odd = book.length % 2 === 1;
     return (
       <div
         style={{
@@ -1284,56 +1332,214 @@ function SeasonLayout({ data }: { data: SeasonShareData }) {
           style={{
             flex: 1,
             marginTop: 24,
-            display: "flex",
-            flexDirection: "column",
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gridAutoRows: "1fr",
             gap: 16,
           }}
         >
-          {data.book.map((item, i) => (
-            <div
-              key={item.label}
-              style={{
-                flex: 1,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "8px 8px 8px 28px",
-                borderRadius: 28,
-                background: i === 0 ? GOLD_WASH : "rgba(250,248,244,0.05)",
-                border:
-                  i === 0 ? `2px solid ${GOLD_RING}` : `1px solid ${LINE_ON_INK}`,
-              }}
-            >
-              <p
+          {book.map((item, i) => {
+            const wide = odd && i === book.length - 1;
+            const accent = i === 0;
+            return (
+              <div
+                key={item.label}
                 style={{
-                  fontSize: 28,
-                  fontWeight: 600,
-                  letterSpacing: 2,
-                  textTransform: "uppercase",
-                  color: BG_70,
+                  gridColumn: wide ? "span 2" : undefined,
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "center",
+                  padding: "24px 36px",
+                  borderRadius: 28,
+                  background: accent ? GOLD_WASH : "rgba(250,248,244,0.05)",
+                  border: accent
+                    ? `2px solid ${GOLD_RING}`
+                    : `1px solid ${LINE_ON_INK}`,
                 }}
               >
-                {item.label}
-              </p>
-              <p
-                style={{
-                  fontSize: 96,
-                  fontWeight: 700,
-                  lineHeight: 1,
-                  color: i === 0 ? ACCENT : BG,
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                {item.value}
-              </p>
-            </div>
-          ))}
+                <p
+                  style={{
+                    // 388px of usable column after padding, so a four-digit
+                    // season total still gets to be enormous. Longer figures
+                    // step down rather than run out of the tile.
+                    fontSize:
+                      item.value.length >= 6
+                        ? 96
+                        : item.value.length === 5
+                          ? 116
+                          : 140,
+                    fontWeight: 700,
+                    lineHeight: 1,
+                    color: accent ? ACCENT : BG,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {item.value}
+                </p>
+                <p
+                  style={{
+                    marginTop: 12,
+                    fontSize: 26,
+                    fontWeight: 600,
+                    letterSpacing: 2,
+                    textTransform: "uppercase",
+                    color: BG_70,
+                  }}
+                >
+                  {item.label}
+                </p>
+              </div>
+            );
+          })}
         </div>
       </div>
     );
   }
 
   return null;
+}
+
+/**
+ * The trophy window, in whole pixels so html-to-image never has to round one.
+ * 768 × 708 is exactly TrophyCard's 512/472: the photograph is drawn square at
+ * 768 and pinned to the top, so the bottom 60 rendered pixels — the bottom 40
+ * source pixels, which is the render's "Grok" watermark and nothing else —
+ * fall outside the window. Change either number and the watermark is back in
+ * every card the group shares.
+ *
+ * The window must also carry `flexShrink: 0`. It is a flex item in the Frame's
+ * column, and a card whose text runs long would otherwise squeeze it — which
+ * crops deeper than 512/472 and quietly stops matching the shelf.
+ */
+const TROPHY_WINDOW_W = 768;
+const TROPHY_WINDOW_H = 708;
+
+/**
+ * One trophy, one number, one name. Everything on this card is sized to
+ * survive WhatsApp's thumbnail: the photograph is the subject, the figure is
+ * the headline, and the first name is the only word that has to be read at
+ * 200px. The kicker states what the number counts and nothing else — the tone
+ * is carried by the colour and the trophy, not by a line of commentary.
+ */
+function TrophyLayout({ data }: { data: TrophyShareData }) {
+  const { award, earn, name, value, unit, awardKind, tone } = data;
+  const roast = tone === "roast";
+  const kicker = earn;
+
+  return (
+    <>
+      <div style={{ marginTop: 40 }}>
+        <span
+          style={{
+            display: "inline-block",
+            fontSize: 22,
+            fontWeight: 600,
+            letterSpacing: 3,
+            textTransform: "uppercase",
+            color: roast ? BG_70 : ACCENT,
+          }}
+        >
+          {kicker}
+        </span>
+        <p
+          style={{
+            marginTop: 12,
+            fontSize: award.length > 14 ? 56 : 68,
+            lineHeight: 1.05,
+            fontWeight: 700,
+            color: BG,
+            wordBreak: "break-word",
+          }}
+        >
+          {award}
+        </p>
+      </div>
+
+      <div
+        style={{
+          marginTop: 32,
+          alignSelf: "center",
+          flexShrink: 0,
+          position: "relative",
+          width: TROPHY_WINDOW_W,
+          height: TROPHY_WINDOW_H,
+          borderRadius: 32,
+          overflow: "hidden",
+          border: `2px solid ${roast ? DANGER_RING : GOLD_RING}`,
+          background: INK,
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- html-to-image
+            needs a real <img>; next/image renders lazily and can't be captured. */}
+        <img
+          src={trophyImage(awardKind)}
+          alt=""
+          width={TROPHY_WINDOW_W}
+          height={TROPHY_WINDOW_W}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: TROPHY_WINDOW_W,
+            height: TROPHY_WINDOW_W,
+            objectFit: "cover",
+            display: "block",
+          }}
+        />
+      </div>
+
+      <div
+        style={{
+          marginTop: "auto",
+          paddingTop: 36,
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          gap: 24,
+        }}
+      >
+        <p
+          style={{
+            fontSize: name.length > 9 ? 60 : 80,
+            lineHeight: 1,
+            fontWeight: 700,
+            color: BG,
+            minWidth: 0,
+            wordBreak: "break-word",
+          }}
+        >
+          {name}
+        </p>
+        <div style={{ flexShrink: 0, textAlign: "right" }}>
+          <p
+            style={{
+              fontSize: value.length > 4 ? 96 : 128,
+              lineHeight: 0.9,
+              fontWeight: 700,
+              color: roast ? BG : ACCENT,
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {value}
+          </p>
+          {unit ? (
+            <p
+              style={{
+                marginTop: 10,
+                fontSize: 24,
+                fontWeight: 600,
+                letterSpacing: 2,
+                textTransform: "uppercase",
+                color: BG_70,
+              }}
+            >
+              {unit}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </>
+  );
 }
 
 function LeaderboardLayout({ data }: { data: LeaderboardShareData }) {

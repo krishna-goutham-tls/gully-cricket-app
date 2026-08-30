@@ -4,15 +4,17 @@ import {
   type FeatRecord,
   type RecordGroup,
 } from "@/components/leaderboard/records";
-import type { SeasonAwardKind } from "@/lib/trophies";
+import type { StampedAwardKind } from "@/lib/trophies";
 import type { SeasonShareData } from "@/components/share/ShareCard";
 import { api } from "@/convex/_generated/api";
 import type { FunctionReturnType } from "convex/server";
 
 type Board = NonNullable<FunctionReturnType<typeof api.stats.leaderboard>>;
 
+// Kind is the wide stamped union: a completed season now carries the shelf
+// trophies too, and the wrap only reads the six it has cards for.
 type NamedAward = {
-  kind: SeasonAwardKind;
+  kind: StampedAwardKind;
   displayName: string;
   display: string;
 };
@@ -23,6 +25,13 @@ const ROAST_PICK = [
   "Most expensive",
   "Butterfingers 🧈",
 ];
+
+/** Legal balls to the way a scorer says it: 412.3, and 412 on the over. */
+function oversText(legalBalls: number) {
+  const overs = Math.floor(legalBalls / 6);
+  const rem = legalBalls % 6;
+  return rem === 0 ? String(overs) : `${overs}.${rem}`;
+}
 
 function monthDay(ts: number) {
   return new Date(ts).toLocaleDateString([], {
@@ -99,8 +108,13 @@ export function buildSeasonCards(args: {
   matchCount: number;
   awards: NamedAward[];
   records: RecordGroup[];
-  sixes: number;
-  wickets: number;
+  /**
+   * The board with visitors and juniors IN. Awards are regulars-only on
+   * purpose — a cap should not go to a one-off walk-on — but "The Book" is
+   * the season's whole ledger, and a visitor's six was still hit that season.
+   * Totals come off this board and nothing else does.
+   */
+  totalsBoard: Board;
   allRound: Array<{ displayName: string; points: number }>;
   soFar?: boolean;
 }): SeasonShareData[] {
@@ -193,15 +207,26 @@ export function buildSeasonCards(args: {
   }
 
   if (args.matchCount > 0) {
-    const book: Array<{ value: string; label: string }> = [
-      {
-        value: String(args.matchCount),
-        label: args.matchCount === 1 ? "match" : "matches",
-      },
-    ];
-    if (args.wickets > 0)
-      book.push({ value: String(args.wickets), label: "wickets" });
-    if (args.sixes > 0) book.push({ value: String(args.sixes), label: "sixes" });
+    const t = args.totalsBoard;
+    const sum = <T,>(rows: T[], pick: (r: T) => number) =>
+      rows.reduce((n, r) => n + pick(r), 0);
+    const legalBalls = sum(t.bowling, (r) => r.legalBalls);
+    // Six disciplines, six numbers, best first — the first one still standing
+    // after the zero-guard is the card's gold figure. Runs is the season's
+    // scale, matches is the frame the rest are read against, and the card
+    // travels alone in a chat, so it cannot borrow the title slide's count.
+    const book = (
+      [
+        [sum(t.batting, (r) => r.runs), "runs"],
+        [t.matchCount, t.matchCount === 1 ? "match" : "matches"],
+        [sum(t.bowling, (r) => r.wickets), "wickets"],
+        [sum(t.batting, (r) => r.sixes), "sixes"],
+        [legalBalls, legalBalls === 6 ? "over" : "overs", oversText(legalBalls)],
+        [sum(t.allRound, (r) => r.catches), "catches"],
+      ] as Array<[number, string, string?]>
+    )
+      .filter(([n]) => n > 0)
+      .map(([n, label, text]) => ({ value: text ?? String(n), label }));
     cards.push({
       kind: "season",
       variant: "book",

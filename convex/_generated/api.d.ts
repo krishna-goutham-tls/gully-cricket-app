@@ -13,6 +13,7 @@ import type * as admin from "../admin.js";
 import type * as auth from "../auth.js";
 import type * as hero from "../hero.js";
 import type * as lib_access from "../lib/access.js";
+import type * as lib_awards from "../lib/awards.js";
 import type * as lib_contribution from "../lib/contribution.js";
 import type * as lib_crypto from "../lib/crypto.js";
 import type * as lib_matches from "../lib/matches.js";
@@ -49,6 +50,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   hero: typeof hero;
   "lib/access": typeof lib_access;
+  "lib/awards": typeof lib_awards;
   "lib/contribution": typeof lib_contribution;
   "lib/crypto": typeof lib_crypto;
   "lib/matches": typeof lib_matches;

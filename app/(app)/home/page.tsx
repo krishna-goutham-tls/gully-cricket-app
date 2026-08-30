@@ -197,7 +197,7 @@ export default function HomePage() {
             href="/records"
             icon={<Medal className="h-4 w-4" strokeWidth={2.2} />}
             title="Records"
-            meta="Season feats"
+            meta="Trophies & feats"
           />
         </div>
 

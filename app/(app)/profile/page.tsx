@@ -10,7 +10,13 @@ import { api } from "@/convex/_generated/api";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { BarChart3, ChevronDown, ChevronRight, Lightbulb } from "lucide-react";
+import {
+  BarChart3,
+  ChevronDown,
+  ChevronRight,
+  Lightbulb,
+  Trophy,
+} from "lucide-react";
 import { cn, errorMessage } from "@/lib/utils";
 
 const ROLES = ["batsman", "bowler", "all-rounder", "keeper"] as const;
@@ -112,6 +118,8 @@ export default function ProfilePage() {
             <ChevronRight className="h-5 w-5 shrink-0 text-faint" />
           </Link>
         ) : null}
+
+        <RecordsRow />
 
         <WishlistRow />
 
@@ -292,6 +300,38 @@ function Row({
  * normal player, so this collapses to nothing — the row is not hidden with
  * CSS, it never renders.
  */
+/**
+ * The Records doorway — trophies and the record book, one page. It has no tab
+ * of its own: it is a place you go looking for, once, after a match day, so it
+ * lives here beside the other two doors rather than costing the tab bar a
+ * fifth slot.
+ */
+function RecordsRow() {
+  const { activeOrgId } = useAuth();
+
+  if (!activeOrgId) return null;
+
+  return (
+    <Link
+      href="/records"
+      className="flex min-h-12 items-center gap-3 rounded-2xl border border-line bg-surface px-4 py-3 active:bg-bg"
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-deep">
+        <Trophy className="h-4 w-4" strokeWidth={2.2} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] font-semibold text-ink">
+          Records
+        </span>
+        <span className="block text-[13px] text-muted">
+          Twelve trophies, one owner each
+        </span>
+      </span>
+      <ChevronRight className="h-5 w-5 shrink-0 text-faint" />
+    </Link>
+  );
+}
+
 /**
  * The wishlist doorway. Every player sees it — the board is the community's,
  * not the admin's. The count is open asks only; settled ones are not a

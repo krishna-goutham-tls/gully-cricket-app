@@ -12,7 +12,10 @@ import {
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { groupByDay } from "@/lib/dates";
-import { type SeasonAwardKind } from "@/lib/trophies";
+import {
+  type SeasonAwardKind,
+  type StampedAwardKind,
+} from "@/lib/trophies";
 import { errorMessage } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { ArrowLeft } from "lucide-react";
@@ -20,7 +23,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
-const AWARD_LABEL: Record<SeasonAwardKind, string> = {
+/** The six caps this page names. Shelf trophies get their own page. */
+const AWARD_LABEL: Partial<Record<StampedAwardKind, string>> = {
   pots: "Player of the season",
   orange_cap: "Orange Cap",
   purple_cap: "Purple Cap",
@@ -179,11 +183,15 @@ export default function SeasonPage() {
 
   const locked = useMemo(() => {
     if (!season || season.status !== "complete") return [];
-    return (season.awards ?? []).map((a) => ({
-      kind: a.kind,
-      name: a.displayName,
-      display: a.display,
-    }));
+    // A completed season also stamps the twelve shelf trophies; this list is
+    // the caps, so anything without copy here is somebody else's surface.
+    return (season.awards ?? [])
+      .filter((a) => a.kind in AWARD_LABEL)
+      .map((a) => ({
+        kind: a.kind,
+        name: a.displayName,
+        display: a.display,
+      }));
   }, [season]);
 
   const shelf = locked.length > 0 ? locked : trophies;

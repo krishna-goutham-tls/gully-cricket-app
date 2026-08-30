@@ -11,6 +11,7 @@ import type { LeaderboardShareData } from "@/components/share/ShareCard";
 import { ShareButton } from "@/components/share/ShareButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { PLAYER_TAG_COPY, type PlayerTag } from "@/lib/playerLabel";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
@@ -377,16 +378,33 @@ function WordToggle<T extends string>({
   );
 }
 
-function ScopeToggle({
-  usingSeason,
-  seasonName,
-  onSeason,
-  onAll,
+type Season = NonNullable<FunctionReturnType<typeof api.seasons.list>>[number];
+
+/**
+ * What the reader picked. A season id means that season, live or finished.
+ * The page holds `Scope | null`, where `null` is "not picked yet" and resolves
+ * to the live season if one is running, else All time.
+ */
+type Scope = "all" | { seasonId: Id<"seasons"> };
+
+const SCOPE_ROW =
+  "flex min-h-11 w-full items-center justify-between gap-2 px-4 text-left text-[15px] text-ink active:bg-bg";
+
+/**
+ * Seasons newest first, All time last under a hairline. Before this it was a
+ * two-row menu — this season or all time — so the day Season-02 started,
+ * Season-01's board had no route back. Same control, more rows: a community
+ * on its first season sees exactly what it saw before.
+ */
+function ScopeMenu({
+  seasons,
+  selected,
+  onSelect,
 }: {
-  usingSeason: boolean;
-  seasonName: string;
-  onSeason: () => void;
-  onAll: () => void;
+  seasons: Season[];
+  /** null = All time. */
+  selected: Season | null;
+  onSelect: (next: Scope) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -410,53 +428,85 @@ function ScopeToggle({
         className="-mx-1 flex h-11 items-center gap-1 rounded-lg px-1 text-[13px] font-semibold text-muted active:bg-bg"
       >
         <span className="whitespace-nowrap">
-          {usingSeason ? seasonName : "All time"}
+          {selected ? selected.name : "All time"}
         </span>
         <ChevronDown className="h-4 w-4 shrink-0" />
       </button>
       {open ? (
         <div
           role="listbox"
-          className="absolute left-0 z-20 mt-1 w-52 overflow-hidden rounded-xl border border-line bg-surface shadow-lift"
+          // Capped and scrollable: a long-running community must not get a
+          // menu taller than the board it is covering.
+          className="absolute left-0 z-20 mt-1 max-h-72 w-52 overflow-y-auto overscroll-contain rounded-xl border border-line bg-surface shadow-lift"
         >
+          {seasons.map((s) => {
+            const on = selected?._id === s._id;
+            return (
+              <button
+                key={s._id}
+                type="button"
+                role="option"
+                aria-selected={on}
+                onClick={() => {
+                  onSelect({ seasonId: s._id });
+                  setOpen(false);
+                }}
+                className={cn(SCOPE_ROW, on && "font-semibold text-accent-deep")}
+              >
+                <span className="truncate" title={s.name}>
+                  {s.name}
+                </span>
+                {on ? <Check className="h-4 w-4 shrink-0" /> : null}
+              </button>
+            );
+          })}
           <button
             type="button"
             role="option"
-            aria-selected={usingSeason}
+            aria-selected={selected === null}
             onClick={() => {
-              onSeason();
+              onSelect("all");
               setOpen(false);
             }}
             className={cn(
-              "flex min-h-11 w-full items-center justify-between gap-2 px-4 text-left text-[15px] text-ink active:bg-bg",
-              usingSeason && "font-semibold text-accent-deep",
-            )}
-          >
-            <span className="truncate" title={seasonName}>
-              {seasonName}
-            </span>
-            {usingSeason ? <Check className="h-4 w-4 shrink-0" /> : null}
-          </button>
-          <button
-            type="button"
-            role="option"
-            aria-selected={!usingSeason}
-            onClick={() => {
-              onAll();
-              setOpen(false);
-            }}
-            className={cn(
-              "flex min-h-11 w-full items-center justify-between gap-2 px-4 text-left text-[15px] text-ink active:bg-bg",
-              !usingSeason && "font-semibold text-accent-deep",
+              SCOPE_ROW,
+              seasons.length > 0 && "border-t border-line",
+              selected === null && "font-semibold text-accent-deep",
             )}
           >
             All time
-            {!usingSeason ? <Check className="h-4 w-4 shrink-0" /> : null}
+            {selected === null ? <Check className="h-4 w-4 shrink-0" /> : null}
           </button>
         </div>
       ) : null}
     </div>
   );
+}
+
+/** Empty board reads differently for a season that is over than one under way. */
+function emptyCopy(format: FormatScope, season: Season | null) {
+  const noun =
+    format === "test" ? "Tests" : format === "limited" ? "ODIs" : null;
+  const play =
+    format === "test"
+      ? "Play a Test. The board starts at zero."
+      : format === "limited"
+        ? "Play an ODI. The board starts at zero."
+        : "Play a match. The board starts at zero.";
+  if (!season)
+    return {
+      title: noun ? `No ${noun} yet` : "No completed matches yet",
+      body: noun ? play : "Leaderboards build up as matches finish.",
+    };
+  if (season.status === "complete")
+    return {
+      title: `No ${noun ?? "games"} in ${season.name}`,
+      body: "That season is done. Nothing landed on this board.",
+    };
+  return {
+    title: `No ${noun ?? "games"} in this season yet`,
+    body: play,
+  };
 }
 
 export default function LeaderboardPage() {
@@ -472,24 +522,37 @@ export default function LeaderboardPage() {
   const [includeExtras, setIncludeExtras] = useState(false);
   // Mixed board is how the community already argues. Tests / ODI is the slice.
   const [format, setFormat] = useState<FormatScope>("all");
-  // null = not chosen yet. Default This season when one is live, else All time.
-  // A cap link from Home always means this season.
-  const [scope, setScope] = useState<"season" | "all" | null>(
-    cap === "orange" || cap === "purple" ? "season" : null,
-  );
-  const current = useQuery(
-    api.seasons.current,
+  // null = not chosen yet, which resolves to the live season when one is
+  // running and All time otherwise. A cap link from Home means the *current*
+  // season, and that is exactly what the unchosen default gives it.
+  const [scope, setScope] = useState<Scope | null>(null);
+  // One round trip: `current` is the active row inside this list, so the two
+  // can never land on different ticks.
+  const seasons = useQuery(
+    api.seasons.list,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
   );
-  const usingSeason = Boolean(current) && (scope ?? "season") === "season";
+  const currentSeason = useMemo(
+    () => seasons?.find((s) => s.status === "active") ?? null,
+    [seasons],
+  );
+  // A stale id (season deleted, org switched) falls back to the live season
+  // rather than querying a board that is not this org's.
+  const selectedSeason = useMemo(() => {
+    if (!seasons) return null;
+    if (scope === null) return currentSeason;
+    if (scope === "all") return null;
+    return seasons.find((s) => s._id === scope.seasonId) ?? currentSeason;
+  }, [seasons, scope, currentSeason]);
+  const usingSeason = selectedSeason !== null;
   const data = useQuery(
     api.stats.leaderboard,
-    token && activeOrgId && current !== undefined
+    token && activeOrgId && seasons !== undefined
       ? {
           token,
           orgId: activeOrgId,
           includeVisitorsAndJuniors: includeExtras,
-          ...(usingSeason && current ? { seasonId: current._id } : {}),
+          ...(selectedSeason ? { seasonId: selectedSeason._id } : {}),
           ...(format === "all" ? {} : { format }),
         }
       : "skip",
@@ -529,6 +592,9 @@ export default function LeaderboardPage() {
   }, [data, measure, includeExtras]);
 
   const hasData = data && data.matchCount > 0 && rows.length > 0;
+  // Arrows read a 7-day lookback. Inside a season that window is clipped to
+  // the season, and on a finished one it is frozen at `endedAt` — so the move
+  // it would report is not the one anyone watched. All time only.
   const showMovement =
     !usingSeason &&
     !!measure.movement &&
@@ -546,8 +612,8 @@ export default function LeaderboardPage() {
           ? "ODI"
           : null;
     const subtitle =
-      usingSeason && current
-        ? [org, current.name, formatBit, count].filter(Boolean).join(" · ")
+      selectedSeason
+        ? [org, selectedSeason.name, formatBit, count].filter(Boolean).join(" · ")
         : [org, formatBit, count].filter(Boolean).join(" · ");
     return {
       kind: "leaderboard" as const,
@@ -562,7 +628,7 @@ export default function LeaderboardPage() {
           value: r.display ?? String(r.value),
         })),
     };
-  }, [data, rows, measure, activeOrg, usingSeason, current, format]);
+  }, [data, rows, measure, activeOrg, selectedSeason, format]);
 
   const [scrolled, setScrolled] = useState(false);
   const [chipsOpen, setChipsOpen] = useState(false);
@@ -577,6 +643,8 @@ export default function LeaderboardPage() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
   const compactChips = scrolled && !chipsOpen;
+
+  const empty = emptyCopy(format, selectedSeason);
 
   const capLabel =
     format === "all" && usingSeason && measure.key === "runs"
@@ -609,12 +677,11 @@ export default function LeaderboardPage() {
       <AppHeader
         title="Leaders"
         subtitle={
-          current ? (
-            <ScopeToggle
-              usingSeason={usingSeason}
-              seasonName={current.name}
-              onSeason={() => setScope("season")}
-              onAll={() => setScope("all")}
+          seasons && seasons.length > 0 ? (
+            <ScopeMenu
+              seasons={seasons}
+              selected={selectedSeason}
+              onSelect={setScope}
             />
           ) : undefined
         }
@@ -700,32 +767,18 @@ export default function LeaderboardPage() {
               <div key={i} className="h-12 animate-pulse rounded-2xl bg-line" />
             ))}
           </div>
-        ) : !hasData ? (
+        ) : data === null ? (
+          // Null is a membership we could not read, not a board with nothing
+          // on it — "No completed matches yet" would be a false empty state.
           <div className="mt-3">
             <EmptyState
-              title={
-                format === "test"
-                  ? usingSeason
-                    ? "No Tests in this season yet"
-                    : "No Tests yet"
-                  : format === "limited"
-                    ? usingSeason
-                      ? "No ODIs in this season yet"
-                      : "No ODIs yet"
-                    : usingSeason
-                      ? "No games in this season yet"
-                      : "No completed matches yet"
-              }
-              body={
-                format === "test"
-                  ? "Play a Test. The board starts at zero."
-                  : format === "limited"
-                    ? "Play an ODI. The board starts at zero."
-                    : usingSeason
-                      ? "Play a match. The board starts at zero."
-                      : "Leaderboards build up as matches finish."
-              }
+              title="Leaders unavailable"
+              body="Sign in to this community to see its boards."
             />
+          </div>
+        ) : !hasData ? (
+          <div className="mt-3">
+            <EmptyState title={empty.title} body={empty.body} />
           </div>
         ) : (
           <div className="mt-3">

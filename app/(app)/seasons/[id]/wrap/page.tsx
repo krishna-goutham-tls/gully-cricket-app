@@ -11,6 +11,7 @@ import { buildSeasonCards, liveAwardsFromBoard } from "@/lib/seasonWrap";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 
@@ -37,9 +38,24 @@ export default function SeasonWrapPage() {
         }
       : "skip",
   );
+  // Awards are regulars-only above — a cap should not go to a one-off walk-on.
+  // The Book is the season's whole ledger, so its totals come off this second
+  // board with everyone in. Both boards are gated together below: nothing
+  // paints until both have landed, so no card repaints under the reader.
+  const totalsBoard = useQuery(
+    api.stats.leaderboard,
+    token && activeOrgId
+      ? {
+          token,
+          orgId: activeOrgId,
+          includeVisitorsAndJuniors: true,
+          seasonId,
+        }
+      : "skip",
+  );
 
   const cards = useMemo(() => {
-    if (!season || !board) return [];
+    if (!season || !board || !totalsBoard) return [];
     const locked = (season.awards ?? []).map((a) => ({
       kind: a.kind,
       displayName: a.displayName,
@@ -50,8 +66,6 @@ export default function SeasonWrapPage() {
         ? locked
         : liveAwardsFromBoard(board);
     const records = buildRecords(board, { season: true });
-    const sixes = board.batting.reduce((n, r) => n + r.sixes, 0);
-    const wickets = board.bowling.reduce((n, r) => n + r.wickets, 0);
     return buildSeasonCards({
       seasonName: season.name,
       startedAt: season.startedAt,
@@ -59,14 +73,20 @@ export default function SeasonWrapPage() {
       matchCount: board.matchCount,
       awards,
       records,
-      sixes,
-      wickets,
+      totalsBoard,
       allRound: board.allRound,
       soFar: season.status !== "complete",
     });
-  }, [season, board]);
+  }, [season, board, totalsBoard]);
 
   const card = cards[active] ?? null;
+  // Records is the long version of the awards slides, so the door opens once
+  // the reader has reached them — offering it over the title card would be
+  // asking them to leave before the wrap has said anything.
+  const firstAwardCard = cards.findIndex((c) =>
+    c.variant === "pots" || c.variant === "caps" || c.variant === "roast",
+  );
+  const showRecordsDoor = firstAwardCard >= 0 && active >= firstAwardCard;
 
   function goTo(i: number) {
     const el = railRef.current;
@@ -75,7 +95,10 @@ export default function SeasonWrapPage() {
     setActive(i);
   }
 
-  if (season === undefined || (season && board === undefined)) {
+  if (
+    season === undefined ||
+    (season && (board === undefined || totalsBoard === undefined))
+  ) {
     return (
       <div className="flex min-h-dvh flex-col bg-ink px-5 pt-[calc(var(--safe-top)+0.5rem)]">
         <button
@@ -172,6 +195,14 @@ export default function SeasonWrapPage() {
                 label="Share"
                 className="w-full"
               />
+            ) : null}
+            {showRecordsDoor ? (
+              <Link
+                href="/records"
+                className="mt-2 flex min-h-11 items-center justify-center rounded-xl text-[13px] font-semibold text-bg/70 active:bg-white/10"
+              >
+                See all the trophies ›
+              </Link>
             ) : null}
             <p className="mt-2 text-center text-[13px] text-bg/70">
               {active + 1} of {cards.length}

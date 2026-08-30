@@ -24,6 +24,15 @@ import {
   tagsForUsers,
   type PlayerTag,
 } from "./lib/playerLabel";
+import {
+  SHELF_KINDS,
+  awardTone,
+  awardsFromShelf,
+  isShelfKind,
+  type SeasonAward,
+  type ShelfAward,
+  type ShelfRow,
+} from "./lib/awards";
 
 type Format = "limited" | "test";
 
@@ -40,11 +49,20 @@ type BatAgg = {
   sixes: number;
   /** Legal balls faced off which the bat scored nothing. */
   dots: number;
+  /** Ones off the bat — the Nudger award's whole measure. */
+  singles: number;
   innings: Set<string>;
   dismissals: number;
   /** Dismissed for 0; golden = dismissed off the first ball faced. */
   ducks: number;
   goldenDucks: number;
+  /**
+   * Ducks in an innings where they actually faced a ball. Separate from
+   * `ducks` because that one counts the non-striker run out for 0 too, and
+   * the shelf's Duck Collector is about failing with the bat, not standing
+   * at the wrong end.
+   */
+  facedDucks: number;
   bestScore: number;
   scoreThisInnings: Map<string, number>;
   /** Balls faced per innings — lets a dismissal tell a golden duck apart. */
@@ -188,6 +206,24 @@ async function aggregateOrg(
    */
   const turnout = new Map<string, number>();
   /**
+   * Per player, per counter, the createdAt of the ball that last moved it.
+   * Every counter here only ever goes up, so its last increment is the moment
+   * the player reached the total they finish the window on — which is what the
+   * shelf's "who got there first" tie-break needs, without a second pass.
+   * Matches are not read in date order, hence the max rather than last-write.
+   */
+  const reachedAt = new Map<string, Map<string, number>>();
+  const markAt = (userId: Id<"users">, counter: string, at: number) => {
+    const key = String(userId);
+    let row = reachedAt.get(key);
+    if (!row) {
+      row = new Map();
+      reachedAt.set(key, row);
+    }
+    const seen = row.get(counter);
+    if (seen === undefined || at > seen) row.set(counter, at);
+  };
+  /**
    * Win credit and contribution, keyed by player. Folded in the same match
    * pass as turnout so a named player with zero points still has a record.
    */
@@ -236,10 +272,12 @@ async function aggregateOrg(
         fours: 0,
         sixes: 0,
         dots: 0,
+        singles: 0,
         innings: new Set(),
         dismissals: 0,
         ducks: 0,
         goldenDucks: 0,
+        facedDucks: 0,
         bestScore: 0,
         scoreThisInnings: new Map(),
         ballsThisInnings: new Map(),
@@ -380,7 +418,10 @@ async function aggregateOrg(
     for (const b of balls) {
       // Drop tags ride every row (rare on a retirement marker, but the tag is
       // just a patched field, not a delivery) — count before the retire skip.
-      if (b.droppedById) bumpDrop(b.droppedById);
+      if (b.droppedById) {
+        bumpDrop(b.droppedById);
+        markAt(b.droppedById, "field.drops", b.createdAt);
+      }
       // Retirement markers are not deliveries
       if (b.isRetire) continue;
       const innKey = String(b.inningsId);
@@ -393,13 +434,30 @@ async function aggregateOrg(
       bat.innings.add(innKey);
       bat.runs += b.runsBat;
       trackMatch(b.strikerId, String(match._id));
+      if (b.runsBat > 0) markAt(b.strikerId, "bat.runs", b.createdAt);
       const faced = b.isLegal || b.extrasType === "noball";
-      if (faced) bat.balls += 1;
+      if (faced) {
+        bat.balls += 1;
+        markAt(b.strikerId, "bat.balls", b.createdAt);
+      }
       // A dot is a legal ball the bat got nothing off. Byes and leg-byes still
       // count as dots for the batter — the runs weren't theirs.
-      if (b.isLegal && b.runsBat === 0) bat.dots += 1;
-      if (b.runsBat === 4) bat.fours += 1;
-      if (b.runsBat === 6) bat.sixes += 1;
+      if (b.isLegal && b.runsBat === 0) {
+        bat.dots += 1;
+        markAt(b.strikerId, "bat.dots", b.createdAt);
+      }
+      if (b.runsBat === 1) {
+        bat.singles += 1;
+        markAt(b.strikerId, "bat.singles", b.createdAt);
+      }
+      if (b.runsBat === 4) {
+        bat.fours += 1;
+        markAt(b.strikerId, "bat.fours", b.createdAt);
+      }
+      if (b.runsBat === 6) {
+        bat.sixes += 1;
+        markAt(b.strikerId, "bat.sixes", b.createdAt);
+      }
       const prev = bat.scoreThisInnings.get(innKey) ?? 0;
       const next = prev + b.runsBat;
       bat.scoreThisInnings.set(innKey, next);
@@ -436,13 +494,18 @@ async function aggregateOrg(
         // faced (a no-ball dismissal can't happen, so faced-balls == 1 is safe).
         if ((outBat.scoreThisInnings.get(innKey) ?? 0) === 0) {
           outBat.ducks += 1;
-          if ((outBat.ballsThisInnings.get(innKey) ?? 0) === 1)
-            outBat.goldenDucks += 1;
+          const ballsFaced = outBat.ballsThisInnings.get(innKey) ?? 0;
+          if (ballsFaced === 1) outBat.goldenDucks += 1;
+          if (ballsFaced >= 1) {
+            outBat.facedDucks += 1;
+            markAt(b.playerOutId, "bat.ducks", b.createdAt);
+          }
         }
         // Catches, mirroring story.ts's Player-of-the-Match credit: a caught
         // dismissal only, credited to the fielder on the ball.
         if (b.wicketType === "caught" && b.fielderId) {
           bumpCatch(b.fielderId);
+          markAt(b.fielderId, "field.catches", b.createdAt);
           trackMatch(b.fielderId, String(match._id));
           if (bowlSide) addPts(bowlSide, b.fielderId, CATCH_POINTS);
         }
@@ -478,8 +541,16 @@ async function aggregateOrg(
       bowl.innings.add(innKey);
       trackMatch(b.bowlerId, String(match._id));
       bowl.runs += b.runsBat + b.extrasRuns;
-      if (b.isLegal) bowl.legalBalls += 1;
-      if (b.isLegal && b.runsBat + b.extrasRuns === 0) bowl.dots += 1;
+      if (b.runsBat + b.extrasRuns > 0)
+        markAt(b.bowlerId, "bowl.runs", b.createdAt);
+      if (b.isLegal) {
+        bowl.legalBalls += 1;
+        markAt(b.bowlerId, "bowl.legalBalls", b.createdAt);
+      }
+      if (b.isLegal && b.runsBat + b.extrasRuns === 0) {
+        bowl.dots += 1;
+        markAt(b.bowlerId, "bowl.dots", b.createdAt);
+      }
       if (b.extrasType === "wide" || b.extrasType === "noball")
         bowl.widesNoballs += 1;
       if (b.runsBat === 6) bowl.sixesConceded += 1;
@@ -488,6 +559,7 @@ async function aggregateOrg(
       const credited = b.isWicket && b.wicketType !== "runout";
       if (credited) {
         bowl.wickets += 1;
+        markAt(b.bowlerId, "bowl.wickets", b.createdAt);
         per.wickets += 1;
         const mKey = String(match._id);
         bowl.wicketsByMatch.set(mKey, (bowl.wicketsByMatch.get(mKey) ?? 0) + 1);
@@ -588,6 +660,7 @@ async function aggregateOrg(
     allRoundMatches,
     turnout,
     records,
+    reachedAt,
     focus,
     matchCount: completed.length,
   };
@@ -895,42 +968,100 @@ function boardFilter<T extends { playerTags: PlayerTag[] }>(
   return rows.filter((r) => isBoardRegular(r.playerTags));
 }
 
+/**
+ * Turnout and the reached-at marks, stamped onto whatever board row is being
+ * ranked. Only the award tie-break ladder reads these — the Leaders payload
+ * builds its own rows and never sees them.
+ */
+function stampContender<T extends { userId: Id<"users"> }>(
+  rows: T[],
+  turnout: Map<string, number>,
+  reachedAt: Map<string, Map<string, number>>,
+): Array<T & { turnoutMatches: number; at: Map<string, number> }> {
+  return rows.map((r) => ({
+    ...r,
+    turnoutMatches: turnout.get(String(r.userId)) ?? 0,
+    at: reachedAt.get(String(r.userId)) ?? new Map<string, number>(),
+  }));
+}
+
 export async function loadRegularsBoard(
   ctx: QueryCtx | MutationCtx,
   orgId: Id<"orgs">,
   window: { afterTs?: number; beforeTs?: number } = {},
 ) {
   const snap = await aggregateOrg(ctx, orgId, window);
+  // Drops and turnout reach players who never batted, bowled or held a catch —
+  // the Butterfingers roast and the roast floor both need those names.
   const keys = [
     ...Array.from(snap.batting.keys()),
     ...Array.from(snap.bowling.keys()),
     ...Array.from(snap.catches.keys()),
+    ...Array.from(snap.drops.keys()),
+    ...Array.from(snap.turnout.keys()),
   ];
   const names = await resolveNames(ctx, keys);
   const tags = await tagsForUsers(ctx, orgId, keys);
+
+  // One row per regular who turned out at all, carrying every counter the
+  // shelf ranks on. Built here rather than on the three boards because a
+  // player who only ever dropped a catch belongs on the shelf and on none
+  // of them.
+  const shelf: ShelfRow[] = Array.from(new Set(keys))
+    .filter((key) => isBoardRegular(tags.get(key) ?? []))
+    .map((key) => {
+      const bat = snap.batting.get(key);
+      const bowl = snap.bowling.get(key);
+      return {
+        userId: (bat?.userId ?? bowl?.userId ?? key) as Id<"users">,
+        displayName: names.get(key) ?? "Player",
+        turnoutMatches: snap.turnout.get(key) ?? 0,
+        at: snap.reachedAt.get(key) ?? new Map<string, number>(),
+        runs: bat?.runs ?? 0,
+        fours: bat?.fours ?? 0,
+        sixes: bat?.sixes ?? 0,
+        ballsFaced: bat?.balls ?? 0,
+        singles: bat?.singles ?? 0,
+        dotsFaced: bat?.dots ?? 0,
+        ducks: bat?.facedDucks ?? 0,
+        wickets: bowl?.wickets ?? 0,
+        legalBallsBowled: bowl?.legalBalls ?? 0,
+        dotsConceded: bowl?.dots ?? 0,
+        catches: snap.catches.get(key) ?? 0,
+        drops: snap.drops.get(key) ?? 0,
+      };
+    });
+
   return {
     matchCount: snap.matchCount,
-    allRound: boardFilter(
-      stampTags(
-        buildAllRoundRows(
-          snap.batting,
-          snap.bowling,
-          snap.catches,
-          snap.allRoundMatches,
-          names,
+    allRound: stampContender(
+      boardFilter(
+        stampTags(
+          buildAllRoundRows(
+            snap.batting,
+            snap.bowling,
+            snap.catches,
+            snap.allRoundMatches,
+            names,
+          ),
+          tags,
         ),
-        tags,
+        false,
       ),
-      false,
+      snap.turnout,
+      snap.reachedAt,
     ),
-    batting: boardFilter(
-      stampTags(buildBattingRows(snap.batting, names), tags),
-      false,
+    batting: stampContender(
+      boardFilter(stampTags(buildBattingRows(snap.batting, names), tags), false),
+      snap.turnout,
+      snap.reachedAt,
     ),
-    bowling: boardFilter(
-      stampTags(buildBowlingRows(snap.bowling, names), tags),
-      false,
+    bowling: stampContender(
+      boardFilter(stampTags(buildBowlingRows(snap.bowling, names), tags), false),
+      snap.turnout,
+      snap.reachedAt,
     ),
+    shelf,
   };
 }
 
@@ -1068,11 +1199,118 @@ export const leaderboard = query({
   },
 });
 
+/**
+ * The window a season covers, exactly as the Leaders board reads it: from
+ * startedAt, and frozen at endedAt once the season is complete so a finished
+ * season never quietly picks up a later match. Null means "not this org's
+ * season", which every caller turns into an empty answer.
+ */
+async function seasonWindow(
+  ctx: QueryCtx,
+  orgId: Id<"orgs">,
+  seasonId: Id<"seasons">,
+): Promise<{ afterTs: number; beforeTs: number } | null> {
+  const season = await ctx.db.get(seasonId);
+  if (!season || String(season.orgId) !== String(orgId)) return null;
+  const now = Date.now();
+  return {
+    afterTs: season.startedAt,
+    beforeTs: Math.min(now, season.endedAt ?? now),
+  };
+}
+
+/**
+ * A finished season's shelf, rebuilt from what that season stamped when it
+ * closed. Same rule the season page and its wrap cards already follow: history
+ * is frozen, and a match edited, abandoned or deleted after the season ended
+ * must not rewrite who won. Only the twelve shelf kinds come back — the six
+ * legacy caps are a Leaders idea and have no card here — in SHELF order,
+ * with tone.
+ */
+async function stampedShelfAwards(
+  ctx: QueryCtx,
+  awards: SeasonAward[],
+): Promise<ShelfAward[]> {
+  const mine = awards.filter((a) => isShelfKind(a.kind));
+  const names = await resolveNames(
+    ctx,
+    mine.map((a) => String(a.userId)),
+  );
+  const byKind = new Map(mine.map((a) => [String(a.kind), a]));
+  const out: ShelfAward[] = [];
+  for (const kind of SHELF_KINDS) {
+    const a = byKind.get(kind);
+    if (!a) continue;
+    out.push({
+      kind,
+      userId: a.userId,
+      displayName: names.get(String(a.userId)) ?? "Player",
+      value: a.value,
+      display: a.display,
+      tone: awardTone(kind),
+      // Always empty: the stamp records the winner, not the field. A frozen
+      // season cannot recompute who tied without recomputing the season.
+      tiedWith: [],
+    });
+  }
+  return out;
+}
+
+/**
+ * The trophy shelf: one winner per award, honours then roasts. Regulars only,
+ * same population as the season awards, so the live shelf and the stamped
+ * season can never name different people off the same cricket.
+ *
+ * Always a season. A trophy is rolling — it moves to whoever claims it next —
+ * and an all-time shelf would just freeze the same names forever, so there is
+ * no all-time shelf to ask for.
+ */
+export const shelf = query({
+  args: {
+    token: v.optional(v.string()),
+    orgId: v.id("orgs"),
+    seasonId: v.id("seasons"),
+  },
+  handler: async (ctx, args) => {
+    try {
+      await requireActiveMembership(ctx, args.token, args.orgId);
+    } catch {
+      return null;
+    }
+
+    const season = await ctx.db.get(args.seasonId);
+    if (!season || String(season.orgId) !== String(args.orgId)) return null;
+
+    // A closed season serves the stamp it took when it ended. Recomputing it
+    // would let a match edited afterwards rewrite history, and Records would
+    // then disagree with that season's own wrap cards. Only the live season
+    // is computed fresh — it is still up for grabs.
+    //
+    // The one exception is a season stamped before the twelve shelf awards
+    // existed: its stamp holds only the legacy caps, so the filter above finds
+    // nothing and the shelf would come back as twelve empty slots. There is no
+    // history to honour there, so it recomputes. A *partial* stamp is still
+    // authoritative — one shelf kind is enough — because mixing stamped and
+    // recomputed winners on one board would name two people off one season.
+    if (season.status === "complete") {
+      const stamped = await stampedShelfAwards(ctx, season.awards ?? []);
+      if (stamped.length > 0) return { awards: stamped };
+    }
+
+    const w = await seasonWindow(ctx, args.orgId, args.seasonId);
+    if (!w) return null;
+    const board = await loadRegularsBoard(ctx, args.orgId, w);
+    return { awards: awardsFromShelf(board.shelf) };
+  },
+});
+
 export const playerStats = query({
   args: {
     token: v.optional(v.string()),
     orgId: v.id("orgs"),
     userId: v.id("users"),
+    /** Omit for the career numbers — the default every profile shows. */
+    seasonId: v.optional(v.id("seasons")),
   },
   handler: async (ctx, args) => {
     try {
@@ -1084,7 +1322,15 @@ export const playerStats = query({
     const player = await ctx.db.get(args.userId);
     if (!player) return null;
 
+    let window: { afterTs?: number; beforeTs?: number } = {};
+    if (args.seasonId) {
+      const w = await seasonWindow(ctx, args.orgId, args.seasonId);
+      if (!w) return null;
+      window = w;
+    }
+
     const { batting, bowling, focus } = await aggregateOrg(ctx, args.orgId, {
+      ...window,
       focusPlayerId: args.userId,
     });
     const names = await resolveNames(ctx, [
@@ -1424,3 +1670,4 @@ export const playerStats = query({
     };
   },
 });
+

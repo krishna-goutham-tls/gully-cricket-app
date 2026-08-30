@@ -8,7 +8,7 @@ import {
   ModeLine,
   NemesisCard,
   StatTile,
-  TrophyShelf,
+  FeatChips,
   type LogRow,
   type Profile,
 } from "@/components/player/ProfileParts";
@@ -399,8 +399,12 @@ export default function PlayerDetailPage() {
     api.seasons.list,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
   );
-
-  if (stats === undefined) {
+  // Both, or neither. The season chips are prepended to the career chips, so a
+  // `seasons` that lands a tick after `stats` reorders the row under the
+  // reader's thumb — and a share tapped in that window builds its poster
+  // around the wrong headline trophy. `seasons` is one small table read; the
+  // profile already waits on something far heavier.
+  if (stats === undefined || seasons === undefined) {
     return (
       <div className="flex items-center justify-center bg-bg py-24">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-line border-t-accent" />
@@ -433,6 +437,9 @@ export default function PlayerDetailPage() {
       m.bowling.toughest ||
       m.bowling.easiest,
   );
+  // `?? []` is safe: null is a membership we could not read, and `stats` is
+  // null on the same failure, so the page has already shown "Player not found"
+  // before this line can matter.
   const trophies = [
     ...computeSeasonTrophies(seasons ?? [], String(stats.userId)),
     ...computeTrophies(stats),
@@ -608,7 +615,7 @@ export default function PlayerDetailPage() {
           </Section>
         ) : null}
 
-        <TrophyShelf trophies={trophies} />
+        <FeatChips trophies={trophies} />
 
         {/* High on the page deliberately — rivalries are the most human thing
             here, and they land in the first fold. */}

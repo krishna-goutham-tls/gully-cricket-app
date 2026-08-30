@@ -410,6 +410,21 @@ export default defineSchema({
             v.literal("most_sixes"),
             v.literal("highest_sr"),
             v.literal("best_economy"),
+            // The trophy shelf, added on top of the six above. Additive on
+            // purpose: seasons that ended before the shelf existed carry only
+            // the first six, and those rows still have to validate.
+            v.literal("run_machine"),
+            v.literal("six_machine"),
+            v.literal("boundary_king"),
+            v.literal("the_anchor"),
+            v.literal("nudger"),
+            v.literal("wicket_taker"),
+            v.literal("workhorse"),
+            v.literal("the_miser"),
+            v.literal("safe_hands"),
+            v.literal("dot_magnet"),
+            v.literal("duck_collector"),
+            v.literal("butterfingers"),
           ),
           userId: v.id("users"),
           value: v.number(),
