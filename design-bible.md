@@ -115,8 +115,7 @@ Cards: `rounded-2xl border border-line bg-surface shadow-card`.
 2. **PIN pad**
 3. **Coin toss** — the coin is the control. Bat / Bowl stay large and **equal**.
 4. **Landing / rules / legal** — gold fills, bigger type, DemoPad miniature keys.
-5. **Trophy Shelf** (`/records`, the Cabinet on a profile, the trophy share
-   card) — the app's only "trophy shelf": the twelve photographed trophies.
+5. **Trophy Shelf** (`/records` and the trophy share card) — the app's only "trophy shelf": the twelve photographed trophies.
    The chips on a player profile are `FeatChips`, not this. `/shelf` is gone,
    redirected in `next.config.mjs`. On `/records` the top-level split is tone —
    **Honours** on paper, **The Roast** on an ink band — and each holds its

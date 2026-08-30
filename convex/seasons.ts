@@ -149,7 +149,14 @@ export const list = query({
     orgId: v.id("orgs"),
   },
   handler: async (ctx, args) => {
-    await requireActiveMembership(ctx, args.token, args.orgId);
+    // Null, not a throw: a stale token or a revoked membership must degrade
+    // into the page's own "unavailable" copy, the way every sibling query
+    // already does. A throw here takes the whole screen with it.
+    try {
+      await requireActiveMembership(ctx, args.token, args.orgId);
+    } catch {
+      return null;
+    }
     return await seasonsForOrg(ctx, args.orgId);
   },
 });

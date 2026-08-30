@@ -144,8 +144,7 @@ const TROPHY_ICON: Record<string, LucideIcon> = {
  * everything solid but not headline. Renders nothing when there is nothing —
  * an empty row reads as failure, not a section worth keeping.
  *
- * Not the trophies. Those are awarded by a season, live on `/records`, and
- * appear on this page below, in the Cabinet.
+ * Not the trophies. Those are awarded by a season and live on `/records`.
  */
 export function FeatChips({ trophies }: { trophies: Trophy[] }) {
   if (trophies.length === 0) return null;

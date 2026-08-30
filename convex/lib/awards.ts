@@ -165,7 +165,7 @@ type ShelfSpec = {
 /**
  * Render order, and the whole definition of the shelf: honours first, roasts
  * last. Add a kind here and to the schema union and it appears everywhere —
- * the shelf, the stamped season, the profile cabinet.
+ * the shelf and the stamped season.
  */
 const SHELF: ShelfSpec[] = [
   {
@@ -242,6 +242,19 @@ const SHELF: ShelfSpec[] = [
   },
 ];
 
+/**
+ * The twelve shelf kinds in render order. A stamped season carries all
+ * eighteen in one array, so anything rebuilding a shelf out of a stamp needs
+ * both this order and the test below to drop the six legacy caps.
+ */
+export const SHELF_KINDS: ShelfAwardKind[] = SHELF.map((s) => s.kind);
+
+const SHELF_KIND_SET = new Set<string>(SHELF_KINDS);
+
+export function isShelfKind(kind: string): kind is ShelfAwardKind {
+  return SHELF_KIND_SET.has(kind);
+}
+
 /** Honours are all six legacy kinds; nothing stamped before today was a roast. */
 const LEGACY_TONE: Record<LegacyAwardKind, AwardTone> = {
   pots: "honor",
@@ -262,22 +275,6 @@ export function awardTone(kind: string): AwardTone {
     LEGACY_TONE[kind as LegacyAwardKind] ??
     ("honor" as const)
   );
-}
-
-/** Stamped order for anything holding a mixed bag of kinds (the cabinet). */
-const KIND_ORDER: string[] = [
-  "pots",
-  "orange_cap",
-  "purple_cap",
-  "most_sixes",
-  "highest_sr",
-  "best_economy",
-  ...SHELF.map((s) => s.kind as string),
-];
-
-export function kindRank(kind: string): number {
-  const i = KIND_ORDER.indexOf(kind);
-  return i < 0 ? KIND_ORDER.length : i;
 }
 
 export type ShelfAward = {

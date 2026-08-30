@@ -767,6 +767,15 @@ export default function LeaderboardPage() {
               <div key={i} className="h-12 animate-pulse rounded-2xl bg-line" />
             ))}
           </div>
+        ) : data === null ? (
+          // Null is a membership we could not read, not a board with nothing
+          // on it — "No completed matches yet" would be a false empty state.
+          <div className="mt-3">
+            <EmptyState
+              title="Leaders unavailable"
+              body="Sign in to this community to see its boards."
+            />
+          </div>
         ) : !hasData ? (
           <div className="mt-3">
             <EmptyState title={empty.title} body={empty.body} />

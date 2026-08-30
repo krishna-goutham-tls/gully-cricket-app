@@ -1,7 +1,7 @@
 /**
- * Every word the app says about an award, in one place — the shelf, the
- * cabinet and the share card all read from here so a trophy is never called
- * two things on two screens.
+ * Every word the app says about an award, in one place — the shelf and the
+ * share card both read from here so a trophy is never called two things on
+ * two screens.
  *
  * `unit` is what the number counts, so `${display} ${unit}` always reads as
  * English ("412 runs", "4 ducks"). `earn` is the one line that says how you
@@ -99,7 +99,7 @@ const COPY: Record<StampedAwardKind, AwardCopy> = {
     hasImage: true,
   },
 
-  // Stamped on finished seasons before the shelf existed. Cabinet only.
+  // Stamped on finished seasons before the shelf existed. Season pages only.
   pots: {
     name: "Player of the Season",
     unit: "points",

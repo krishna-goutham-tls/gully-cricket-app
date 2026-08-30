@@ -25,14 +25,14 @@ import {
   type PlayerTag,
 } from "./lib/playerLabel";
 import {
+  SHELF_KINDS,
   awardTone,
   awardsFromShelf,
-  kindRank,
-  type AwardTone,
-  type SeasonAwardKind,
+  isShelfKind,
+  type SeasonAward,
+  type ShelfAward,
   type ShelfRow,
 } from "./lib/awards";
-import { seasonsForOrg } from "./lib/seasons";
 
 type Format = "limited" | "test";
 
@@ -1220,16 +1220,56 @@ async function seasonWindow(
 }
 
 /**
+ * A finished season's shelf, rebuilt from what that season stamped when it
+ * closed. Same rule the season page and its wrap cards already follow: history
+ * is frozen, and a match edited, abandoned or deleted after the season ended
+ * must not rewrite who won. Only the twelve shelf kinds come back — the six
+ * legacy caps are a Leaders idea and have no card here — in SHELF order,
+ * with tone.
+ */
+async function stampedShelfAwards(
+  ctx: QueryCtx,
+  awards: SeasonAward[],
+): Promise<ShelfAward[]> {
+  const mine = awards.filter((a) => isShelfKind(a.kind));
+  const names = await resolveNames(
+    ctx,
+    mine.map((a) => String(a.userId)),
+  );
+  const byKind = new Map(mine.map((a) => [String(a.kind), a]));
+  const out: ShelfAward[] = [];
+  for (const kind of SHELF_KINDS) {
+    const a = byKind.get(kind);
+    if (!a) continue;
+    out.push({
+      kind,
+      userId: a.userId,
+      displayName: names.get(String(a.userId)) ?? "Player",
+      value: a.value,
+      display: a.display,
+      tone: awardTone(kind),
+      // Always empty: the stamp records the winner, not the field. A frozen
+      // season cannot recompute who tied without recomputing the season.
+      tiedWith: [],
+    });
+  }
+  return out;
+}
+
+/**
  * The trophy shelf: one winner per award, honours then roasts. Regulars only,
  * same population as the season awards, so the live shelf and the stamped
  * season can never name different people off the same cricket.
+ *
+ * Always a season. A trophy is rolling — it moves to whoever claims it next —
+ * and an all-time shelf would just freeze the same names forever, so there is
+ * no all-time shelf to ask for.
  */
 export const shelf = query({
   args: {
     token: v.optional(v.string()),
     orgId: v.id("orgs"),
-    /** Omit for all time. */
-    seasonId: v.optional(v.id("seasons")),
+    seasonId: v.id("seasons"),
   },
   handler: async (ctx, args) => {
     try {
@@ -1238,89 +1278,21 @@ export const shelf = query({
       return null;
     }
 
-    let window: { afterTs?: number; beforeTs?: number } = {};
-    if (args.seasonId) {
-      const w = await seasonWindow(ctx, args.orgId, args.seasonId);
-      if (!w) return null;
-      window = w;
+    const season = await ctx.db.get(args.seasonId);
+    if (!season || String(season.orgId) !== String(args.orgId)) return null;
+
+    // A closed season serves the stamp it took when it ended. Recomputing it
+    // would let a match edited afterwards rewrite history, and Records would
+    // then disagree with that season's own wrap cards. Only the live season
+    // is computed fresh — it is still up for grabs.
+    if (season.status === "complete" && (season.awards?.length ?? 0) > 0) {
+      return { awards: await stampedShelfAwards(ctx, season.awards!) };
     }
 
-    const board = await loadRegularsBoard(ctx, args.orgId, window);
+    const w = await seasonWindow(ctx, args.orgId, args.seasonId);
+    if (!w) return null;
+    const board = await loadRegularsBoard(ctx, args.orgId, w);
     return { awards: awardsFromShelf(board.shelf) };
-  },
-});
-
-/**
- * One player's trophies, season by season, newest first. Finished seasons read
- * their stamped awards — that is the frozen record, and recomputing it would
- * let a later edit rewrite history. The active season is computed live and
- * flagged `provisional`, because it is still up for grabs.
- */
-export const cabinet = query({
-  args: {
-    token: v.optional(v.string()),
-    orgId: v.id("orgs"),
-    userId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    try {
-      await requireActiveMembership(ctx, args.token, args.orgId);
-    } catch {
-      return null;
-    }
-
-    const key = String(args.userId);
-    const seasons = await seasonsForOrg(ctx, args.orgId);
-    type CabinetEntry = {
-      seasonId: Id<"seasons">;
-      seasonName: string;
-      kind: SeasonAwardKind;
-      display: string;
-      tone: AwardTone;
-      provisional: boolean;
-    };
-    // Newest season first (seasonsForOrg's order), each season's own trophies
-    // in shelf order.
-    const out: CabinetEntry[] = [];
-
-    for (const season of seasons) {
-      const mine: CabinetEntry[] = [];
-      if (season.status === "active") {
-        const board = await loadRegularsBoard(ctx, args.orgId, {
-          afterTs: season.startedAt,
-          beforeTs: Date.now(),
-        });
-        for (const a of awardsFromShelf(board.shelf)) {
-          if (String(a.userId) !== key) continue;
-          mine.push({
-            seasonId: season._id,
-            seasonName: season.name,
-            kind: a.kind,
-            display: a.display,
-            tone: a.tone,
-            provisional: true,
-          });
-        }
-      } else {
-        // Seasons that ended before the shelf existed carry only the original
-        // six kinds. Nothing to backfill — that is what those seasons were.
-        for (const a of season.awards ?? []) {
-          if (String(a.userId) !== key) continue;
-          mine.push({
-            seasonId: season._id,
-            seasonName: season.name,
-            kind: a.kind,
-            display: a.display,
-            tone: awardTone(a.kind),
-            provisional: false,
-          });
-        }
-      }
-      mine.sort((a, b) => kindRank(a.kind) - kindRank(b.kind));
-      out.push(...mine);
-    }
-
-    return out;
   },
 });
 

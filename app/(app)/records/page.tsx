@@ -174,9 +174,19 @@ export default function RecordsPage() {
   const seasonArg = selectedSeason ? { seasonId: selectedSeason._id } : {};
   const ready = Boolean(token && activeOrgId) && seasons !== undefined;
 
+  // Trophies are season-bound. They roll — a trophy moves to whoever claims it
+  // next season — so an all-time shelf would just freeze the same names, and
+  // there is nothing to ask the server for. The records rows below still run
+  // all time.
   const shelf = useQuery(
     api.stats.shelf,
-    ready ? { token: token!, orgId: activeOrgId!, ...seasonArg } : "skip",
+    ready && selectedSeason
+      ? {
+          token: token!,
+          orgId: activeOrgId!,
+          seasonId: selectedSeason._id,
+        }
+      : "skip",
   );
   const board = useQuery(
     api.stats.leaderboard,
@@ -217,7 +227,10 @@ export default function RecordsPage() {
   const heroKind = HONOURS.find((k) => byKind.has(k)) ?? null;
   const gridHonours = HONOURS.filter((k) => k !== heroKind);
 
-  const loading = shelf === undefined || board === undefined;
+  // `shelf` stays undefined forever on All time because the query is skipped —
+  // only wait on it when a season is actually asking for one.
+  const loading =
+    board === undefined || (selectedSeason !== null && shelf === undefined);
 
   return (
     <div>
@@ -260,40 +273,52 @@ export default function RecordsPage() {
               </h2>
             </div>
 
-            <div className="mt-3">
-              <SubLabel>Trophies</SubLabel>
-            </div>
-            {heroKind ? (
-              <div className="mt-2">
-                <TrophyHeroCard
-                  award={byKind.get(heroKind)!}
-                  scopeLabel={scopeLabel}
-                  tone="honor"
-                />
-              </div>
+            {/* All time gets no trophy block at all, and says nothing about
+                it: the scope menu overhead already reads "All time", and a
+                line explaining where trophies went is an explainer nobody
+                asked for. */}
+            {selectedSeason ? (
+              <>
+                <div className="mt-3">
+                  <SubLabel>Trophies</SubLabel>
+                </div>
+                {heroKind ? (
+                  <div className="mt-2">
+                    <TrophyHeroCard
+                      award={byKind.get(heroKind)!}
+                      scopeLabel={scopeLabel}
+                      tone="honor"
+                    />
+                  </div>
+                ) : null}
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  {gridHonours.map((kind) => {
+                    const won = byKind.get(kind);
+                    return won ? (
+                      <TrophyGridCard
+                        key={kind}
+                        award={won}
+                        scopeLabel={scopeLabel}
+                        tone="honor"
+                      />
+                    ) : (
+                      <TrophyEmptySlot key={kind} kind={kind} tone="honor" />
+                    );
+                  })}
+                </div>
+              </>
             ) : null}
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              {gridHonours.map((kind) => {
-                const won = byKind.get(kind);
-                return won ? (
-                  <TrophyGridCard
-                    key={kind}
-                    award={won}
-                    scopeLabel={scopeLabel}
-                    tone="honor"
-                  />
-                ) : (
-                  <TrophyEmptySlot key={kind} kind={kind} tone="honor" />
-                );
-              })}
-            </div>
 
             {records.honour.length > 0 ? (
               <>
-                <div className="mt-6">
-                  <SubLabel>Records</SubLabel>
-                </div>
-                <div className="mt-2">
+                {/* The sub-label only earns its space when there is a trophy
+                    block above it to be told apart from. */}
+                {selectedSeason ? (
+                  <div className="mt-6">
+                    <SubLabel>Records</SubLabel>
+                  </div>
+                ) : null}
+                <div className={selectedSeason ? "mt-2" : "mt-3"}>
                   <RecordRows items={records.honour} />
                 </div>
               </>
@@ -302,47 +327,56 @@ export default function RecordsPage() {
 
           {/* The roast band flips the page to ink. Same cards, same rows, dark
               room — the register changes with the ground, and it costs no
-              colour the bible does not already own. */}
-          <section className="mt-2 bg-ink pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-5">
-            <div className="mx-auto max-w-md px-5">
-              <div className="flex items-center gap-1.5 px-1">
-                <Flame className="h-4 w-4 text-bg/70" aria-hidden />
-                <h2 className="text-xl font-semibold tracking-tight text-bg">
-                  The Roast
-                </h2>
-              </div>
+              colour the bible does not already own. On All time it has no
+              trophies to show, so it only appears if the rows carry it. */}
+          {selectedSeason || records.roast.length > 0 ? (
+            <section className="mt-2 bg-ink pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-5">
+              <div className="mx-auto max-w-md px-5">
+                <div className="flex items-center gap-1.5 px-1">
+                  <Flame className="h-4 w-4 text-bg/70" aria-hidden />
+                  <h2 className="text-xl font-semibold tracking-tight text-bg">
+                    The Roast
+                  </h2>
+                </div>
 
-              <div className="mt-3">
-                <SubLabel onInk>Trophies</SubLabel>
-              </div>
-              <div className="mt-2 grid grid-cols-2 gap-3">
-                {ROASTS.map((kind) => {
-                  const won = byKind.get(kind);
-                  return won ? (
-                    <TrophyGridCard
-                      key={kind}
-                      award={won}
-                      scopeLabel={scopeLabel}
-                      tone="roast"
-                    />
-                  ) : (
-                    <TrophyEmptySlot key={kind} kind={kind} tone="roast" />
-                  );
-                })}
-              </div>
+                {selectedSeason ? (
+                  <>
+                    <div className="mt-3">
+                      <SubLabel onInk>Trophies</SubLabel>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-3">
+                      {ROASTS.map((kind) => {
+                        const won = byKind.get(kind);
+                        return won ? (
+                          <TrophyGridCard
+                            key={kind}
+                            award={won}
+                            scopeLabel={scopeLabel}
+                            tone="roast"
+                          />
+                        ) : (
+                          <TrophyEmptySlot key={kind} kind={kind} tone="roast" />
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : null}
 
-              {records.roast.length > 0 ? (
-                <>
-                  <div className="mt-6">
-                    <SubLabel onInk>Records</SubLabel>
-                  </div>
-                  <div className="mt-2">
-                    <RecordRows items={records.roast} onInk />
-                  </div>
-                </>
-              ) : null}
-            </div>
-          </section>
+                {records.roast.length > 0 ? (
+                  <>
+                    {selectedSeason ? (
+                      <div className="mt-6">
+                        <SubLabel onInk>Records</SubLabel>
+                      </div>
+                    ) : null}
+                    <div className={selectedSeason ? "mt-2" : "mt-3"}>
+                      <RecordRows items={records.roast} onInk />
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
         </>
       )}
     </div>

@@ -121,7 +121,7 @@ export type SeasonShareData = {
 
 /**
  * One trophy off the shelf, the way it lands in a WhatsApp group. Deliberately
- * flat strings: the shelf, the cabinet and this card all read the same words
+ * flat strings: the shelf and this card both read the same words
  * out of `lib/awardCopy`, so the card never has to know an award's shape.
  *
  * `name` is the winner's FIRST name — the group knows who Naman is, and one

@@ -43,6 +43,13 @@ export default function SeasonsPage() {
               />
             ))}
           </div>
+        ) : seasons === null ? (
+          // Null is "we could not read this community", not "no seasons" —
+          // telling a signed-out reader to start one would be a lie.
+          <EmptyState
+            title="Seasons unavailable"
+            body="Sign in to this community to see its seasons."
+          />
         ) : seasons.length === 0 ? (
           <EmptyState
             title="No seasons yet"
