@@ -24,6 +24,15 @@ import {
   tagsForUsers,
   type PlayerTag,
 } from "./lib/playerLabel";
+import {
+  awardTone,
+  awardsFromShelf,
+  kindRank,
+  type AwardTone,
+  type SeasonAwardKind,
+  type ShelfRow,
+} from "./lib/awards";
+import { seasonsForOrg } from "./lib/seasons";
 
 type Format = "limited" | "test";
 
@@ -40,11 +49,20 @@ type BatAgg = {
   sixes: number;
   /** Legal balls faced off which the bat scored nothing. */
   dots: number;
+  /** Ones off the bat — the Nudger award's whole measure. */
+  singles: number;
   innings: Set<string>;
   dismissals: number;
   /** Dismissed for 0; golden = dismissed off the first ball faced. */
   ducks: number;
   goldenDucks: number;
+  /**
+   * Ducks in an innings where they actually faced a ball. Separate from
+   * `ducks` because that one counts the non-striker run out for 0 too, and
+   * the shelf's Duck Collector is about failing with the bat, not standing
+   * at the wrong end.
+   */
+  facedDucks: number;
   bestScore: number;
   scoreThisInnings: Map<string, number>;
   /** Balls faced per innings — lets a dismissal tell a golden duck apart. */
@@ -188,6 +206,24 @@ async function aggregateOrg(
    */
   const turnout = new Map<string, number>();
   /**
+   * Per player, per counter, the createdAt of the ball that last moved it.
+   * Every counter here only ever goes up, so its last increment is the moment
+   * the player reached the total they finish the window on — which is what the
+   * shelf's "who got there first" tie-break needs, without a second pass.
+   * Matches are not read in date order, hence the max rather than last-write.
+   */
+  const reachedAt = new Map<string, Map<string, number>>();
+  const markAt = (userId: Id<"users">, counter: string, at: number) => {
+    const key = String(userId);
+    let row = reachedAt.get(key);
+    if (!row) {
+      row = new Map();
+      reachedAt.set(key, row);
+    }
+    const seen = row.get(counter);
+    if (seen === undefined || at > seen) row.set(counter, at);
+  };
+  /**
    * Win credit and contribution, keyed by player. Folded in the same match
    * pass as turnout so a named player with zero points still has a record.
    */
@@ -236,10 +272,12 @@ async function aggregateOrg(
         fours: 0,
         sixes: 0,
         dots: 0,
+        singles: 0,
         innings: new Set(),
         dismissals: 0,
         ducks: 0,
         goldenDucks: 0,
+        facedDucks: 0,
         bestScore: 0,
         scoreThisInnings: new Map(),
         ballsThisInnings: new Map(),
@@ -380,7 +418,10 @@ async function aggregateOrg(
     for (const b of balls) {
       // Drop tags ride every row (rare on a retirement marker, but the tag is
       // just a patched field, not a delivery) — count before the retire skip.
-      if (b.droppedById) bumpDrop(b.droppedById);
+      if (b.droppedById) {
+        bumpDrop(b.droppedById);
+        markAt(b.droppedById, "field.drops", b.createdAt);
+      }
       // Retirement markers are not deliveries
       if (b.isRetire) continue;
       const innKey = String(b.inningsId);
@@ -393,13 +434,30 @@ async function aggregateOrg(
       bat.innings.add(innKey);
       bat.runs += b.runsBat;
       trackMatch(b.strikerId, String(match._id));
+      if (b.runsBat > 0) markAt(b.strikerId, "bat.runs", b.createdAt);
       const faced = b.isLegal || b.extrasType === "noball";
-      if (faced) bat.balls += 1;
+      if (faced) {
+        bat.balls += 1;
+        markAt(b.strikerId, "bat.balls", b.createdAt);
+      }
       // A dot is a legal ball the bat got nothing off. Byes and leg-byes still
       // count as dots for the batter — the runs weren't theirs.
-      if (b.isLegal && b.runsBat === 0) bat.dots += 1;
-      if (b.runsBat === 4) bat.fours += 1;
-      if (b.runsBat === 6) bat.sixes += 1;
+      if (b.isLegal && b.runsBat === 0) {
+        bat.dots += 1;
+        markAt(b.strikerId, "bat.dots", b.createdAt);
+      }
+      if (b.runsBat === 1) {
+        bat.singles += 1;
+        markAt(b.strikerId, "bat.singles", b.createdAt);
+      }
+      if (b.runsBat === 4) {
+        bat.fours += 1;
+        markAt(b.strikerId, "bat.fours", b.createdAt);
+      }
+      if (b.runsBat === 6) {
+        bat.sixes += 1;
+        markAt(b.strikerId, "bat.sixes", b.createdAt);
+      }
       const prev = bat.scoreThisInnings.get(innKey) ?? 0;
       const next = prev + b.runsBat;
       bat.scoreThisInnings.set(innKey, next);
@@ -436,13 +494,18 @@ async function aggregateOrg(
         // faced (a no-ball dismissal can't happen, so faced-balls == 1 is safe).
         if ((outBat.scoreThisInnings.get(innKey) ?? 0) === 0) {
           outBat.ducks += 1;
-          if ((outBat.ballsThisInnings.get(innKey) ?? 0) === 1)
-            outBat.goldenDucks += 1;
+          const ballsFaced = outBat.ballsThisInnings.get(innKey) ?? 0;
+          if (ballsFaced === 1) outBat.goldenDucks += 1;
+          if (ballsFaced >= 1) {
+            outBat.facedDucks += 1;
+            markAt(b.playerOutId, "bat.ducks", b.createdAt);
+          }
         }
         // Catches, mirroring story.ts's Player-of-the-Match credit: a caught
         // dismissal only, credited to the fielder on the ball.
         if (b.wicketType === "caught" && b.fielderId) {
           bumpCatch(b.fielderId);
+          markAt(b.fielderId, "field.catches", b.createdAt);
           trackMatch(b.fielderId, String(match._id));
           if (bowlSide) addPts(bowlSide, b.fielderId, CATCH_POINTS);
         }
@@ -478,8 +541,16 @@ async function aggregateOrg(
       bowl.innings.add(innKey);
       trackMatch(b.bowlerId, String(match._id));
       bowl.runs += b.runsBat + b.extrasRuns;
-      if (b.isLegal) bowl.legalBalls += 1;
-      if (b.isLegal && b.runsBat + b.extrasRuns === 0) bowl.dots += 1;
+      if (b.runsBat + b.extrasRuns > 0)
+        markAt(b.bowlerId, "bowl.runs", b.createdAt);
+      if (b.isLegal) {
+        bowl.legalBalls += 1;
+        markAt(b.bowlerId, "bowl.legalBalls", b.createdAt);
+      }
+      if (b.isLegal && b.runsBat + b.extrasRuns === 0) {
+        bowl.dots += 1;
+        markAt(b.bowlerId, "bowl.dots", b.createdAt);
+      }
       if (b.extrasType === "wide" || b.extrasType === "noball")
         bowl.widesNoballs += 1;
       if (b.runsBat === 6) bowl.sixesConceded += 1;
@@ -488,6 +559,7 @@ async function aggregateOrg(
       const credited = b.isWicket && b.wicketType !== "runout";
       if (credited) {
         bowl.wickets += 1;
+        markAt(b.bowlerId, "bowl.wickets", b.createdAt);
         per.wickets += 1;
         const mKey = String(match._id);
         bowl.wicketsByMatch.set(mKey, (bowl.wicketsByMatch.get(mKey) ?? 0) + 1);
@@ -588,6 +660,7 @@ async function aggregateOrg(
     allRoundMatches,
     turnout,
     records,
+    reachedAt,
     focus,
     matchCount: completed.length,
   };
@@ -895,42 +968,100 @@ function boardFilter<T extends { playerTags: PlayerTag[] }>(
   return rows.filter((r) => isBoardRegular(r.playerTags));
 }
 
+/**
+ * Turnout and the reached-at marks, stamped onto whatever board row is being
+ * ranked. Only the award tie-break ladder reads these — the Leaders payload
+ * builds its own rows and never sees them.
+ */
+function stampContender<T extends { userId: Id<"users"> }>(
+  rows: T[],
+  turnout: Map<string, number>,
+  reachedAt: Map<string, Map<string, number>>,
+): Array<T & { turnoutMatches: number; at: Map<string, number> }> {
+  return rows.map((r) => ({
+    ...r,
+    turnoutMatches: turnout.get(String(r.userId)) ?? 0,
+    at: reachedAt.get(String(r.userId)) ?? new Map<string, number>(),
+  }));
+}
+
 export async function loadRegularsBoard(
   ctx: QueryCtx | MutationCtx,
   orgId: Id<"orgs">,
   window: { afterTs?: number; beforeTs?: number } = {},
 ) {
   const snap = await aggregateOrg(ctx, orgId, window);
+  // Drops and turnout reach players who never batted, bowled or held a catch —
+  // the Butterfingers roast and the roast floor both need those names.
   const keys = [
     ...Array.from(snap.batting.keys()),
     ...Array.from(snap.bowling.keys()),
     ...Array.from(snap.catches.keys()),
+    ...Array.from(snap.drops.keys()),
+    ...Array.from(snap.turnout.keys()),
   ];
   const names = await resolveNames(ctx, keys);
   const tags = await tagsForUsers(ctx, orgId, keys);
+
+  // One row per regular who turned out at all, carrying every counter the
+  // shelf ranks on. Built here rather than on the three boards because a
+  // player who only ever dropped a catch belongs on the shelf and on none
+  // of them.
+  const shelf: ShelfRow[] = Array.from(new Set(keys))
+    .filter((key) => isBoardRegular(tags.get(key) ?? []))
+    .map((key) => {
+      const bat = snap.batting.get(key);
+      const bowl = snap.bowling.get(key);
+      return {
+        userId: (bat?.userId ?? bowl?.userId ?? key) as Id<"users">,
+        displayName: names.get(key) ?? "Player",
+        turnoutMatches: snap.turnout.get(key) ?? 0,
+        at: snap.reachedAt.get(key) ?? new Map<string, number>(),
+        runs: bat?.runs ?? 0,
+        fours: bat?.fours ?? 0,
+        sixes: bat?.sixes ?? 0,
+        ballsFaced: bat?.balls ?? 0,
+        singles: bat?.singles ?? 0,
+        dotsFaced: bat?.dots ?? 0,
+        ducks: bat?.facedDucks ?? 0,
+        wickets: bowl?.wickets ?? 0,
+        legalBallsBowled: bowl?.legalBalls ?? 0,
+        dotsConceded: bowl?.dots ?? 0,
+        catches: snap.catches.get(key) ?? 0,
+        drops: snap.drops.get(key) ?? 0,
+      };
+    });
+
   return {
     matchCount: snap.matchCount,
-    allRound: boardFilter(
-      stampTags(
-        buildAllRoundRows(
-          snap.batting,
-          snap.bowling,
-          snap.catches,
-          snap.allRoundMatches,
-          names,
+    allRound: stampContender(
+      boardFilter(
+        stampTags(
+          buildAllRoundRows(
+            snap.batting,
+            snap.bowling,
+            snap.catches,
+            snap.allRoundMatches,
+            names,
+          ),
+          tags,
         ),
-        tags,
+        false,
       ),
-      false,
+      snap.turnout,
+      snap.reachedAt,
     ),
-    batting: boardFilter(
-      stampTags(buildBattingRows(snap.batting, names), tags),
-      false,
+    batting: stampContender(
+      boardFilter(stampTags(buildBattingRows(snap.batting, names), tags), false),
+      snap.turnout,
+      snap.reachedAt,
     ),
-    bowling: boardFilter(
-      stampTags(buildBowlingRows(snap.bowling, names), tags),
-      false,
+    bowling: stampContender(
+      boardFilter(stampTags(buildBowlingRows(snap.bowling, names), tags), false),
+      snap.turnout,
+      snap.reachedAt,
     ),
+    shelf,
   };
 }
 
@@ -1068,7 +1199,64 @@ export const leaderboard = query({
   },
 });
 
-export const playerStats = query({
+/**
+ * The window a season covers, exactly as the Leaders board reads it: from
+ * startedAt, and frozen at endedAt once the season is complete so a finished
+ * season never quietly picks up a later match. Null means "not this org's
+ * season", which every caller turns into an empty answer.
+ */
+async function seasonWindow(
+  ctx: QueryCtx,
+  orgId: Id<"orgs">,
+  seasonId: Id<"seasons">,
+): Promise<{ afterTs: number; beforeTs: number } | null> {
+  const season = await ctx.db.get(seasonId);
+  if (!season || String(season.orgId) !== String(orgId)) return null;
+  const now = Date.now();
+  return {
+    afterTs: season.startedAt,
+    beforeTs: Math.min(now, season.endedAt ?? now),
+  };
+}
+
+/**
+ * The trophy shelf: one winner per award, honours then roasts. Regulars only,
+ * same population as the season awards, so the live shelf and the stamped
+ * season can never name different people off the same cricket.
+ */
+export const shelf = query({
+  args: {
+    token: v.optional(v.string()),
+    orgId: v.id("orgs"),
+    /** Omit for all time. */
+    seasonId: v.optional(v.id("seasons")),
+  },
+  handler: async (ctx, args) => {
+    try {
+      await requireActiveMembership(ctx, args.token, args.orgId);
+    } catch {
+      return null;
+    }
+
+    let window: { afterTs?: number; beforeTs?: number } = {};
+    if (args.seasonId) {
+      const w = await seasonWindow(ctx, args.orgId, args.seasonId);
+      if (!w) return null;
+      window = w;
+    }
+
+    const board = await loadRegularsBoard(ctx, args.orgId, window);
+    return { awards: awardsFromShelf(board.shelf) };
+  },
+});
+
+/**
+ * One player's trophies, season by season, newest first. Finished seasons read
+ * their stamped awards — that is the frozen record, and recomputing it would
+ * let a later edit rewrite history. The active season is computed live and
+ * flagged `provisional`, because it is still up for grabs.
+ */
+export const cabinet = query({
   args: {
     token: v.optional(v.string()),
     orgId: v.id("orgs"),
@@ -1081,10 +1269,88 @@ export const playerStats = query({
       return null;
     }
 
+    const key = String(args.userId);
+    const seasons = await seasonsForOrg(ctx, args.orgId);
+    type CabinetEntry = {
+      seasonId: Id<"seasons">;
+      seasonName: string;
+      kind: SeasonAwardKind;
+      display: string;
+      tone: AwardTone;
+      provisional: boolean;
+    };
+    // Newest season first (seasonsForOrg's order), each season's own trophies
+    // in shelf order.
+    const out: CabinetEntry[] = [];
+
+    for (const season of seasons) {
+      const mine: CabinetEntry[] = [];
+      if (season.status === "active") {
+        const board = await loadRegularsBoard(ctx, args.orgId, {
+          afterTs: season.startedAt,
+          beforeTs: Date.now(),
+        });
+        for (const a of awardsFromShelf(board.shelf)) {
+          if (String(a.userId) !== key) continue;
+          mine.push({
+            seasonId: season._id,
+            seasonName: season.name,
+            kind: a.kind,
+            display: a.display,
+            tone: a.tone,
+            provisional: true,
+          });
+        }
+      } else {
+        // Seasons that ended before the shelf existed carry only the original
+        // six kinds. Nothing to backfill — that is what those seasons were.
+        for (const a of season.awards ?? []) {
+          if (String(a.userId) !== key) continue;
+          mine.push({
+            seasonId: season._id,
+            seasonName: season.name,
+            kind: a.kind,
+            display: a.display,
+            tone: awardTone(a.kind),
+            provisional: false,
+          });
+        }
+      }
+      mine.sort((a, b) => kindRank(a.kind) - kindRank(b.kind));
+      out.push(...mine);
+    }
+
+    return out;
+  },
+});
+
+export const playerStats = query({
+  args: {
+    token: v.optional(v.string()),
+    orgId: v.id("orgs"),
+    userId: v.id("users"),
+    /** Omit for the career numbers — the default every profile shows. */
+    seasonId: v.optional(v.id("seasons")),
+  },
+  handler: async (ctx, args) => {
+    try {
+      await requireActiveMembership(ctx, args.token, args.orgId);
+    } catch {
+      return null;
+    }
+
     const player = await ctx.db.get(args.userId);
     if (!player) return null;
 
+    let window: { afterTs?: number; beforeTs?: number } = {};
+    if (args.seasonId) {
+      const w = await seasonWindow(ctx, args.orgId, args.seasonId);
+      if (!w) return null;
+      window = w;
+    }
+
     const { batting, bowling, focus } = await aggregateOrg(ctx, args.orgId, {
+      ...window,
       focusPlayerId: args.userId,
     });
     const names = await resolveNames(ctx, [

@@ -4,15 +4,17 @@ import {
   type FeatRecord,
   type RecordGroup,
 } from "@/components/leaderboard/records";
-import type { SeasonAwardKind } from "@/lib/trophies";
+import type { StampedAwardKind } from "@/lib/trophies";
 import type { SeasonShareData } from "@/components/share/ShareCard";
 import { api } from "@/convex/_generated/api";
 import type { FunctionReturnType } from "convex/server";
 
 type Board = NonNullable<FunctionReturnType<typeof api.stats.leaderboard>>;
 
+// Kind is the wide stamped union: a completed season now carries the shelf
+// trophies too, and the wrap only reads the six it has cards for.
 type NamedAward = {
-  kind: SeasonAwardKind;
+  kind: StampedAwardKind;
   displayName: string;
   display: string;
 };

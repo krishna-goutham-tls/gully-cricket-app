@@ -9,7 +9,7 @@ export type Trophy = {
   tier: "gold" | "silver";
 };
 
-/** Mirrors convex/seasons.ts award kinds — kept here so the client never imports the server module. */
+/** Mirrors convex/lib/awards.ts — kept here so the client never imports the server module. */
 export type SeasonAwardKind =
   | "pots"
   | "orange_cap"
@@ -18,21 +18,40 @@ export type SeasonAwardKind =
   | "highest_sr"
   | "best_economy";
 
+/**
+ * Everything a season can stamp: the six caps above plus the trophy shelf.
+ * The shelf kinds have no copy in this file — they are the trophy page's, and
+ * anything reading a stamped award has to cope with a kind it can't name.
+ */
+export type StampedAwardKind =
+  | SeasonAwardKind
+  | "run_machine"
+  | "six_machine"
+  | "boundary_king"
+  | "the_anchor"
+  | "nudger"
+  | "wicket_taker"
+  | "workhorse"
+  | "the_miser"
+  | "safe_hands"
+  | "dot_magnet"
+  | "duck_collector"
+  | "butterfingers";
+
 export type SeasonForTrophies = {
   _id: string;
   name: string;
   status?: string;
   awards?: Array<{
-    kind: SeasonAwardKind;
+    kind: StampedAwardKind;
     userId: string;
     value?: number;
     display?: string;
   }> | null;
 };
 
-const SEASON_AWARD_COPY: Record<
-  SeasonAwardKind,
-  { label: string; icon: "Crown" | "Award" }
+const SEASON_AWARD_COPY: Partial<
+  Record<StampedAwardKind, { label: string; icon: "Crown" | "Award" }>
 > = {
   pots: { label: "Player of the season", icon: "Crown" },
   orange_cap: { label: "Orange Cap", icon: "Crown" },

@@ -13,25 +13,19 @@ import {
 } from "./lib/session";
 import { seasonsForOrg } from "./lib/seasons";
 import { loadRegularsBoard } from "./stats";
+import {
+  awardsFromShelf,
+  pickWinner,
+  type Contender,
+  type SeasonAward,
+  type SeasonAwardKind,
+} from "./lib/awards";
 
 /** Same bars as components/leaderboard/records.ts — do not import from UI. */
 const RECORD_MIN_BALLS = 24;
 const RECORD_MIN_INNINGS = 3;
 
-export type SeasonAwardKind =
-  | "pots"
-  | "orange_cap"
-  | "purple_cap"
-  | "most_sixes"
-  | "highest_sr"
-  | "best_economy";
-
-export type SeasonAward = {
-  kind: SeasonAwardKind;
-  userId: Id<"users">;
-  value: number;
-  display: string;
-};
+export type { SeasonAward, SeasonAwardKind };
 
 function seasonLabel(n: number) {
   return `Season-${String(n).padStart(2, "0")}`;
@@ -54,89 +48,47 @@ async function earliestMatchCreatedAt(
   return min;
 }
 
-type Named = { userId: Id<"users">; displayName: string };
-
-function breaksTie(a: Named, b: Named) {
-  const byName = a.displayName.localeCompare(b.displayName);
-  if (byName !== 0) return byName < 0;
-  return String(a.userId).localeCompare(String(b.userId)) < 0;
-}
-
-function pickWinner<T extends Named>(
-  rows: T[],
-  measure: (r: T) => number,
-  opts: {
-    better?: (a: number, b: number) => boolean;
-    keepZero?: boolean;
-  } = {},
-): T | null {
-  const better = opts.better ?? ((a: number, b: number) => a > b);
-  let best: T | null = null;
-  for (const r of rows) {
-    const value = measure(r);
-    if (!opts.keepZero && value <= 0) continue;
-    if (!best) {
-      best = r;
-      continue;
-    }
-    const incumbent = measure(best);
-    if (better(value, incumbent)) best = r;
-    else if (value === incumbent && breaksTie(r, best)) best = r;
-  }
-  return best;
-}
-
-function award(
+function award<T extends Contender>(
   kind: SeasonAwardKind,
-  row: Named,
-  value: number,
+  won: { row: T; value: number },
   display: string,
 ): SeasonAward {
-  return { kind, userId: row.userId, value, display };
+  return { kind, userId: won.row.userId, value: won.value, display };
 }
 
+type Board = Awaited<ReturnType<typeof loadRegularsBoard>>;
+
 /**
- * One winner per kind from a regulars-only board. Rate awards are omitted
- * when nobody clears RECORD_MIN_BALLS and RECORD_MIN_INNINGS.
+ * One winner per kind from a regulars-only board — the six caps, then the
+ * twelve shelf trophies. Rate awards are omitted when nobody clears
+ * RECORD_MIN_BALLS and RECORD_MIN_INNINGS, and every winner goes through the
+ * same tie-break ladder the live shelf uses (convex/lib/awards.ts), so a
+ * stamped season and the shelf can never disagree about who won.
  */
-export function awardsFromBoard(board: {
-  allRound: Array<Named & { points: number }>;
-  batting: Array<
-    Named & {
-      runs: number;
-      balls: number;
-      innings: number;
-      sixes: number;
-      strikeRate: number;
-    }
-  >;
-  bowling: Array<
-    Named & {
-      wickets: number;
-      legalBalls: number;
-      innings: number;
-      economy: number;
-    }
-  >;
-}): SeasonAward[] {
+export function awardsFromBoard(board: Board): SeasonAward[] {
   const out: SeasonAward[] = [];
 
-  const pots = pickWinner(board.allRound, (r) => r.points);
-  if (pots) out.push(award("pots", pots, pots.points, String(pots.points)));
+  // Points are runs + wickets + catches + bonuses, so the last of those to
+  // move is when the total was reached — that is what rung (c) needs.
+  const pots = pickWinner(board.allRound, (r) => r.points, {
+    counters: ["bat.runs", "bowl.wickets", "field.catches"],
+  });
+  if (pots) out.push(award("pots", pots, String(pots.value)));
 
-  const orange = pickWinner(board.batting, (r) => r.runs);
-  if (orange)
-    out.push(award("orange_cap", orange, orange.runs, String(orange.runs)));
+  const orange = pickWinner(board.batting, (r) => r.runs, {
+    counters: ["bat.runs"],
+  });
+  if (orange) out.push(award("orange_cap", orange, String(orange.value)));
 
-  const purple = pickWinner(board.bowling, (r) => r.wickets);
-  if (purple)
-    out.push(
-      award("purple_cap", purple, purple.wickets, String(purple.wickets)),
-    );
+  const purple = pickWinner(board.bowling, (r) => r.wickets, {
+    counters: ["bowl.wickets"],
+  });
+  if (purple) out.push(award("purple_cap", purple, String(purple.value)));
 
-  const sixes = pickWinner(board.batting, (r) => r.sixes);
-  if (sixes)
-    out.push(award("most_sixes", sixes, sixes.sixes, String(sixes.sixes)));
+  const sixes = pickWinner(board.batting, (r) => r.sixes, {
+    counters: ["bat.sixes"],
+  });
+  if (sixes) out.push(award("most_sixes", sixes, String(sixes.value)));
 
   const srPool = board.batting.filter(
     (r) =>
@@ -144,9 +96,11 @@ export function awardsFromBoard(board: {
       r.innings >= RECORD_MIN_INNINGS &&
       r.balls > 0,
   );
-  const sr = pickWinner(srPool, (r) => r.strikeRate);
-  if (sr)
-    out.push(award("highest_sr", sr, sr.strikeRate, sr.strikeRate.toFixed(1)));
+  // A rate is settled by the last ball that fed it, either side of the ratio.
+  const sr = pickWinner(srPool, (r) => r.strikeRate, {
+    counters: ["bat.runs", "bat.balls"],
+  });
+  if (sr) out.push(award("highest_sr", sr, sr.value.toFixed(1)));
 
   const econPool = board.bowling.filter(
     (r) =>
@@ -155,11 +109,18 @@ export function awardsFromBoard(board: {
   const econ = pickWinner(econPool, (r) => r.economy, {
     better: (a, b) => a < b,
     keepZero: true,
+    counters: ["bowl.runs", "bowl.legalBalls"],
   });
-  if (econ)
-    out.push(
-      award("best_economy", econ, econ.economy, econ.economy.toFixed(1)),
-    );
+  if (econ) out.push(award("best_economy", econ, econ.value.toFixed(1)));
+
+  for (const a of awardsFromShelf(board.shelf)) {
+    out.push({
+      kind: a.kind,
+      userId: a.userId,
+      value: a.value,
+      display: a.display,
+    });
+  }
 
   return out;
 }
