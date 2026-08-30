@@ -45,6 +45,13 @@ const HONOURS = [
 
 const ROASTS = ["dot_magnet", "duck_collector", "butterfingers"] as const;
 
+const TABS = ["trophies", "records"] as const;
+type Tab = (typeof TABS)[number];
+const TAB_LABEL: Record<Tab, string> = {
+  trophies: "Trophies",
+  records: "Records",
+};
+
 function initials(name: string) {
   return name
     .trim()
@@ -54,17 +61,30 @@ function initials(name: string) {
     .join("");
 }
 
-/** 11px caps, on paper or on the roast band's ink. */
-function SubLabel({ children, onInk }: { children: string; onInk?: boolean }) {
+/** The paper heading over an honours band, and its ink twin over the roasts. */
+function ToneHeading({
+  children,
+  onInk,
+}: {
+  children: string;
+  onInk?: boolean;
+}) {
+  const Icon = onInk ? Flame : Trophy;
   return (
-    <p
-      className={cn(
-        "px-1 text-[11px] font-semibold uppercase tracking-wide",
-        onInk ? "text-bg/70" : "text-faint",
-      )}
-    >
-      {children}
-    </p>
+    <div className="flex items-center gap-1.5 px-1">
+      <Icon
+        className={cn("h-4 w-4", onInk ? "text-bg/70" : "text-accent-deep")}
+        aria-hidden
+      />
+      <h2
+        className={cn(
+          "text-xl font-semibold tracking-tight",
+          onInk ? "text-bg" : "text-ink",
+        )}
+      >
+        {children}
+      </h2>
+    </div>
   );
 }
 
@@ -142,42 +162,47 @@ function RecordRows({
 }
 
 /**
- * One page for everything the community argues about. Trophies first because
- * they are photographs somebody can paste into the group; records under them
- * because they are the same idea without a picture. The split that matters is
- * honour versus roast, not trophy versus record — so tone is the top level and
- * the two mediums sit inside it under one scope.
+ * Two tabs over one scope. Trophies open, because the photograph is why anyone
+ * comes here — and with the rows moved off that fold, the twelve exhibits get
+ * the page to themselves instead of sharing it. Inside each tab the split is
+ * still tone, honour on paper and roast on ink; the "Trophies"/"Records"
+ * sub-labels that used to separate the two mediums mid-scroll are gone, since
+ * the tab you are standing on already says which one you are reading.
  */
 export default function RecordsPage() {
   const { token, activeOrgId } = useAuth();
-  // null = not picked yet, which resolves to the live season when one is
-  // running and All time otherwise — the same default Leaders uses.
+  const [tab, setTab] = useState<Tab>("trophies");
+  // null = not picked yet. Unlike Leaders, that resolves to the most recent
+  // season rather than All time: trophies are season-bound, and a community
+  // between seasons landing on All time would open a page with no trophies on
+  // it at all.
   const [scope, setScope] = useState<Scope | null>(null);
 
   const seasons = useQuery(
     api.seasons.list,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
   );
-  const currentSeason = useMemo(
-    () => seasons?.find((s) => s.status === "active") ?? null,
+  // `seasons` is newest first, so [0] is the season that just ended when none
+  // is running.
+  const landingSeason = useMemo(
+    () => seasons?.find((s) => s.status === "active") ?? seasons?.[0] ?? null,
     [seasons],
   );
-  // A stale id (season deleted, org switched) falls back to the live season
+  // A stale id (season deleted, org switched) falls back to the landing season
   // rather than asking for a board that is not this community's.
   const selectedSeason = useMemo(() => {
     if (!seasons) return null;
-    if (scope === null) return currentSeason;
+    if (scope === null) return landingSeason;
     if (scope === "all") return null;
-    return seasons.find((s) => s._id === scope.seasonId) ?? currentSeason;
-  }, [seasons, scope, currentSeason]);
+    return seasons.find((s) => s._id === scope.seasonId) ?? landingSeason;
+  }, [seasons, scope, landingSeason]);
 
   const seasonArg = selectedSeason ? { seasonId: selectedSeason._id } : {};
   const ready = Boolean(token && activeOrgId) && seasons !== undefined;
 
   // Trophies are season-bound. They roll — a trophy moves to whoever claims it
   // next season — so an all-time shelf would just freeze the same names, and
-  // there is nothing to ask the server for. The records rows below still run
-  // all time.
+  // there is nothing to ask the server for. The records rows still run all time.
   const shelf = useQuery(
     api.stats.shelf,
     ready && selectedSeason
@@ -232,6 +257,25 @@ export default function RecordsPage() {
   const loading =
     board === undefined || (selectedSeason !== null && shelf === undefined);
 
+  const tabs = (
+    <div className="flex rounded-xl border border-line bg-surface p-1">
+      {TABS.map((t) => (
+        <button
+          key={t}
+          type="button"
+          onClick={() => setTab(t)}
+          aria-current={tab === t}
+          className={cn(
+            "min-h-11 flex-1 rounded-lg text-[13px] font-semibold transition",
+            tab === t ? "bg-ink text-bg" : "text-muted active:bg-line/60",
+          )}
+        >
+          {TAB_LABEL[t]}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div>
       <AppHeader
@@ -245,6 +289,7 @@ export default function RecordsPage() {
             />
           ) : undefined
         }
+        below={tabs}
       />
 
       {loading ? (
@@ -263,117 +308,103 @@ export default function RecordsPage() {
             body="Sign in to this community to see its trophies."
           />
         </main>
-      ) : (
-        <>
-          <main className="mx-auto max-w-md px-5 py-4">
-            <div className="flex items-center gap-1.5 px-1">
-              <Trophy className="h-4 w-4 text-accent-deep" aria-hidden />
-              <h2 className="text-xl font-semibold tracking-tight text-ink">
-                Honours
-              </h2>
-            </div>
-
-            {/* All time gets no trophy block at all, and says nothing about
-                it: the scope menu overhead already reads "All time", and a
-                line explaining where trophies went is an explainer nobody
-                asked for. */}
-            {selectedSeason ? (
-              <>
+      ) : tab === "trophies" ? (
+        selectedSeason ? (
+          <>
+            <main className="mx-auto max-w-md px-5 py-4">
+              <ToneHeading>Honours</ToneHeading>
+              {heroKind ? (
                 <div className="mt-3">
-                  <SubLabel>Trophies</SubLabel>
+                  <TrophyHeroCard
+                    award={byKind.get(heroKind)!}
+                    scopeLabel={scopeLabel}
+                    tone="honor"
+                  />
                 </div>
-                {heroKind ? (
-                  <div className="mt-2">
-                    <TrophyHeroCard
-                      award={byKind.get(heroKind)!}
+              ) : null}
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                {gridHonours.map((kind) => {
+                  const won = byKind.get(kind);
+                  return won ? (
+                    <TrophyGridCard
+                      key={kind}
+                      award={won}
                       scopeLabel={scopeLabel}
                       tone="honor"
                     />
-                  </div>
-                ) : null}
+                  ) : (
+                    <TrophyEmptySlot key={kind} kind={kind} tone="honor" />
+                  );
+                })}
+              </div>
+            </main>
+
+            {/* The roast band flips the page to ink. Same cards, dark room —
+                the register changes with the ground, and it costs no colour
+                the bible does not already own. */}
+            <section className="mt-2 bg-ink pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-5">
+              <div className="mx-auto max-w-md px-5">
+                <ToneHeading onInk>The Roast</ToneHeading>
                 <div className="mt-3 grid grid-cols-2 gap-3">
-                  {gridHonours.map((kind) => {
+                  {ROASTS.map((kind) => {
                     const won = byKind.get(kind);
                     return won ? (
                       <TrophyGridCard
                         key={kind}
                         award={won}
                         scopeLabel={scopeLabel}
-                        tone="honor"
+                        tone="roast"
                       />
                     ) : (
-                      <TrophyEmptySlot key={kind} kind={kind} tone="honor" />
+                      <TrophyEmptySlot key={kind} kind={kind} tone="roast" />
                     );
                   })}
                 </div>
-              </>
-            ) : null}
-
-            {records.honour.length > 0 ? (
-              <>
-                {/* The sub-label only earns its space when there is a trophy
-                    block above it to be told apart from. */}
-                {selectedSeason ? (
-                  <div className="mt-6">
-                    <SubLabel>Records</SubLabel>
-                  </div>
-                ) : null}
-                <div className={selectedSeason ? "mt-2" : "mt-3"}>
-                  <RecordRows items={records.honour} />
-                </div>
-              </>
-            ) : null}
+              </div>
+            </section>
+          </>
+        ) : (
+          // Only two ways to stand here: the reader chose All time, where a
+          // rolling trophy has no meaning, or the community has never run a
+          // season. Neither gets an explainer, just the fact.
+          <main className="mx-auto max-w-md px-5 py-4">
+            <EmptyState
+              title={
+                seasons && seasons.length > 0
+                  ? "Trophies belong to a season"
+                  : "No seasons yet"
+              }
+              body={
+                seasons && seasons.length > 0
+                  ? "Pick a season to see who holds what."
+                  : "Trophies start when a season does."
+              }
+            />
+          </main>
+        )
+      ) : (
+        <>
+          <main className="mx-auto max-w-md px-5 py-4">
+            <ToneHeading>Honours</ToneHeading>
+            <div className="mt-3">
+              {records.honour.length > 0 ? (
+                <RecordRows items={records.honour} />
+              ) : (
+                <EmptyState
+                  title="No records yet"
+                  body="Records build up as matches finish."
+                />
+              )}
+            </div>
           </main>
 
-          {/* The roast band flips the page to ink. Same cards, same rows, dark
-              room — the register changes with the ground, and it costs no
-              colour the bible does not already own. On All time it has no
-              trophies to show, so it only appears if the rows carry it. */}
-          {selectedSeason || records.roast.length > 0 ? (
+          {records.roast.length > 0 ? (
             <section className="mt-2 bg-ink pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-5">
               <div className="mx-auto max-w-md px-5">
-                <div className="flex items-center gap-1.5 px-1">
-                  <Flame className="h-4 w-4 text-bg/70" aria-hidden />
-                  <h2 className="text-xl font-semibold tracking-tight text-bg">
-                    The Roast
-                  </h2>
+                <ToneHeading onInk>The Roast</ToneHeading>
+                <div className="mt-3">
+                  <RecordRows items={records.roast} onInk />
                 </div>
-
-                {selectedSeason ? (
-                  <>
-                    <div className="mt-3">
-                      <SubLabel onInk>Trophies</SubLabel>
-                    </div>
-                    <div className="mt-2 grid grid-cols-2 gap-3">
-                      {ROASTS.map((kind) => {
-                        const won = byKind.get(kind);
-                        return won ? (
-                          <TrophyGridCard
-                            key={kind}
-                            award={won}
-                            scopeLabel={scopeLabel}
-                            tone="roast"
-                          />
-                        ) : (
-                          <TrophyEmptySlot key={kind} kind={kind} tone="roast" />
-                        );
-                      })}
-                    </div>
-                  </>
-                ) : null}
-
-                {records.roast.length > 0 ? (
-                  <>
-                    {selectedSeason ? (
-                      <div className="mt-6">
-                        <SubLabel onInk>Records</SubLabel>
-                      </div>
-                    ) : null}
-                    <div className={selectedSeason ? "mt-2" : "mt-3"}>
-                      <RecordRows items={records.roast} onInk />
-                    </div>
-                  </>
-                ) : null}
               </div>
             </section>
           ) : null}

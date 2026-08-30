@@ -1285,8 +1285,16 @@ export const shelf = query({
     // would let a match edited afterwards rewrite history, and Records would
     // then disagree with that season's own wrap cards. Only the live season
     // is computed fresh — it is still up for grabs.
-    if (season.status === "complete" && (season.awards?.length ?? 0) > 0) {
-      return { awards: await stampedShelfAwards(ctx, season.awards!) };
+    //
+    // The one exception is a season stamped before the twelve shelf awards
+    // existed: its stamp holds only the legacy caps, so the filter above finds
+    // nothing and the shelf would come back as twelve empty slots. There is no
+    // history to honour there, so it recomputes. A *partial* stamp is still
+    // authoritative — one shelf kind is enough — because mixing stamped and
+    // recomputed winners on one board would name two people off one season.
+    if (season.status === "complete") {
+      const stamped = await stampedShelfAwards(ctx, season.awards ?? []);
+      if (stamped.length > 0) return { awards: stamped };
     }
 
     const w = await seasonWindow(ctx, args.orgId, args.seasonId);
@@ -1662,3 +1670,4 @@ export const playerStats = query({
     };
   },
 });
+
