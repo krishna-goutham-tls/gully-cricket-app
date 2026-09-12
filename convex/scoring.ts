@@ -13,6 +13,11 @@ import {
   type WicketType,
 } from "./lib/scoring";
 import { captainTeamLabel } from "./lib/teams";
+import {
+  pauseMatchClock,
+  publicMatchClock,
+  resumeMatchClock,
+} from "./lib/clock";
 
 type Side = "A" | "B";
 
@@ -527,6 +532,7 @@ async function completeInningsAndMaybeMatch(
   match: Doc<"matches">,
   innings: Doc<"innings">,
   reason: string,
+  forceMatchEnd = false,
 ) {
   await ctx.db.patch(innings._id, {
     status: "complete",
@@ -562,7 +568,7 @@ async function completeInningsAndMaybeMatch(
     innings.inningsNo === 3 &&
     aggBat < aggOpp;
 
-  if (!isFinal && !inningsVictory) {
+  if (!forceMatchEnd && !isFinal && !inningsVictory) {
     // Innings break
     const nextNo = innings.inningsNo + 1;
     // The final innings is a chase; earlier test breaks just carry the lead
@@ -621,7 +627,19 @@ async function completeInningsAndMaybeMatch(
   let winnerSide: Side | undefined;
   let resultText: string;
 
-  if (inningsVictory) {
+  if (forceMatchEnd) {
+    if (aggA > aggB) {
+      winnerSide = "A";
+      const margin = aggA - aggB;
+      resultText = `${nameA} won by ${margin} run${margin === 1 ? "" : "s"}`;
+    } else if (aggB > aggA) {
+      winnerSide = "B";
+      const margin = aggB - aggA;
+      resultText = `${nameB} won by ${margin} run${margin === 1 ? "" : "s"}`;
+    } else {
+      resultText = "Match tied";
+    }
+  } else if (inningsVictory) {
     winnerSide = otherSide(innings.battingSide);
     const margin = aggOpp - aggBat;
     resultText = `${nm(winnerSide)} won by an innings and ${margin} run${margin === 1 ? "" : "s"}`;
@@ -785,8 +803,15 @@ export const startInnings = mutation({
       throw new Error("Bowler cannot be one of the openers");
     }
 
-    if (inningsNo === 1) {
-      await ctx.db.patch(match._id, { status: "live" });
+    const startClock =
+      match.clock && match.clock.startedAt === undefined
+        ? { ...match.clock, startedAt: Date.now() }
+        : undefined;
+    if (inningsNo === 1 || startClock) {
+      await ctx.db.patch(match._id, {
+        ...(inningsNo === 1 ? { status: "live" as const } : {}),
+        ...(startClock ? { clock: startClock } : {}),
+      });
     }
 
     const inningsId = await ctx.db.insert("innings", {
@@ -1432,6 +1457,98 @@ export const endInnings = mutation({
   },
 });
 
+function requireLiveClock(match: Doc<"matches">) {
+  if (match.status === "completed" || match.status === "abandoned") {
+    throw new Error("Match is over");
+  }
+  if (match.status !== "live") throw new Error("Match is not live");
+  if (!match.clock) throw new Error("No clock on this match");
+  return match.clock;
+}
+
+export const pauseClock = mutation({
+  args: {
+    token: v.string(),
+    matchId: v.id("matches"),
+  },
+  handler: async (ctx, args) => {
+    const { match } = await requireCanScore(ctx, args.token, args.matchId);
+    const clock = requireLiveClock(match);
+    const next = pauseMatchClock(clock, Date.now());
+    if (!next) return { ok: true };
+    await ctx.db.patch(match._id, { clock: next });
+    return { ok: true };
+  },
+});
+
+export const resumeClock = mutation({
+  args: {
+    token: v.string(),
+    matchId: v.id("matches"),
+  },
+  handler: async (ctx, args) => {
+    const { match } = await requireCanScore(ctx, args.token, args.matchId);
+    const clock = requireLiveClock(match);
+    const next = resumeMatchClock(clock, Date.now());
+    if (!next) return { ok: true };
+    await ctx.db.patch(match._id, { clock: next });
+    return { ok: true };
+  },
+});
+
+export const keepPlayingAfterTime = mutation({
+  args: {
+    token: v.string(),
+    matchId: v.id("matches"),
+  },
+  handler: async (ctx, args) => {
+    const { match } = await requireCanScore(ctx, args.token, args.matchId);
+    const clock = requireLiveClock(match);
+    const now = Date.now();
+    const resumed = resumeMatchClock(clock, now);
+    if (!resumed && clock.overtime) return { ok: true };
+    await ctx.db.patch(match._id, {
+      clock: { ...(resumed ?? clock), overtime: true },
+    });
+    return { ok: true };
+  },
+});
+
+/** Time is up: finish the match on the current totals. Not an innings break. */
+export const endMatchNow = mutation({
+  args: {
+    token: v.string(),
+    matchId: v.id("matches"),
+  },
+  handler: async (ctx, args) => {
+    const { match } = await requireCanScore(ctx, args.token, args.matchId);
+    if (match.status !== "live") throw new Error("Match is not live");
+    const live = await ctx.db
+      .query("matchLiveState")
+      .withIndex("by_match", (q) => q.eq("matchId", match._id))
+      .unique();
+    let innings = live?.currentInningsId
+      ? await ctx.db.get(live.currentInningsId)
+      : null;
+    if (!innings) {
+      const all = await ctx.db
+        .query("innings")
+        .withIndex("by_match", (q) => q.eq("matchId", match._id))
+        .collect();
+      all.sort((a, b) => a.inningsNo - b.inningsNo);
+      innings = all[all.length - 1] ?? null;
+    }
+    if (!innings) throw new Error("No innings to close");
+    return completeInningsAndMaybeMatch(
+      ctx,
+      match,
+      innings,
+      "time_up",
+      true,
+    );
+  },
+});
+
 // ─── Queries ─────────────────────────────────────────────────
 
 export const liveState = query({
@@ -1787,6 +1904,7 @@ export const liveState = query({
       status: match.status,
       canScore,
       ruleSnapshot: rules,
+      clock: publicMatchClock(match.clock),
       sideA: await sideInfo("A"),
       sideB: await sideInfo("B"),
       battingFirst: match.battingFirst,

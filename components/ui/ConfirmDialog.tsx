@@ -13,6 +13,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
   danger,
   busy,
   onConfirm,
@@ -22,6 +23,7 @@ export function ConfirmDialog({
   title: string;
   description?: string;
   confirmLabel?: string;
+  cancelLabel?: string;
   danger?: boolean;
   busy?: boolean;
   onConfirm: () => void;
@@ -41,7 +43,7 @@ export function ConfirmDialog({
         ) : null}
         <div className="mt-5 grid grid-cols-2 gap-2">
           <Button variant="secondary" disabled={busy} onClick={onCancel}>
-            Cancel
+            {cancelLabel}
           </Button>
           <Button
             variant={danger ? "danger" : "primary"}

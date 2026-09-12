@@ -4,6 +4,11 @@ import { Doc, Id } from "./_generated/dataModel";
 import { requireActiveMembership } from "./lib/session";
 import { captainTeamLabel } from "./lib/teams";
 import { buildRuleSnapshot } from "./lib/rules";
+import {
+  buildMatchClock,
+  DEFAULT_TEST_MINUTES,
+  publicMatchClock,
+} from "./lib/clock";
 import { battingMode, matchFormat, side } from "./schema";
 
 type Side = "A" | "B";
@@ -25,6 +30,8 @@ export const create = mutation({
     oversPerPlayer: v.optional(v.number()),
     /** Default true (gully). False = innings ends when one batter remains. */
     lastBatsmanAlone: v.optional(v.boolean()),
+    /** Test only. Ignored for limited. Default 90. */
+    durationMinutes: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const { user } = await requireActiveMembership(ctx, args.token, args.orgId);
@@ -72,6 +79,11 @@ export const create = mutation({
       return name.length > 0 ? name.slice(0, 30) : fallback;
     };
 
+    const clock =
+      (args.format ?? ruleSnapshot.format) === "test"
+        ? buildMatchClock(args.durationMinutes ?? DEFAULT_TEST_MINUTES)
+        : undefined;
+
     const matchId = await ctx.db.insert("matches", {
       orgId: args.orgId,
       status: "scheduled",
@@ -80,6 +92,7 @@ export const create = mutation({
       sideAPlayerIds: args.sideAPlayerIds,
       sideBPlayerIds: args.sideBPlayerIds,
       ruleSnapshot,
+      ...(clock ? { clock } : {}),
       createdBy: user._id,
       createdAt: Date.now(),
     });
@@ -248,6 +261,7 @@ export const get = query({
         ? match.ruleSnapshot.maxBallsPerBatsman / 6
         : 2,
       battingMode: match.ruleSnapshot.battingModeDefault,
+      clock: publicMatchClock(match.clock),
       resultText: match.resultText,
       winnerSide: match.winnerSide,
       tournamentId: match.tournamentId,

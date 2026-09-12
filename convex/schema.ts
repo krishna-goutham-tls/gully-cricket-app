@@ -117,6 +117,26 @@ export const rulesObject = v.object({
   extrasNotes: v.optional(v.string()),
 });
 
+/**
+ * Test-only match clock. Lives on `matches`, not matchLiveState — that row
+ * is replaced on every ball.
+ */
+export const matchClock = v.object({
+  durationMs: v.number(),
+  /** Always 5. */
+  dayCount: v.number(),
+  startedAt: v.optional(v.number()),
+  pausedAt: v.optional(v.number()),
+  pauseAccumulatedMs: v.number(),
+  pauses: v.array(
+    v.object({
+      at: v.number(),
+      until: v.optional(v.number()),
+    }),
+  ),
+  overtime: v.optional(v.boolean()),
+});
+
 export default defineSchema({
   users: defineTable({
     // Guests have no PIN (and possibly no phone) until they claim the account.
@@ -266,6 +286,8 @@ export default defineSchema({
     /** Limited only: overs each player may bat & bowl (even; common get half). */
     oversPerPlayer: v.optional(v.number()),
     battingMode: battingMode,
+    /** Test series only. Copied onto each match clock at startMatch. */
+    matchDurationMinutes: v.optional(v.number()),
     sideAName: v.string(),
     sideBName: v.string(),
     sideASquadIds: v.array(v.id("users")),
@@ -298,6 +320,7 @@ export default defineSchema({
     sideBPlayerIds: v.array(v.id("users")),
     battingFirst: v.optional(side),
     ruleSnapshot: rulesObject,
+    clock: v.optional(matchClock),
     resultText: v.optional(v.string()),
     winnerSide: v.optional(side),
     createdBy: v.id("users"),

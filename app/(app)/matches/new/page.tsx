@@ -7,9 +7,17 @@ import { Id } from "@/convex/_generated/dataModel";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { PlayerMultiSelect } from "@/components/match/PlayerMultiSelect";
 import {
+  DEFAULT_TEST_MINUTES,
+  MAX_TEST_MINUTES,
+  MIN_TEST_MINUTES,
+  TEST_CLOCK_DAYS,
+} from "@/convex/lib/clock";
+import {
+  getLastDurationMinutes,
   getLastFormat,
   getLastOvers,
   getLastOversPerPlayer,
+  setLastDurationMinutes,
   setLastFormat,
   setLastOvers,
   setLastOversPerPlayer,
@@ -35,6 +43,12 @@ type DraftTarget = Side | "common";
 
 function firstName(full: string) {
   return full.trim().split(/\s+/)[0] ?? full;
+}
+
+function matchTimeHint(minutes: number) {
+  const per = minutes / TEST_CLOCK_DAYS;
+  const n = Number.isInteger(per) ? String(per) : per.toFixed(1);
+  return `${TEST_CLOCK_DAYS} days · ${n} min each`;
 }
 
 function whenLabel(ts: number) {
@@ -88,6 +102,9 @@ export default function NewMatchPage() {
   );
   const [format, setFormat] = useState<"limited" | "test">(() =>
     getLastFormat(),
+  );
+  const [durationMinutes, setDurationMinutes] = useState(() =>
+    getLastDurationMinutes(),
   );
   const [battingMode, setBattingMode] = useState<"double" | "single">("double");
   // Gully default: the last batter bats on alone. Off = proper cricket.
@@ -333,6 +350,18 @@ export default function NewMatchPage() {
     setOvers(lastMatch.overs);
     setOversPerPlayer(lastMatch.oversPerPlayer);
     setBattingMode(lastMatch.battingMode);
+    if (lastMatch.format === "test") {
+      const mins = lastMatch.clock
+        ? Math.round(lastMatch.clock.durationMs / 60000)
+        : DEFAULT_TEST_MINUTES;
+      setDurationMinutes(
+        Number.isInteger(mins) &&
+          mins >= MIN_TEST_MINUTES &&
+          mins <= MAX_TEST_MINUTES
+          ? mins
+          : DEFAULT_TEST_MINUTES,
+      );
+    }
     setActiveTarget("A");
     enterDraft();
   }
@@ -354,10 +383,12 @@ export default function NewMatchPage() {
         format,
         oversPerPlayer: format === "limited" ? oversPerPlayer : undefined,
         lastBatsmanAlone,
+        durationMinutes: format === "test" ? durationMinutes : undefined,
       });
       setLastOvers(overs);
       setLastFormat(format);
       if (format === "limited") setLastOversPerPlayer(oversPerPlayer);
+      if (format === "test") setLastDurationMinutes(durationMinutes);
       await dropStepEntry();
       router.replace(`/matches/${res.matchId}/score`);
     } catch (e) {
@@ -718,6 +749,38 @@ export default function NewMatchPage() {
             className="tabular h-11 w-20 rounded-xl border border-line bg-bg px-3 text-center text-lg font-semibold text-ink outline-none focus:border-ink"
           />
         </div>
+
+        {format === "test" ? (
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4">
+            <div className="min-w-0">
+              <p className="text-[15px] font-medium text-ink">Match time</p>
+              <p className="mt-0.5 text-[13px] text-muted">
+                {matchTimeHint(durationMinutes)}
+              </p>
+            </div>
+            <input
+              type="number"
+              inputMode="numeric"
+              enterKeyHint="done"
+              min={MIN_TEST_MINUTES}
+              max={MAX_TEST_MINUTES}
+              step={1}
+              value={durationMinutes}
+              onChange={(e) => {
+                const n = parseInt(e.target.value, 10);
+                if (e.target.value === "") {
+                  setDurationMinutes(MIN_TEST_MINUTES);
+                  return;
+                }
+                if (!Number.isInteger(n)) return;
+                setDurationMinutes(
+                  Math.min(MAX_TEST_MINUTES, Math.max(MIN_TEST_MINUTES, n)),
+                );
+              }}
+              className="tabular h-11 w-20 rounded-xl border border-line bg-bg px-3 text-center text-lg font-semibold text-ink outline-none focus:border-ink"
+            />
+          </div>
+        ) : null}
 
         {format === "limited" ? (
           <div className="rounded-2xl border border-line bg-surface p-4">

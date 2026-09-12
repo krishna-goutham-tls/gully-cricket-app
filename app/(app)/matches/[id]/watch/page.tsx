@@ -1,10 +1,17 @@
 "use client";
 
 import { useAuth } from "@/components/providers/AuthProvider";
+import {
+  TestClockLine,
+  TestClockOverlays,
+  TestClockProvider,
+  TestClockStatus,
+} from "@/components/match/TestClock";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import { matchBoardLabel, matchBoardLine } from "@/lib/matchBoard";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { ArrowLeft, ClipboardList, Pencil } from "lucide-react";
@@ -142,16 +149,20 @@ export default function WatchPage() {
 
   const battingName =
     live?.battingSide === "A" ? state.sideA.name : state.sideB.name;
-  const aggBat = live
-    ? state.innings
-        .filter((i) => i.battingSide === live.battingSide)
-        .reduce((s, i) => s + i.totalRuns, 0)
-    : 0;
-  const aggOther = live
-    ? state.innings
-        .filter((i) => i.battingSide !== live.battingSide)
-        .reduce((s, i) => s + i.totalRuns, 0)
-    : 0;
+  const board =
+    live?.battingSide
+      ? matchBoardLine({
+          inningsPerSide: state.ruleSnapshot.inningsPerSide ?? 1,
+          innings: state.innings,
+          live: {
+            battingSide: live.battingSide,
+            totalRuns: live.totalRuns,
+            inningsNo: live.inningsNo,
+            currentInningsId: live.currentInningsId,
+            target: live.target,
+          },
+        })
+      : null;
 
   const waitingText = (() => {
     switch (state.phase) {
@@ -171,6 +182,11 @@ export default function WatchPage() {
   })();
 
   return (
+    <TestClockProvider
+      clock={done ? null : state.clock}
+      role="watcher"
+      matchId={matchId}
+    >
     <div className="min-h-dvh bg-bg">
       <header className="bg-ink px-4 pb-6 pt-[calc(var(--safe-top)+1rem)] text-bg">
         <div className="flex items-center justify-between gap-2">
@@ -197,6 +213,7 @@ export default function WatchPage() {
             </span>
           )}
         </div>
+        <TestClockLine />
 
         {live ? (
           <>
@@ -210,20 +227,16 @@ export default function WatchPage() {
                 {live.oversText} ov
                 {live.runRate > 0 ? ` · RR ${live.runRate.toFixed(1)}` : ""}
               </p>
-              {live.target !== undefined ? (
+              {board?.kind === "target" ? (
                 <p className="tabular mt-1.5 inline-block rounded-full bg-accent/15 px-3 py-1 text-[13px] font-medium text-accent">
-                  Target {live.target}
-                  {live.requiredRunRate != null
-                    ? ` · need ${live.requiredRunRate.toFixed(1)}/ov`
+                  {matchBoardLabel(board)}
+                  {!isTest && live.requiredRunRate != null
+                    ? ` · ${live.requiredRunRate.toFixed(1)}/ov`
                     : ""}
                 </p>
-              ) : isTest && live.inningsNo > 1 ? (
+              ) : board ? (
                 <p className="tabular mt-1.5 inline-block rounded-full bg-white/10 px-3 py-1 text-[13px] font-medium text-bg/70">
-                  {aggBat === aggOther
-                    ? "Scores level"
-                    : aggBat > aggOther
-                      ? `Lead by ${aggBat - aggOther}`
-                      : `Trail by ${aggOther - aggBat}`}
+                  {matchBoardLabel(board)}
                 </p>
               ) : null}
             </div>
@@ -309,6 +322,7 @@ export default function WatchPage() {
           </div>
         )}
       </header>
+      <TestClockStatus />
 
       <main className="mx-auto max-w-md px-5 py-5">
         {waitingText && live ? (
@@ -365,6 +379,8 @@ export default function WatchPage() {
           </div>
         ) : null}
       </main>
+      <TestClockOverlays />
     </div>
+    </TestClockProvider>
   );
 }

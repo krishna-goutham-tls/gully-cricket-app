@@ -6,6 +6,7 @@ import {
   requireOrgAdmin,
 } from "./lib/session";
 import { buildRuleSnapshot } from "./lib/rules";
+import { buildMatchClock, DEFAULT_TEST_MINUTES } from "./lib/clock";
 import { deleteMatchCascade } from "./lib/matches";
 import { captainTeamLabel } from "./lib/teams";
 import { assertSeriesSides } from "./lib/tournamentLineup";
@@ -68,6 +69,8 @@ export const create = mutation({
     oversPerInnings: v.number(),
     oversPerPlayer: v.optional(v.number()),
     battingMode: v.optional(battingMode),
+    /** Test only. Ignored for limited. Default 90. */
+    matchDurationMinutes: v.optional(v.number()),
     sideAName: v.string(),
     sideBName: v.string(),
     sideASquadIds: v.array(v.id("users")),
@@ -122,6 +125,13 @@ export const create = mutation({
       Array.from(new Set([...args.sideASquadIds, ...args.sideBSquadIds])),
     );
 
+    let matchDurationMinutes: number | undefined;
+    if (args.format === "test") {
+      matchDurationMinutes =
+        args.matchDurationMinutes ?? DEFAULT_TEST_MINUTES;
+      buildMatchClock(matchDurationMinutes);
+    }
+
     const tournamentId = await ctx.db.insert("tournaments", {
       orgId: args.orgId,
       name,
@@ -130,6 +140,9 @@ export const create = mutation({
       oversPerPlayer:
         args.format === "limited" ? args.oversPerPlayer ?? 2 : undefined,
       battingMode: args.battingMode ?? "double",
+      ...(matchDurationMinutes !== undefined
+        ? { matchDurationMinutes }
+        : {}),
       sideAName: cleanName(args.sideAName, "Team A"),
       sideBName: cleanName(args.sideBName, "Team B"),
       sideASquadIds: args.sideASquadIds,
@@ -265,6 +278,7 @@ export const get = query({
       oversPerInnings: t.oversPerInnings,
       oversPerPlayer: t.oversPerPlayer,
       battingMode: t.battingMode,
+      matchDurationMinutes: t.matchDurationMinutes,
       sideAName: captainTeamLabel(t.sideAName, sideA[0]?.displayName),
       sideBName: captainTeamLabel(t.sideBName, sideB[0]?.displayName),
       sideA,
@@ -362,6 +376,11 @@ export const startMatch = mutation({
       battingMode: t.battingMode,
     });
 
+    const clock =
+      t.format === "test"
+        ? buildMatchClock(t.matchDurationMinutes ?? DEFAULT_TEST_MINUTES)
+        : undefined;
+
     const matchId = await ctx.db.insert("matches", {
       orgId: t.orgId,
       tournamentId: t._id,
@@ -371,6 +390,7 @@ export const startMatch = mutation({
       sideAPlayerIds: args.sideAPlayerIds,
       sideBPlayerIds: args.sideBPlayerIds,
       ruleSnapshot,
+      ...(clock ? { clock } : {}),
       createdBy: user._id,
       createdAt: Date.now(),
     });

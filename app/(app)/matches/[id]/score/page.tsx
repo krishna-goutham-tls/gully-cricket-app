@@ -4,9 +4,16 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { CoinToss } from "@/components/match/CoinToss";
+import {
+  TestClockLine,
+  TestClockOverlays,
+  TestClockProvider,
+  TestClockStatus,
+} from "@/components/match/TestClock";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import { matchBoardLabel, matchBoardLine } from "@/lib/matchBoard";
 import { cn, errorMessage } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { ArrowLeft, Eye, Undo2, UserPlus } from "lucide-react";
@@ -147,6 +154,10 @@ export default function ScorePage() {
   const endInnings = useMutation(api.scoring.endInnings);
   const setBattingFirst = useMutation(api.scoring.setBattingFirst);
   const startInnings = useMutation(api.scoring.startInnings);
+  const pauseClock = useMutation(api.scoring.pauseClock);
+  const resumeClock = useMutation(api.scoring.resumeClock);
+  const keepPlayingAfterTime = useMutation(api.scoring.keepPlayingAfterTime);
+  const endMatchNow = useMutation(api.scoring.endMatchNow);
 
   const [sheet, setSheet] = useState<Sheet>(null);
   const [wicketType, setWicketType] = useState<string>("bowled");
@@ -400,6 +411,30 @@ export default function ScorePage() {
     const ready = pickStriker && (solo || pickNon) && pickBowler;
 
     return (
+      <TestClockProvider
+        clock={state.clock}
+        role="scorer"
+        matchId={matchId}
+        onPause={
+          token ? () => pauseClock({ token, matchId }) : undefined
+        }
+        onResume={
+          token ? () => resumeClock({ token, matchId }) : undefined
+        }
+        onKeepPlaying={
+          token
+            ? () => keepPlayingAfterTime({ token, matchId })
+            : undefined
+        }
+        onEndMatch={
+          token
+            ? () =>
+                tap("end", async () => {
+                  await endMatchNow({ token, matchId });
+                })
+            : undefined
+        }
+      >
       <div className="min-h-dvh bg-bg px-5 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-[calc(var(--safe-top)+1rem)]">
         <Link
           href="/home"
@@ -423,6 +458,8 @@ export default function ScorePage() {
               ? "One batter at a time — pick who opens and who bowls."
               : "Pick the openers and opening bowler."}
         </p>
+        <TestClockLine tone="paper" />
+        <TestClockStatus />
         {error ? <p className="mt-4 text-[13px] text-danger">{error}</p> : null}
         <div className="mt-6 space-y-4">
           {isBreak && bi?.canChooseSide && bi.followOnSide ? (
@@ -517,7 +554,9 @@ export default function ScorePage() {
               : "Start scoring"}
           </Button>
         </div>
+        <TestClockOverlays />
       </div>
+      </TestClockProvider>
     );
   }
 
@@ -631,6 +670,19 @@ export default function ScorePage() {
     .filter((i) => i.battingSide !== live.battingSide)
     .reduce((s, i) => s + i.totalRuns, 0);
   const declareMode = isTest && aggBat > aggOther;
+  const board = live.battingSide
+    ? matchBoardLine({
+        inningsPerSide: state.ruleSnapshot.inningsPerSide ?? 1,
+        innings: state.innings,
+        live: {
+          battingSide: live.battingSide,
+          totalRuns: live.totalRuns,
+          inningsNo: live.inningsNo,
+          currentInningsId: live.currentInningsId,
+          target: live.target,
+        },
+      })
+    : null;
   const isFollowOnInnings =
     isTest &&
     live.inningsNo === 3 &&
@@ -712,6 +764,35 @@ export default function ScorePage() {
       : null;
 
   return (
+    <TestClockProvider
+      clock={state.clock}
+      role="scorer"
+      matchId={matchId}
+      onPause={
+        token
+          ? () => pauseClock({ token, matchId })
+          : undefined
+      }
+      onResume={
+        token
+          ? () => resumeClock({ token, matchId })
+          : undefined
+      }
+      onKeepPlaying={
+        token
+          ? () => keepPlayingAfterTime({ token, matchId })
+          : undefined
+      }
+      onEndMatch={
+        token
+          ? () =>
+              tap("end", async () => {
+                await endMatchNow({ token, matchId });
+              })
+          : undefined
+      }
+      suppressTimeUp={confirmEndInnings}
+    >
     <div className="flex min-h-dvh flex-col bg-bg">
       <header className="bg-ink px-4 pb-5 pt-[calc(var(--safe-top)+1rem)] text-bg">
         <div className="flex items-center justify-between">
@@ -750,6 +831,7 @@ export default function ScorePage() {
             </button>
           </div>
         </div>
+        <TestClockLine />
 
         <div className="mt-1 text-center">
           {/* Score and overs sit side by side, both big — the two things a
@@ -790,20 +872,16 @@ export default function ScorePage() {
               ) : null}
             </p>
           ) : null}
-          {live.target !== undefined ? (
+          {board?.kind === "target" ? (
             <p className="tabular mt-1.5 inline-block rounded-full bg-accent/15 px-3 py-1 text-[13px] font-medium text-accent">
-              Target {live.target}
-              {live.requiredRunRate != null
-                ? ` · need ${live.requiredRunRate.toFixed(1)}/ov`
+              {matchBoardLabel(board)}
+              {!isTest && live.requiredRunRate != null
+                ? ` · ${live.requiredRunRate.toFixed(1)}/ov`
                 : ""}
             </p>
-          ) : isTest && live.inningsNo > 1 ? (
+          ) : board ? (
             <p className="tabular mt-1.5 inline-block rounded-full bg-white/10 px-3 py-1 text-[13px] font-medium text-bg/70">
-              {aggBat === aggOther
-                ? "Scores level"
-                : aggBat > aggOther
-                  ? `Lead by ${aggBat - aggOther}`
-                  : `Trail by ${aggOther - aggBat}`}
+              {matchBoardLabel(board)}
             </p>
           ) : null}
         </div>
@@ -888,6 +966,7 @@ export default function ScorePage() {
           ballsPerOver={state.ruleSnapshot.ballsPerOver}
         />
       </header>
+      <TestClockStatus />
 
       {error ? (
         <div className="mx-4 mt-3 rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-[13px] text-danger">
@@ -1561,7 +1640,9 @@ export default function ScorePage() {
         }}
         onCancel={() => setConfirmEndInnings(false)}
       />
+      <TestClockOverlays />
     </div>
+    </TestClockProvider>
   );
 }
 
