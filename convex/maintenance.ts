@@ -2,6 +2,9 @@ import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { assertSeriesSides } from "./lib/tournamentLineup";
+import { buildRuleSnapshot } from "./lib/rules";
+import { legalBallToOverText } from "./lib/scoring";
+import { looksLikeJunior, resolvePlayerTags, sortTags } from "./lib/playerLabel";
 
 const side = v.union(v.literal("A"), v.literal("B"));
 
@@ -191,6 +194,188 @@ export const linkMatchToTournament = internalMutation({
       tournament: t.name,
       winnerSide: match.winnerSide,
     };
+  },
+});
+
+/**
+ * Ops: a completed Test that was really an ODI. Refuses unless every innings
+ * past the first two has 0 balls (the dummy 3rd/4th used to close a Test).
+ * Result text is left alone — it already reads as a runs win.
+ */
+export const retagCompletedAsLimited = internalMutation({
+  args: {
+    matchId: v.id("matches"),
+    overs: v.number(),
+    oversPerPlayer: v.number(),
+  },
+  handler: async (ctx, { matchId, overs, oversPerPlayer }) => {
+    const match = await ctx.db.get(matchId);
+    if (!match) throw new Error("Match not found");
+    if (match.status !== "completed")
+      throw new Error(`Match not completed (status=${match.status})`);
+    if (match.ruleSnapshot.format !== "test")
+      throw new Error(`Match format is ${match.ruleSnapshot.format}, not test`);
+
+    const innings = await ctx.db
+      .query("innings")
+      .withIndex("by_match", (q) => q.eq("matchId", matchId))
+      .collect();
+    innings.sort((a, b) => a.inningsNo - b.inningsNo);
+
+    const extras = innings.filter((i) => i.inningsNo > 2);
+    for (const inn of extras) {
+      const balls = await ctx.db
+        .query("balls")
+        .withIndex("by_innings", (q) => q.eq("inningsId", inn._id))
+        .collect();
+      if (balls.length > 0 || inn.legalBalls !== 0 || inn.totalRuns !== 0) {
+        throw new Error(
+          `Innings ${inn.inningsNo} has real play — not a dummy close`,
+        );
+      }
+    }
+
+    const snapshot = buildRuleSnapshot({
+      format: "limited",
+      overs,
+      oversPerPlayer,
+      battingMode: match.ruleSnapshot.battingModeDefault,
+      lastBatsmanAlone: match.ruleSnapshot.lastBatsmanAlone,
+    });
+    await ctx.db.patch(matchId, { ruleSnapshot: snapshot });
+
+    for (const inn of extras) await ctx.db.delete(inn._id);
+
+    const lastReal = innings.find((i) => i.inningsNo === 2);
+    const live = await ctx.db
+      .query("matchLiveState")
+      .withIndex("by_match", (q) => q.eq("matchId", matchId))
+      .unique();
+    if (live && lastReal) {
+      await ctx.db.patch(live._id, {
+        currentInningsId: lastReal._id,
+        inningsNo: lastReal.inningsNo,
+        battingSide: lastReal.battingSide,
+        totalRuns: lastReal.totalRuns,
+        wickets: lastReal.wickets,
+        legalBalls: lastReal.legalBalls,
+        oversText: legalBallToOverText(
+          lastReal.legalBalls,
+          snapshot.ballsPerOver,
+        ),
+        resultText: match.resultText,
+      });
+    }
+
+    return {
+      matchId,
+      format: snapshot.format,
+      deletedInnings: extras.map((i) => i.inningsNo),
+      overs,
+      oversPerPlayer,
+    };
+  },
+});
+
+/**
+ * Ops: two overs were given to the wrong bowlers. Swaps bowlerId on every
+ * delivery in those overs. Each over must already be a single bowler.
+ * Stats replay from the ball log, so no recompute.
+ */
+export const swapOverBowlers = internalMutation({
+  args: {
+    matchId: v.id("matches"),
+    inningsNo: v.number(),
+    overA: v.number(),
+    overB: v.number(),
+  },
+  handler: async (ctx, { matchId, inningsNo, overA, overB }) => {
+    if (overA === overB) throw new Error("Pick two different overs");
+    const inn = await ctx.db
+      .query("innings")
+      .withIndex("by_match_no", (q) =>
+        q.eq("matchId", matchId).eq("inningsNo", inningsNo),
+      )
+      .unique();
+    if (!inn) throw new Error("Innings not found");
+
+    const balls = await ctx.db
+      .query("balls")
+      .withIndex("by_innings", (q) => q.eq("inningsId", inn._id))
+      .collect();
+
+    const inOver = (n: number) =>
+      balls.filter((b) => b.overNumber === n && !b.isRetire);
+    const aBalls = inOver(overA);
+    const bBalls = inOver(overB);
+    if (aBalls.length === 0 || bBalls.length === 0)
+      throw new Error("One of those overs has no deliveries");
+
+    const idsA = new Set(aBalls.map((b) => String(b.bowlerId)));
+    const idsB = new Set(bBalls.map((b) => String(b.bowlerId)));
+    if (idsA.size !== 1 || idsB.size !== 1)
+      throw new Error("Each over must have exactly one bowler");
+    const idA = aBalls[0].bowlerId;
+    const idB = bBalls[0].bowlerId;
+    if (String(idA) === String(idB))
+      throw new Error("Those overs already have the same bowler");
+
+    for (const b of aBalls) await ctx.db.patch(b._id, { bowlerId: idB });
+    for (const b of bBalls) await ctx.db.patch(b._id, { bowlerId: idA });
+
+    const nameOf = async (id: Id<"users">) => {
+      const u = await ctx.db.get(id);
+      return u && "displayName" in u ? u.displayName : "?";
+    };
+    return {
+      inningsNo,
+      swapped: [
+        { over: overA, from: await nameOf(idA), to: await nameOf(idB) },
+        { over: overB, from: await nameOf(idB), to: await nameOf(idA) },
+      ],
+      ballsPatched: aBalls.length + bBalls.length,
+    };
+  },
+});
+
+/** Ops: rename a player. If the new name ends in Jr, stamp the junior tag. */
+export const renamePlayer = internalMutation({
+  args: {
+    userId: v.id("users"),
+    displayName: v.string(),
+  },
+  handler: async (ctx, { userId, displayName }) => {
+    const user = await ctx.db.get(userId);
+    if (!user) throw new Error("User not found");
+    const name = displayName.trim();
+    if (name.length < 2 || name.length > 40)
+      throw new Error("Name must be 2-40 characters");
+    const previous = user.displayName;
+    await ctx.db.patch(userId, { displayName: name, updatedAt: Date.now() });
+
+    let membershipsPatched = 0;
+    if (looksLikeJunior(name)) {
+      const memberships = await ctx.db
+        .query("orgMembers")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .collect();
+      for (const m of memberships) {
+        const tags = new Set(
+          resolvePlayerTags(m.playerTags, m.playerLabel, user.isGuest ?? false),
+        );
+        tags.add("junior");
+        const playerTags = sortTags(tags);
+        const same =
+          m.playerTags !== undefined &&
+          m.playerTags.length === playerTags.length &&
+          m.playerTags.every((t, i) => t === playerTags[i]);
+        if (same) continue;
+        await ctx.db.patch(m._id, { playerTags });
+        membershipsPatched += 1;
+      }
+    }
+
+    return { previous, displayName: name, membershipsPatched };
   },
 });
 
