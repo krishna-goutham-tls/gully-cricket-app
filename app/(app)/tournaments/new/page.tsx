@@ -4,6 +4,12 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import {
+  DEFAULT_TEST_MINUTES,
+  MAX_TEST_MINUTES,
+  MIN_TEST_MINUTES,
+  TEST_CLOCK_DAYS,
+} from "@/convex/lib/clock";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -13,6 +19,12 @@ import Link from "next/link";
 import { ArrowLeft, Crown, Minus, Plus, Star, Users, X } from "lucide-react";
 
 type DraftTarget = "A" | "B" | "common";
+
+function matchTimeHint(minutes: number) {
+  const per = minutes / TEST_CLOCK_DAYS;
+  const n = Number.isInteger(per) ? String(per) : per.toFixed(1);
+  return `${TEST_CLOCK_DAYS} days · ${n} min each`;
+}
 
 export default function NewTournamentPage() {
   const { token, activeOrgId } = useAuth();
@@ -26,6 +38,7 @@ export default function NewTournamentPage() {
 
   const [name, setName] = useState("");
   const [format, setFormat] = useState<"limited" | "test">("test");
+  const [durationMinutes, setDurationMinutes] = useState(DEFAULT_TEST_MINUTES);
   const [overs, setOvers] = useState(20);
   const [oversPerPlayer, setOversPerPlayer] = useState(2);
   const [battingMode, setBattingMode] = useState<"double" | "single">("double");
@@ -141,6 +154,8 @@ export default function NewTournamentPage() {
         oversPerInnings: overs,
         oversPerPlayer: format === "limited" ? oversPerPlayer : undefined,
         battingMode,
+        matchDurationMinutes:
+          format === "test" ? durationMinutes : undefined,
         sideAName: nameA.trim() || `Team ${nameOf(capA)}`,
         sideBName: nameB.trim() || `Team ${nameOf(capB)}`,
         sideASquadIds: orderedA as Id<"users">[],
@@ -249,6 +264,37 @@ export default function NewTournamentPage() {
             className="tabular h-11 w-20 rounded-xl border border-line bg-bg px-3 text-center text-lg font-semibold text-ink outline-none focus:border-ink"
           />
         </div>
+
+        {format === "test" ? (
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4">
+            <div className="min-w-0">
+              <p className="text-[15px] font-medium text-ink">Match time</p>
+              <p className="mt-0.5 text-[13px] text-muted">
+                {matchTimeHint(durationMinutes)}
+              </p>
+            </div>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={MIN_TEST_MINUTES}
+              max={MAX_TEST_MINUTES}
+              step={1}
+              value={durationMinutes}
+              onChange={(e) => {
+                if (e.target.value === "") {
+                  setDurationMinutes(MIN_TEST_MINUTES);
+                  return;
+                }
+                const n = parseInt(e.target.value, 10);
+                if (!Number.isInteger(n)) return;
+                setDurationMinutes(
+                  Math.min(MAX_TEST_MINUTES, Math.max(MIN_TEST_MINUTES, n)),
+                );
+              }}
+              className="tabular h-11 w-20 rounded-xl border border-line bg-bg px-3 text-center text-lg font-semibold text-ink outline-none focus:border-ink"
+            />
+          </div>
+        ) : null}
 
         {format === "limited" ? (
           <Stepper

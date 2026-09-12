@@ -1,5 +1,11 @@
 "use client";
 
+import {
+  DEFAULT_TEST_MINUTES,
+  MAX_TEST_MINUTES,
+  MIN_TEST_MINUTES,
+} from "@/convex/lib/clock";
+
 const TOKEN_KEY = "cricket_session_token";
 const ORG_KEY = "cricket_active_org";
 const AUTH_CACHE_KEY = "boundary_auth_cache";
@@ -186,4 +192,22 @@ export function getLastOversPerPlayer(): number {
 
 export function setLastOversPerPlayer(overs: number) {
   localStorage.setItem(LAST_OPP_KEY, String(overs));
+}
+
+const LAST_DURATION_KEY = "boundary_last_duration_minutes";
+
+/** Test match length in minutes. 15–180; default 90. */
+export function getLastDurationMinutes(): number {
+  if (typeof window === "undefined") return DEFAULT_TEST_MINUTES;
+  const raw = localStorage.getItem(LAST_DURATION_KEY);
+  const n = raw ? parseInt(raw, 10) : NaN;
+  return Number.isInteger(n) &&
+    n >= MIN_TEST_MINUTES &&
+    n <= MAX_TEST_MINUTES
+    ? n
+    : DEFAULT_TEST_MINUTES;
+}
+
+export function setLastDurationMinutes(minutes: number) {
+  localStorage.setItem(LAST_DURATION_KEY, String(minutes));
 }
