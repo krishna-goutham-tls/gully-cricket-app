@@ -25,6 +25,7 @@ import {
 import { balanceTeams } from "@/lib/autoTeams";
 import { cn, errorMessage } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
+import { NumberField } from "@/components/ui/NumberField";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -378,17 +379,29 @@ export default function NewMatchPage() {
         sideBName: nameB || undefined,
         sideAPlayerIds: [...teamA, ...common] as Id<"users">[],
         sideBPlayerIds: [...teamB, ...common] as Id<"users">[],
-        overs,
+        overs: Math.min(200, Math.max(1, overs)),
         battingMode,
         format,
         oversPerPlayer: format === "limited" ? oversPerPlayer : undefined,
         lastBatsmanAlone,
-        durationMinutes: format === "test" ? durationMinutes : undefined,
+        durationMinutes:
+          format === "test"
+            ? Math.min(
+                MAX_TEST_MINUTES,
+                Math.max(MIN_TEST_MINUTES, durationMinutes),
+              )
+            : undefined,
       });
-      setLastOvers(overs);
+      setLastOvers(Math.min(200, Math.max(1, overs)));
       setLastFormat(format);
       if (format === "limited") setLastOversPerPlayer(oversPerPlayer);
-      if (format === "test") setLastDurationMinutes(durationMinutes);
+      if (format === "test")
+        setLastDurationMinutes(
+          Math.min(
+            MAX_TEST_MINUTES,
+            Math.max(MIN_TEST_MINUTES, durationMinutes),
+          ),
+        );
       await dropStepEntry();
       router.replace(`/matches/${res.matchId}/score`);
     } catch (e) {
@@ -729,24 +742,12 @@ export default function NewMatchPage() {
 
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4">
           <p className="text-[15px] font-medium text-ink">Overs per innings</p>
-          <input
-            type="number"
-            inputMode="numeric"
-            enterKeyHint="done"
+          <NumberField
+            aria-label="Overs per innings"
+            value={overs}
             min={1}
             max={200}
-            step={1}
-            value={overs}
-            onChange={(e) => {
-              const n = parseInt(e.target.value, 10);
-              if (e.target.value === "") {
-                setOvers(1);
-                return;
-              }
-              if (!Number.isInteger(n)) return;
-              setOvers(Math.min(200, Math.max(1, n)));
-            }}
-            className="tabular h-11 w-20 rounded-xl border border-line bg-bg px-3 text-center text-lg font-semibold text-ink outline-none focus:border-ink"
+            onChange={setOvers}
           />
         </div>
 
@@ -758,26 +759,12 @@ export default function NewMatchPage() {
                 {matchTimeHint(durationMinutes)}
               </p>
             </div>
-            <input
-              type="number"
-              inputMode="numeric"
-              enterKeyHint="done"
+            <NumberField
+              aria-label="Match time in minutes"
+              value={durationMinutes}
               min={MIN_TEST_MINUTES}
               max={MAX_TEST_MINUTES}
-              step={1}
-              value={durationMinutes}
-              onChange={(e) => {
-                const n = parseInt(e.target.value, 10);
-                if (e.target.value === "") {
-                  setDurationMinutes(MIN_TEST_MINUTES);
-                  return;
-                }
-                if (!Number.isInteger(n)) return;
-                setDurationMinutes(
-                  Math.min(MAX_TEST_MINUTES, Math.max(MIN_TEST_MINUTES, n)),
-                );
-              }}
-              className="tabular h-11 w-20 rounded-xl border border-line bg-bg px-3 text-center text-lg font-semibold text-ink outline-none focus:border-ink"
+              onChange={setDurationMinutes}
             />
           </div>
         ) : null}

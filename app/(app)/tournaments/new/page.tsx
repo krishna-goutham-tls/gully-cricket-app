@@ -13,6 +13,7 @@ import {
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { NumberField } from "@/components/ui/NumberField";
 import { cn, errorMessage } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -151,11 +152,16 @@ export default function NewTournamentPage() {
         orgId: activeOrgId,
         name: name.trim(),
         format,
-        oversPerInnings: overs,
+        oversPerInnings: Math.min(200, Math.max(1, overs)),
         oversPerPlayer: format === "limited" ? oversPerPlayer : undefined,
         battingMode,
         matchDurationMinutes:
-          format === "test" ? durationMinutes : undefined,
+          format === "test"
+            ? Math.min(
+                MAX_TEST_MINUTES,
+                Math.max(MIN_TEST_MINUTES, durationMinutes),
+              )
+            : undefined,
         sideAName: nameA.trim() || `Team ${nameOf(capA)}`,
         sideBName: nameB.trim() || `Team ${nameOf(capB)}`,
         sideASquadIds: orderedA as Id<"users">[],
@@ -245,23 +251,12 @@ export default function NewTournamentPage() {
 
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4">
           <p className="text-[15px] font-medium text-ink">Overs per innings</p>
-          <input
-            type="number"
-            inputMode="numeric"
+          <NumberField
+            aria-label="Overs per innings"
+            value={overs}
             min={1}
             max={200}
-            step={1}
-            value={overs}
-            onChange={(e) => {
-              if (e.target.value === "") {
-                setOvers(1);
-                return;
-              }
-              const n = parseInt(e.target.value, 10);
-              if (!Number.isInteger(n)) return;
-              setOvers(Math.min(200, Math.max(1, n)));
-            }}
-            className="tabular h-11 w-20 rounded-xl border border-line bg-bg px-3 text-center text-lg font-semibold text-ink outline-none focus:border-ink"
+            onChange={setOvers}
           />
         </div>
 
@@ -273,25 +268,12 @@ export default function NewTournamentPage() {
                 {matchTimeHint(durationMinutes)}
               </p>
             </div>
-            <input
-              type="number"
-              inputMode="numeric"
+            <NumberField
+              aria-label="Match time in minutes"
+              value={durationMinutes}
               min={MIN_TEST_MINUTES}
               max={MAX_TEST_MINUTES}
-              step={1}
-              value={durationMinutes}
-              onChange={(e) => {
-                if (e.target.value === "") {
-                  setDurationMinutes(MIN_TEST_MINUTES);
-                  return;
-                }
-                const n = parseInt(e.target.value, 10);
-                if (!Number.isInteger(n)) return;
-                setDurationMinutes(
-                  Math.min(MAX_TEST_MINUTES, Math.max(MIN_TEST_MINUTES, n)),
-                );
-              }}
-              className="tabular h-11 w-20 rounded-xl border border-line bg-bg px-3 text-center text-lg font-semibold text-ink outline-none focus:border-ink"
+              onChange={setDurationMinutes}
             />
           </div>
         ) : null}
