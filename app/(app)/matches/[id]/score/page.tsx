@@ -23,7 +23,7 @@ import { useState } from "react";
 
 type Sheet =
   | null
-  | { kind: "extra"; type: "bye" | "legbye" }
+  | { kind: "extra"; type: "bye" | "legbye" | "noball" }
   | { kind: "wicket" }
   | { kind: "bowler" }
   | { kind: "batsman" }
@@ -61,7 +61,8 @@ function ballLabel(b: {
   if (b.isRetire) return "R";
   if (b.isWicket) return "W";
   if (b.extrasType === "wide") return "Wd";
-  if (b.extrasType === "noball") return "Nb";
+  if (b.extrasType === "noball")
+    return b.runsBat > 0 ? `Nb${b.runsBat}` : "Nb";
   if (b.extrasType === "bye") return `B${b.extrasRuns}`;
   if (b.extrasType === "legbye") return `Lb${b.extrasRuns}`;
   // A dot ball is still a scored delivery — showing the digit keeps every
@@ -251,7 +252,7 @@ export default function ScorePage() {
     );
   }
 
-  async function sendExtra(type: "wide" | "noball") {
+  async function sendExtra(type: "wide") {
     if (!token) return;
     await tap(type, () =>
       recordBall({
@@ -262,6 +263,20 @@ export default function ScorePage() {
         extrasRuns: 1,
       }),
     );
+  }
+
+  async function sendNoBall(runsBat: number) {
+    if (!token) return;
+    await tap("noball", () =>
+      recordBall({
+        token,
+        matchId,
+        runsBat,
+        extrasType: "noball",
+        extrasRuns: 1,
+      }),
+    );
+    setSheet(null);
   }
 
   async function sendByeLb(type: "bye" | "legbye", runs: number) {
@@ -1061,7 +1076,7 @@ export default function ScorePage() {
             small
             disabled={locked}
             active={pulse === "noball"}
-            onClick={() => sendExtra("noball")}
+            onClick={() => setSheet({ kind: "extra", type: "noball" })}
           />
           <PadKey
             label="BYE"
@@ -1125,14 +1140,40 @@ export default function ScorePage() {
             {activeSheet.kind === "extra" ? (
               <>
                 <p className="text-[15px] font-semibold text-ink">
-                  {activeSheet.type === "bye" ? "Byes" : "Leg byes"}
+                  {activeSheet.type === "noball"
+                    ? "No-ball"
+                    : activeSheet.type === "bye"
+                      ? "Byes"
+                      : "Leg byes"}
                 </p>
-                <div className="mt-4 grid grid-cols-4 gap-2">
-                  {[1, 2, 3, 4].map((n) => (
+                {activeSheet.type === "noball" ? (
+                  <p className="mt-1 text-[13px] text-muted">
+                    The no-ball is +1. This is what they hit.
+                  </p>
+                ) : null}
+                <div
+                  className={cn(
+                    "mt-4 grid gap-2",
+                    activeSheet.type === "noball"
+                      ? "grid-cols-3"
+                      : "grid-cols-4",
+                  )}
+                >
+                  {(activeSheet.type === "noball"
+                    ? [0, 1, 2, 3, 4, 6]
+                    : [1, 2, 3, 4]
+                  ).map((n) => (
                     <PadKey
                       key={n}
                       label={String(n)}
-                      onClick={() => sendByeLb(activeSheet.type, n)}
+                      emphasis={
+                        activeSheet.type === "noball" && (n === 4 || n === 6)
+                      }
+                      onClick={() =>
+                        activeSheet.type === "noball"
+                          ? sendNoBall(n)
+                          : sendByeLb(activeSheet.type, n)
+                      }
                     />
                   ))}
                 </div>
