@@ -14,7 +14,8 @@ import { Id } from "@/convex/_generated/dataModel";
 import { errorMessage } from "@/lib/utils";
 
 export default function JoinPage() {
-  const { token, pendingMemberships, activeMemberships, logout } = useAuth();
+  const { token, user, pendingMemberships, activeMemberships, logout } =
+    useAuth();
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -128,23 +129,32 @@ export default function JoinPage() {
             ))}
           </div>
         ) : list.length === 0 ? (
-          <EmptyState
-            title="No communities found"
-            body={
-              search.trim()
-                ? "Nothing matches that name. Try just the first word — or ask your organiser for the exact one."
-                : canCreate
-                  ? "Nothing listed yet. Create yours and share the app link with the players you turn up with."
-                  : "Ask whoever organises your matches to add you. If that's you, register your community at gullycricket.space."
-            }
-            action={
-              canCreate ? (
-                <Button onClick={() => router.push("/org/new")}>
-                  Create your community
-                </Button>
-              ) : undefined
-            }
-          />
+          <>
+            <EmptyState
+              title="No communities found"
+              body={
+                search.trim()
+                  ? "Nothing matches that name. Try the first word, or ask your organiser for the exact spelling."
+                  : canCreate
+                    ? "Nothing listed yet. Create yours and share the app link with the players you turn up with."
+                    : "Ask whoever organises your matches to add you. Search for the name they used."
+              }
+              action={
+                canCreate ? (
+                  <Button onClick={() => router.push("/org/new")}>
+                    Create your community
+                  </Button>
+                ) : undefined
+              }
+            />
+            {!canCreate ? (
+              <RegisterCommunityOnJoin
+                name={user?.displayName ?? ""}
+                phone={user?.phone ?? ""}
+                requestPending={allowance?.reason === "pending"}
+              />
+            ) : null}
+          </>
         ) : (
           list.map((org) => (
             <div
@@ -203,5 +213,76 @@ export default function JoinPage() {
         </button>
       </div>
     </main>
+  );
+}
+
+function RegisterCommunityOnJoin({
+  name,
+  phone,
+  requestPending,
+}: {
+  name: string;
+  phone: string;
+  requestPending: boolean;
+}) {
+  const submitRequest = useMutation(api.access.submitRequest);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
+
+  async function onRegister() {
+    if (!phone) {
+      setError("This account has no phone number on it.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await submitRequest({
+        name: name.trim() || "Organiser",
+        phone,
+      });
+      setSent(true);
+    } catch (e) {
+      setError(errorMessage(e, "Could not send that"));
+      setBusy(false);
+    }
+  }
+
+  if (sent || requestPending) {
+    return (
+      <div className="mt-4 rounded-2xl border border-accent/30 bg-accent-soft p-5">
+        <p className="text-[15px] font-semibold text-accent-deep">
+          Request sent
+        </p>
+        <p className="mt-1.5 text-[13px] leading-relaxed text-ink">
+          I&apos;ll WhatsApp you within a day. Your community opens after that
+          hello.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 rounded-2xl border border-line bg-surface p-5">
+      <p className="text-[13px] leading-relaxed text-muted">
+        Don&apos;t see yours? Ask your organiser for the exact name.
+      </p>
+      <p className="mt-2 text-[13px] leading-relaxed text-ink">
+        If you organise the matches and it is not in the app yet, register the
+        community here.
+      </p>
+      {error ? (
+        <p className="mt-3 text-[13px] text-danger">{error}</p>
+      ) : null}
+      <Button
+        fullWidth
+        className="mt-4"
+        disabled={busy || !phone}
+        onClick={() => void onRegister()}
+      >
+        {busy ? "Sending…" : "Register your community"}
+      </Button>
+    </div>
   );
 }

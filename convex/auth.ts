@@ -213,6 +213,28 @@ export const signUp = mutation({
   },
 });
 
+/**
+ * Public door for the login and landing phone field. Returns only whether
+ * this number already has a PIN, is an unclaimed guest, or is unknown —
+ * never a name or membership. The next screen is Sign in, claim, or
+ * create account; the player does not pick that.
+ */
+export const lookupPhone = query({
+  args: { phone: v.string() },
+  handler: async (ctx, args) => {
+    const phone = normalizePhone(args.phone);
+    if (!phone) return { status: "invalid" as const };
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_phone", (q) => q.eq("phone", phone))
+      .unique();
+    if (!user) return { status: "unknown" as const };
+    if (user.pinHash && user.pinSalt) return { status: "hasPin" as const };
+    return { status: "guest" as const };
+  },
+});
+
 export const signIn = mutation({
   args: {
     phone: v.string(),
