@@ -553,6 +553,20 @@ export default function ScorePage() {
               ? `Start innings ${bi?.nextInningsNo ?? 2}`
               : "Start scoring"}
           </Button>
+          {isBreak && token ? (
+            <Button
+              variant="ghost"
+              fullWidth
+              disabled={busy}
+              onClick={() =>
+                tap("undo", async () => {
+                  await undoLastBall({ token, matchId });
+                })
+              }
+            >
+              Undo last ball
+            </Button>
+          ) : null}
         </div>
         <TestClockOverlays />
       </div>
@@ -570,9 +584,24 @@ export default function ScorePage() {
           <h1 className="mt-3 text-2xl font-semibold text-ink">
             {state.resultText ?? `${state.sideA.name} vs ${state.sideB.name}`}
           </h1>
+          {state.status === "completed" && token ? (
+            <Button
+              variant="ghost"
+              fullWidth
+              className="mt-8"
+              disabled={busy}
+              onClick={() =>
+                tap("undo", async () => {
+                  await undoLastBall({ token, matchId });
+                })
+              }
+            >
+              Undo last ball
+            </Button>
+          ) : null}
           <Button
             fullWidth
-            className="mt-8"
+            className={state.status === "completed" ? "mt-3" : "mt-8"}
             onClick={() => router.push(`/matches/${matchId}`)}
           >
             View scorecard
@@ -598,6 +627,13 @@ export default function ScorePage() {
       </div>
     );
   }
+
+  const lastMan =
+    !solo &&
+    (state.ruleSnapshot.lastBatsmanAlone ?? true) &&
+    !!live.striker &&
+    !live.nonStriker;
+  const oneBatter = solo || lastMan;
 
   const battingName =
     live.battingSide === "A" ? state.sideA.name : state.sideB.name;
@@ -661,6 +697,10 @@ export default function ScorePage() {
     return [...bowlingSide, ...battingSideHelpers];
   })();
   const locked = live.needBowler || live.needBatsman || live.needRetire || busy;
+  const canChangeBowler =
+    !live.needBowler &&
+    !!live.bowler &&
+    live.currentOverBalls.filter((b) => !b.isRetire).length === 0;
 
   const isTest = state.ruleSnapshot.inningsPerSide === 2;
   const aggBat = state.innings
@@ -889,20 +929,20 @@ export default function ScorePage() {
         <div
           className={cn(
             "mt-4 grid gap-2 text-center text-[11px]",
-            solo ? "grid-cols-2" : "grid-cols-3",
+            oneBatter ? "grid-cols-2" : "grid-cols-3",
           )}
         >
           {/* Gold fill marks who is facing — readable at a glance mid-over */}
           <div className="rounded-2xl bg-accent/20 px-2 py-2 ring-1 ring-accent/60">
             <p className="font-semibold uppercase tracking-wide text-accent">
-              {solo ? "Batting" : "On strike"}
+              {lastMan ? "Last man" : solo ? "Batting" : "On strike"}
             </p>
             <p
               className="mt-0.5 line-clamp-2 text-[15px] font-semibold text-bg [overflow-wrap:anywhere]"
               title={live.striker?.displayName ?? undefined}
             >
               {live.striker?.displayName ?? "—"}
-              {solo ? null : <span className="text-accent">*</span>}
+              {oneBatter ? null : <span className="text-accent">*</span>}
             </p>
             {live.figures.striker ? (
               <p className="tabular mt-0.5 text-[13px] text-bg/70">
@@ -917,7 +957,7 @@ export default function ScorePage() {
               </p>
             ) : null}
           </div>
-          {solo ? null : (
+          {oneBatter ? null : (
             <div className="rounded-2xl bg-white/[0.05] px-2 py-2">
               <p className="font-semibold uppercase tracking-wide text-bg/70">
                 Non-striker
@@ -956,6 +996,16 @@ export default function ScorePage() {
               <p className="tabular mt-0.5 text-[13px] text-bg/70">
                 {live.figures.bowler.wickets}-{live.figures.bowler.runs}
               </p>
+            ) : null}
+            {canChangeBowler ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setSheet({ kind: "bowler" })}
+                className="mt-1 min-h-11 w-full text-[13px] font-semibold text-accent"
+              >
+                Change
+              </button>
             ) : null}
           </div>
         </div>
@@ -1033,7 +1083,7 @@ export default function ScorePage() {
             small
             emphasis
             armed={!!state.lastBallDrop}
-            disabled={locked || live.lastBalls.length === 0}
+            disabled={busy || live.lastBalls.length === 0}
             onClick={() => {
               setDropId(
                 state.lastBallDrop ? String(state.lastBallDrop.byId) : null,
@@ -1261,6 +1311,16 @@ export default function ScorePage() {
                   </div>
                 ) : null}
                 <SquadEscapeHatch onOpen={() => setSheet({ kind: "squad" })} />
+                {!live.needBowler ? (
+                  <Button
+                    variant="ghost"
+                    fullWidth
+                    className="mt-3"
+                    onClick={() => setSheet(null)}
+                  >
+                    Cancel
+                  </Button>
+                ) : null}
               </>
             ) : null}
 

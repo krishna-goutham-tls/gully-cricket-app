@@ -53,6 +53,20 @@ function isSolo(match: Doc<"matches">): boolean {
   return match.ruleSnapshot.battingModeDefault === "single";
 }
 
+/** Gully last-man: pairs match, survivor on strike, empty other end. */
+function isLastManAtCrease(
+  match: Doc<"matches">,
+  strikerId: Id<"users"> | undefined,
+  nonStrikerId: Id<"users"> | undefined,
+): boolean {
+  return (
+    (match.ruleSnapshot.lastBatsmanAlone ?? true) &&
+    !isSolo(match) &&
+    strikerId !== undefined &&
+    nonStrikerId === undefined
+  );
+}
+
 export function sidePlayers(match: Doc<"matches">, side: Side): Id<"users">[] {
   return side === "A" ? match.sideAPlayerIds : match.sideBPlayerIds;
 }
@@ -888,9 +902,17 @@ export const recordBall = mutation({
     }
     if (innings.needBowler) throw new Error("Pick a bowler first");
     if (innings.needBatsman) throw new Error("Pick the next batsman first");
+    if (!innings.currentStrikerId) {
+      throw new Error("Batsmen not set");
+    }
     if (
-      !innings.currentStrikerId ||
-      (!isSolo(match) && !innings.currentNonStrikerId)
+      !innings.currentNonStrikerId &&
+      !isSolo(match) &&
+      !isLastManAtCrease(
+        match,
+        innings.currentStrikerId,
+        innings.currentNonStrikerId,
+      )
     ) {
       throw new Error("Batsmen not set");
     }
@@ -1156,7 +1178,7 @@ export const tagDrop = mutation({
     if (!live?.currentInningsId) throw new Error("No active innings");
 
     const balls = await getBallsOrdered(ctx, live.currentInningsId);
-    const lastBall = balls[balls.length - 1];
+    const lastBall = [...balls].reverse().find((b) => !b.isRetire);
     if (!lastBall) {
       throw new Error("Score the ball first, then tag the drop");
     }
@@ -1213,7 +1235,23 @@ export const setBowler = mutation({
     if (!innings || innings.status !== "in_progress") {
       throw new Error("Innings not in progress");
     }
-    if (!innings.needBowler) throw new Error("Bowler already set");
+    const overBalls = (await getBallsOrdered(ctx, innings._id)).filter(
+      (b) => !b.isRetire,
+    );
+    let legal = 0;
+    let overStart = 0;
+    const bpo = match.ruleSnapshot.ballsPerOver;
+    overBalls.forEach((b, i) => {
+      if (b.isLegal) {
+        legal += 1;
+        if (legal % bpo === 0) overStart = i + 1;
+      }
+    });
+    const ballsThisOver = overBalls.slice(overStart);
+    const canChange =
+      innings.needBowler ||
+      (innings.currentBowlerId !== undefined && ballsThisOver.length === 0);
+    if (!canChange) throw new Error("Bowler already set");
 
     const bowling = sidePlayers(match, otherSide(innings.battingSide));
     if (!bowling.map(String).includes(String(args.bowlerId))) {
@@ -1392,23 +1430,58 @@ export const undoLastBall = mutation({
     matchId: v.id("matches"),
   },
   handler: async (ctx, args) => {
-    const { match } = await requireCanScore(ctx, args.token, args.matchId);
-    if (match.status !== "live") throw new Error("Match is not live");
+    const { match: raw } = await requireCanScore(ctx, args.token, args.matchId);
+    if (raw.status === "abandoned") throw new Error("Match is abandoned");
 
-    const live = await ctx.db
-      .query("matchLiveState")
-      .withIndex("by_match", (q) => q.eq("matchId", match._id))
-      .unique();
-    if (!live?.currentInningsId) throw new Error("No active innings");
-    const innings = await ctx.db.get(live.currentInningsId);
-    if (!innings || innings.status !== "in_progress") {
+    const allInnings = (
+      await ctx.db
+        .query("innings")
+        .withIndex("by_match", (q) => q.eq("matchId", args.matchId))
+        .collect()
+    ).sort((a, b) => a.inningsNo - b.inningsNo);
+    if (allInnings.length === 0) throw new Error("No balls to undo");
+
+    const withBalls = [];
+    for (const inn of allInnings) {
+      const balls = await getBallsOrdered(ctx, inn._id);
+      withBalls.push({ inn, balls });
+    }
+    const scored = withBalls.filter((row) => row.balls.length > 0);
+    if (scored.length === 0) throw new Error("No balls to undo");
+    const latest = scored[scored.length - 1];
+    const laterStarted = withBalls.some(
+      (row) =>
+        row.inn.inningsNo > latest.inn.inningsNo && row.balls.length > 0,
+    );
+    if (laterStarted) {
+      throw new Error("Cannot undo — a later innings already has balls");
+    }
+
+    let match = raw;
+    if (match.status === "completed") {
+      await ctx.db.patch(match._id, {
+        status: "live",
+        winnerSide: undefined,
+        resultText: undefined,
+      });
+      const reopened = await ctx.db.get(match._id);
+      if (!reopened) throw new Error("Match not found");
+      match = reopened;
+    } else if (match.status !== "live") {
+      throw new Error("Match is not live");
+    }
+
+    const innings = latest.inn;
+    if (innings.status === "complete") {
+      await ctx.db.patch(innings._id, {
+        status: "in_progress",
+        completedAt: undefined,
+      });
+    } else if (innings.status !== "in_progress") {
       throw new Error("Cannot undo — innings not in progress");
     }
 
-    const balls = await getBallsOrdered(ctx, innings._id);
-    if (balls.length === 0) throw new Error("No balls to undo");
-
-    const last = balls[balls.length - 1];
+    const last = latest.balls[latest.balls.length - 1];
     await ctx.db.delete(last._id);
 
     // Wipe human picks so pure recompute rebuilds from remaining log
