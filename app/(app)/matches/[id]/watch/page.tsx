@@ -40,7 +40,8 @@ function ballLabel(b: BallChip) {
   if (b.isRetire) return "R";
   if (b.isWicket) return "W";
   if (b.extrasType === "wide") return "Wd";
-  if (b.extrasType === "noball") return "Nb";
+  if (b.extrasType === "noball")
+    return b.runsBat > 0 ? `Nb${b.runsBat}` : "Nb";
   if (b.extrasType === "bye") return `B${b.extrasRuns}`;
   if (b.extrasType === "legbye") return `Lb${b.extrasRuns}`;
   if (b.runsBat === 0) return "·";
