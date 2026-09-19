@@ -3,10 +3,13 @@
 import { DemoPad } from "@/components/landing/DemoPad";
 import { InviteForm } from "@/components/landing/InviteForm";
 import { RULES, RuleCard } from "@/components/landing/ruleCards";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { Logo } from "@/components/ui/Logo";
-import { cn } from "@/lib/utils";
+import { cn, sanitizePhoneInput } from "@/lib/utils";
 import { Home, Trophy, User, Users } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 /**
@@ -299,30 +302,50 @@ function Mark({ children }: { children: React.ReactNode }) {
   );
 }
 
-function CTA({
-  href = "/login",
-  children,
-  gold,
-  className,
-}: {
-  href?: string;
-  children: React.ReactNode;
-  gold?: boolean;
-  className?: string;
-}) {
+function PlayPhoneEntry() {
+  const router = useRouter();
+  const [phone, setPhone] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  function go() {
+    const cleaned = sanitizePhoneInput(phone);
+    if (cleaned.length < 10) {
+      setError("Enter a valid phone number");
+      return;
+    }
+    router.push(`/login?phone=${encodeURIComponent(cleaned)}`);
+  }
+
   return (
-    <Link
-      href={href}
-      className={cn(
-        "inline-flex min-h-14 items-center justify-center rounded-xl px-8 text-base font-semibold shadow-lift transition active:scale-[0.98]",
-        gold
-          ? "bg-accent text-ink hover:bg-accent/90"
-          : "bg-ink text-bg hover:bg-ink/90",
-        className,
-      )}
+    <form
+      className="w-full max-w-md space-y-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        go();
+      }}
     >
-      {children}
-    </Link>
+      <Input
+        label="Phone number"
+        inputMode="tel"
+        autoComplete="tel"
+        placeholder="98765 43210"
+        value={phone}
+        onChange={(e) => {
+          setError(null);
+          setPhone(sanitizePhoneInput(e.target.value));
+        }}
+      />
+      {error ? <p className="text-[13px] text-danger">{error}</p> : null}
+      <Button type="submit" fullWidth size="lg">
+        Continue
+      </Button>
+      <a
+        href="#invite"
+        className="flex min-h-11 items-center justify-center whitespace-nowrap text-[13px] font-semibold text-accent-deep underline-offset-4 hover:underline"
+      >
+        Register your community
+      </a>
+    </form>
   );
 }
 
@@ -490,15 +513,10 @@ function HeroLive() {
                 — write themselves.
               </p>
               <div className="mt-6 sm:mt-8">
-                <CTA
-                  href="#invite"
-                  className="min-h-[3.25rem] px-5 text-[15px] sm:min-h-14 sm:px-8 sm:text-base"
-                >
-                  Register your community
-                </CTA>
+                <PlayPhoneEntry />
               </div>
-              <p className="mt-4 text-[13px] font-medium text-faint sm:mt-5">
-                Invite-only for now — one community at a time, over WhatsApp
+              <p className="mt-4 text-[13px] font-medium text-muted sm:mt-5">
+                The number your organiser has. Then a 4-digit PIN. No SMS.
               </p>
             </div>
 

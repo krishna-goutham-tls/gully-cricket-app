@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/Button";
@@ -41,22 +41,60 @@ export default function LoginPage() {
   // The number that just failed "no account" — until the digits actually
   // change, "Try this number" would only replay the same failed sign-in.
   const [failedPhone, setFailedPhone] = useState("");
+  const [lookupPhone, setLookupPhone] = useState<string | null>(null);
+
+  const lookup = useQuery(
+    api.auth.lookupPhone,
+    lookupPhone ? { phone: lookupPhone } : "skip",
+  );
 
   // Storage loss shouldn't cost a phone number as well as a PIN — if a sign-in
   // is forced, prefill the number they used last so it's four taps, not typing.
+  // A ?phone= from the landing door wins over that memory.
   useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("phone");
+    if (q) {
+      const cleaned = sanitizePhoneInput(q);
+      setPhone(cleaned);
+      if (cleaned.length >= 10) setLookupPhone(cleaned);
+      return;
+    }
     const last = getLastPhone();
     if (last) setPhone(last);
   }, []);
 
-  async function continueFromPhone() {
+  useEffect(() => {
+    if (!lookupPhone || lookup === undefined) return;
+    if (lookup.status === "invalid") {
+      setError("Enter a valid phone number");
+      setLookupPhone(null);
+      setStep("phone");
+      return;
+    }
+    setError(null);
+    setPin("");
+    if (lookup.status === "hasPin") {
+      setNotice(null);
+      setStep("signin-pin");
+    } else if (lookup.status === "guest") {
+      setNotice(
+        "This number was added as a guest player. Set your name and PIN to claim your stats.",
+      );
+      setStep("signup-name");
+    } else {
+      setNotice(null);
+      setStep("signup-name");
+    }
+    setLookupPhone(null);
+  }, [lookup, lookupPhone]);
+
+  function continueFromPhone() {
     setError(null);
     if (phone.trim().length < 10) {
       setError("Enter a valid phone number");
       return;
     }
-    setStep("signin-pin");
-    setPin("");
+    setLookupPhone(phone);
   }
 
   async function doSignIn(nextPin: string) {
@@ -166,8 +204,12 @@ export default function LoginPage() {
                 setPhone(sanitizePhoneInput(text));
               }}
             />
-            <Button fullWidth disabled={busy} onClick={continueFromPhone}>
-              Continue
+            <Button
+              fullWidth
+              disabled={busy || !!lookupPhone}
+              onClick={continueFromPhone}
+            >
+              {lookupPhone ? "…" : "Continue"}
             </Button>
             <button
               type="button"
@@ -249,14 +291,19 @@ export default function LoginPage() {
             />
             <Button
               fullWidth
-              disabled={busy || phone.trim().length < 10 || phone === failedPhone}
+              disabled={
+                busy ||
+                !!lookupPhone ||
+                phone.trim().length < 10 ||
+                phone === failedPhone
+              }
               onClick={() => {
                 setError(null);
                 setPin("");
-                setStep("signin-pin");
+                setLookupPhone(phone);
               }}
             >
-              Try this number
+              {lookupPhone ? "…" : "Try this number"}
             </Button>
             <button
               type="button"
@@ -375,6 +422,18 @@ export default function LoginPage() {
             >
               Set PIN
             </Button>
+            <button
+              type="button"
+              className="flex min-h-11 w-full items-center justify-center text-[13px] text-muted underline-offset-4 hover:text-ink hover:underline"
+              onClick={() => {
+                setNotice(null);
+                setError(null);
+                setName("");
+                setStep("phone");
+              }}
+            >
+              Change number
+            </button>
           </div>
         ) : null}
 
