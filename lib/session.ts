@@ -158,15 +158,26 @@ export function clearAuthCache() {
   localStorage.removeItem(AUTH_CACHE_KEY);
 }
 
-export function getLastOvers(): number {
-  if (typeof window === "undefined") return 6;
-  const raw = localStorage.getItem(LAST_OVERS_KEY);
+const LAST_OVERS_TEST_KEY = "boundary_last_overs_test";
+const DEFAULT_TEST_INNINGS_OVERS = 100;
+
+export function getLastOvers(format: "limited" | "test" = "limited"): number {
+  if (typeof window === "undefined") {
+    return format === "test" ? DEFAULT_TEST_INNINGS_OVERS : 6;
+  }
+  const key = format === "test" ? LAST_OVERS_TEST_KEY : LAST_OVERS_KEY;
+  const fallback = format === "test" ? DEFAULT_TEST_INNINGS_OVERS : 6;
+  const raw = localStorage.getItem(key);
   const n = raw ? parseInt(raw, 10) : NaN;
-  return Number.isInteger(n) && n >= 1 && n <= 200 ? n : 6;
+  return Number.isInteger(n) && n >= 1 && n <= 200 ? n : fallback;
 }
 
-export function setLastOvers(overs: number) {
-  localStorage.setItem(LAST_OVERS_KEY, String(overs));
+export function setLastOvers(
+  overs: number,
+  format: "limited" | "test" = "limited",
+) {
+  const key = format === "test" ? LAST_OVERS_TEST_KEY : LAST_OVERS_KEY;
+  localStorage.setItem(key, String(overs));
 }
 
 const LAST_FORMAT_KEY = "boundary_last_format";

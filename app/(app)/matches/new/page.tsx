@@ -97,12 +97,12 @@ export default function NewMatchPage() {
   const [teamB, setTeamB] = useState<string[]>([]);
   const [common, setCommon] = useState<string[]>([]);
   const [activeTarget, setActiveTarget] = useState<DraftTarget>("A");
-  const [overs, setOvers] = useState(() => getLastOvers());
-  const [oversPerPlayer, setOversPerPlayer] = useState(() =>
-    getLastOversPerPlayer(),
-  );
   const [format, setFormat] = useState<"limited" | "test">(() =>
     getLastFormat(),
+  );
+  const [overs, setOvers] = useState(() => getLastOvers(getLastFormat()));
+  const [oversPerPlayer, setOversPerPlayer] = useState(() =>
+    getLastOversPerPlayer(),
   );
   const [durationMinutes, setDurationMinutes] = useState(() =>
     getLastDurationMinutes(),
@@ -392,7 +392,7 @@ export default function NewMatchPage() {
               )
             : undefined,
       });
-      setLastOvers(Math.min(200, Math.max(1, overs)));
+      setLastOvers(Math.min(200, Math.max(1, overs)), format);
       setLastFormat(format);
       if (format === "limited") setLastOversPerPlayer(oversPerPlayer);
       if (format === "test")
@@ -721,7 +721,10 @@ export default function NewMatchPage() {
                 <button
                   key={opt.id}
                   type="button"
-                  onClick={() => setFormat(opt.id)}
+                  onClick={() => {
+                    setFormat(opt.id);
+                    setOvers(getLastOvers(opt.id));
+                  }}
                   className={
                     format === opt.id
                       ? "min-h-11 rounded-xl bg-ink px-4 text-[13px] font-semibold text-bg"
@@ -741,9 +744,13 @@ export default function NewMatchPage() {
         </div>
 
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4">
-          <p className="text-[15px] font-medium text-ink">Overs per innings</p>
+          <p className="text-[15px] font-medium text-ink">
+            {format === "test" ? "Innings ends after" : "Overs per innings"}
+          </p>
           <NumberField
-            aria-label="Overs per innings"
+            aria-label={
+              format === "test" ? "Innings ends after" : "Overs per innings"
+            }
             value={overs}
             min={1}
             max={200}
