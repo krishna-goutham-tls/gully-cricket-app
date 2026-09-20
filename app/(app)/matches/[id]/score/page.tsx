@@ -19,7 +19,7 @@ import { useMutation, useQuery } from "convex/react";
 import { ArrowLeft, Eye, Undo2, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Sheet =
   | null
@@ -139,7 +139,7 @@ export default function ScorePage() {
   const params = useParams();
   const matchId = params.id as Id<"matches">;
   const router = useRouter();
-  const { token, activeOrgId, user } = useAuth();
+  const { token, activeOrgId, user, isObserver } = useAuth();
   const state = useQuery(
     api.scoring.liveState,
     token ? { token, matchId } : "skip",
@@ -183,6 +183,16 @@ export default function ScorePage() {
   // gets steered to the spectator view by default — any org member is still
   // allowed to score, so this is a one-tap override, never a hard block.
   const [spectatorOverride, setSpectatorOverride] = useState(false);
+
+  useEffect(() => {
+    if (!isObserver) return;
+    if (state === undefined || state === null) return;
+    if (state.status === "live") {
+      router.replace(`/matches/${matchId}/watch`);
+    } else {
+      router.replace(`/matches/${matchId}`);
+    }
+  }, [isObserver, state, matchId, router]);
 
   // Subscribed to only while the squad sheet is open — the scoring screen is
   // the hot path and doesn't otherwise need the org pool.
@@ -378,13 +388,15 @@ export default function ScorePage() {
             <Eye className="h-5 w-5" strokeWidth={2.4} />
             Watch live
           </Link>
-          <button
-            type="button"
-            onClick={() => setSpectatorOverride(true)}
-            className="mt-4 min-h-11 text-[13px] font-medium text-muted underline underline-offset-4"
-          >
-            I&apos;m scoring instead
-          </button>
+          {state.canScore ? (
+            <button
+              type="button"
+              onClick={() => setSpectatorOverride(true)}
+              className="mt-4 min-h-11 text-[13px] font-medium text-muted underline underline-offset-4"
+            >
+              I&apos;m scoring instead
+            </button>
+          ) : null}
         </div>
       </div>
     );

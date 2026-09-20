@@ -232,10 +232,16 @@ export async function loadMatchAccess(
       q.eq("orgId", match.orgId).eq("userId", user._id),
     )
     .unique();
-  if (!membership || membership.status !== "active") return null;
-
-  // Gully cricket: umpires rotate — any active org member can score.
-  return { user, match, membership, canScore: true };
+  if (membership && membership.status === "active") {
+    // Gully cricket: umpires rotate — any active org member can score.
+    return { user, match, membership, canScore: true };
+  }
+  // Platform owner may watch a community they have not joined. Writes stay
+  // off: they are not on the board and must not take the pad.
+  if (user.isPlatformAdmin ?? false) {
+    return { user, match, membership: null, canScore: false };
+  }
+  return null;
 }
 
 async function requireCanScore(
@@ -244,7 +250,9 @@ async function requireCanScore(
   matchId: Id<"matches">,
 ) {
   const access = await loadMatchAccess(ctx, token, matchId);
-  if (!access) throw new Error("Match not found or not authorized");
+  if (!access || !access.canScore) {
+    throw new Error("Match not found or not authorized");
+  }
   return access;
 }
 

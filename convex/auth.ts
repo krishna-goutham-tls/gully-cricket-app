@@ -55,25 +55,60 @@ export const bootstrap = query({
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
 
-    const rows = await Promise.all(
-      memberships.map(async (m) => {
-        const org = await ctx.db.get(m.orgId);
-        if (!org) return null;
+    const rows = (
+      await Promise.all(
+        memberships.map(async (m) => {
+          const org = await ctx.db.get(m.orgId);
+          if (!org) return null;
+          const featured = await featuredSeasonForOrg(ctx, org._id);
+          return {
+            membershipId: m._id as typeof m._id | undefined,
+            orgId: org._id,
+            orgName: org.name,
+            location: org.location,
+            status: m.status,
+            roles: m.roles,
+            requestedAt: m.requestedAt,
+            isObserver: false,
+            // Lets the shell flag sandbox mode without a second round trip,
+            // and works off the localStorage cache on a warm start.
+            isSandbox: org.isSandbox ?? false,
+            sandboxForOrgId: org.sandboxForOrgId,
+            // Home paints the season folder from this. A second seasons query
+            // used to land after auth and flash "No season yet" on refresh.
+            featuredSeason: featured
+              ? {
+                  id: featured.id,
+                  name: featured.name,
+                  status: featured.status,
+                }
+              : null,
+            seasonCount: featured?.seasonCount ?? 0,
+          };
+        }),
+      )
+    ).filter((r): r is NonNullable<typeof r> => r !== null);
+
+    // Platform owner can open every real community without joining it.
+    // No orgMembers row, so the community never lists them as a player.
+    if (user.isPlatformAdmin ?? false) {
+      const have = new Set(rows.map((r) => String(r.orgId)));
+      const orgs = await ctx.db.query("orgs").collect();
+      for (const org of orgs) {
+        if (org.isSandbox) continue;
+        if (have.has(String(org._id))) continue;
         const featured = await featuredSeasonForOrg(ctx, org._id);
-        return {
-          membershipId: m._id,
+        rows.push({
+          membershipId: undefined,
           orgId: org._id,
           orgName: org.name,
           location: org.location,
-          status: m.status,
-          roles: m.roles,
-          requestedAt: m.requestedAt,
-          // Lets the shell flag sandbox mode without a second round trip,
-          // and works off the localStorage cache on a warm start.
-          isSandbox: org.isSandbox ?? false,
-          sandboxForOrgId: org.sandboxForOrgId,
-          // Home paints the season folder from this. A second seasons query
-          // used to land after auth and flash "No season yet" on refresh.
+          status: "active",
+          roles: [],
+          requestedAt: org.createdAt,
+          isObserver: true,
+          isSandbox: false,
+          sandboxForOrgId: undefined,
           featuredSeason: featured
             ? {
                 id: featured.id,
@@ -82,13 +117,13 @@ export const bootstrap = query({
               }
             : null,
           seasonCount: featured?.seasonCount ?? 0,
-        };
-      }),
-    );
+        });
+      }
+    }
 
     return {
       user: publicUser(user),
-      memberships: rows.filter((r): r is NonNullable<typeof r> => r !== null),
+      memberships: rows,
     };
   },
 });
@@ -568,11 +603,16 @@ export const setPreferredOrg = mutation({
     const user = await getUserBySessionToken(ctx, args.token);
     if (!user) throw new Error("Not authenticated");
 
+    const org = await ctx.db.get(args.orgId);
+    if (!org) throw new Error("Community not found");
+
     const membership = await ctx.db
       .query("orgMembers")
       .withIndex("by_org_user", (q) => q.eq("orgId", args.orgId).eq("userId", user._id))
       .unique();
-    if (!membership || membership.status !== "active") {
+    const isMember = membership?.status === "active";
+    const canWatch = (user.isPlatformAdmin ?? false) && !org.isSandbox;
+    if (!isMember && !canWatch) {
       throw new Error("Not an active member of this org");
     }
 

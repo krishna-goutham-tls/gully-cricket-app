@@ -3,6 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import {
   requireActiveMembership,
+  requireOrgViewer,
   requirePlatformAdmin,
 } from "./lib/session";
 import {
@@ -31,7 +32,7 @@ export const board = query({
   handler: async (ctx, args) => {
     let me: Id<"users">;
     try {
-      const { user } = await requireActiveMembership(
+      const { user } = await requireOrgViewer(
         ctx,
         args.token,
         args.orgId,
@@ -124,7 +125,7 @@ export const openCount = query({
   },
   handler: async (ctx, args) => {
     try {
-      await requireActiveMembership(ctx, args.token, args.orgId);
+      await requireOrgViewer(ctx, args.token, args.orgId);
     } catch {
       return 0;
     }

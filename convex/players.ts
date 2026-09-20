@@ -1,6 +1,10 @@
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
-import { requireActiveMembership, requireOrgAdmin } from "./lib/session";
+import {
+  requireActiveMembership,
+  requireOrgAdmin,
+  requireOrgViewer,
+} from "./lib/session";
 import { normalizePhone } from "./lib/phone";
 import { playerTag } from "./schema";
 import {
@@ -110,7 +114,7 @@ export const listOrgPlayers = query({
   },
   handler: async (ctx, args) => {
     try {
-      await requireActiveMembership(ctx, args.token, args.orgId);
+      await requireOrgViewer(ctx, args.token, args.orgId);
     } catch {
       return [];
     }

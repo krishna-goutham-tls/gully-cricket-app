@@ -1,11 +1,12 @@
 "use client";
 
+import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { TruncText } from "@/components/ui/TruncText";
 import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import type { FunctionReturnType } from "convex/server";
-import { ChevronRight, MoreVertical, Pencil, Trophy } from "lucide-react";
+import { ChevronRight, Eye, MoreVertical, Pencil, Trophy } from "lucide-react";
 import Link from "next/link";
 
 /**
@@ -78,6 +79,38 @@ function TournamentChip({ name, dark }: { name: string; dark?: boolean }) {
   );
 }
 
+function ResumeOrWatch({
+  matchId,
+  dark,
+}: {
+  matchId: string;
+  dark?: boolean;
+}) {
+  const { isObserver } = useAuth();
+  if (isObserver) {
+    return (
+      <Button
+        href={`/matches/${matchId}/watch`}
+        fullWidth
+        className={dark ? "bg-bg text-ink shadow-none active:bg-bg/90" : undefined}
+      >
+        <Eye className="h-[18px] w-[18px]" strokeWidth={2.4} />
+        Watch live
+      </Button>
+    );
+  }
+  return (
+    <Button
+      href={`/matches/${matchId}/score`}
+      fullWidth
+      className={dark ? "bg-bg text-ink shadow-none active:bg-bg/90" : undefined}
+    >
+      <Pencil className="h-[18px] w-[18px]" strokeWidth={2.4} />
+      Resume scoring
+    </Button>
+  );
+}
+
 function LivePill({ dark }: { dark?: boolean }) {
   return (
     <span
@@ -110,7 +143,9 @@ export function MatchMenu({
   onDelete: (matchId: string, label: string) => void;
   dark?: boolean;
 }) {
+  const { isObserver } = useAuth();
   const canEnd = match.status === "live" || match.status === "scheduled";
+  if (isObserver) return null;
   return (
     <>
       <button
@@ -247,14 +282,7 @@ export function LiveHero({
       </Link>
 
       <div className="px-4 pb-4">
-        <Button
-          href={`/matches/${match._id}/score`}
-          fullWidth
-          className="bg-bg text-ink shadow-none active:bg-bg/90"
-        >
-          <Pencil className="h-[18px] w-[18px]" strokeWidth={2.4} />
-          Resume scoring
-        </Button>
+        <ResumeOrWatch matchId={match._id} dark />
       </div>
 
       <MatchMenu
@@ -283,11 +311,13 @@ export function MatchCard({
   onEnd: (matchId: string, label: string) => void;
   onDelete: (matchId: string, label: string) => void;
 }) {
+  const { isObserver } = useAuth();
   const isLive = match.status === "live";
   // Live goes to the read-only watch view — the pad is one deliberate tap on.
+  // An observer has no pad, so a scheduled match opens the card instead.
   const href = isLive
     ? `/matches/${match._id}/watch`
-    : match.status === "scheduled"
+    : match.status === "scheduled" && !isObserver
       ? `/matches/${match._id}/score`
       : `/matches/${match._id}`;
   const label = `${match.sideAName} vs ${match.sideBName}`;

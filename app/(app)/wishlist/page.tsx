@@ -19,7 +19,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 export default function WishlistPage() {
-  const { token, activeOrgId } = useAuth();
+  const { token, activeOrgId, isObserver } = useAuth();
   const board = useQuery(
     api.wishlist.board,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
@@ -93,7 +93,7 @@ export default function WishlistPage() {
   /* One ask a day. Known before the player types, so nobody writes a
      paragraph and then gets told no. */
   const waitMs = board?.nextAskAt ? board.nextAskAt - Date.now() : 0;
-  const canAsk = waitMs <= 0;
+  const canAsk = !isObserver && waitMs <= 0;
   const totalCards =
     (board?.live ?? []).reduce((n, s) => n + s.cards.length, 0) +
     (board?.closed ?? []).reduce((n, s) => n + s.cards.length, 0);
@@ -190,6 +190,7 @@ export default function WishlistPage() {
                 score={c.score}
                 myVote={c.myVote as 1 | -1 | 0}
                 canMove={amPlatformAdmin}
+                busy={isObserver}
                 onVote={(next) => void onVote(c._id, next)}
                 onMove={(next) => void onMove(c._id, next)}
               />
@@ -223,6 +224,7 @@ export default function WishlistPage() {
                       score={c.score}
                       myVote={c.myVote as 1 | -1 | 0}
                       canMove={amPlatformAdmin}
+                      busy={isObserver}
                       onVote={(next) => void onVote(c._id, next)}
                       onMove={(next) => void onMove(c._id, next)}
                     />
@@ -235,7 +237,7 @@ export default function WishlistPage() {
         {/* The door out of reading and into asking. It sits after the board on
             purpose: the player who read to the bottom is the one with
             something to add. Dashed, so it never competes with a real ask. */}
-        {board && canAsk ? (
+        {board && isObserver ? null : board && canAsk ? (
           <button
             type="button"
             onClick={() => {

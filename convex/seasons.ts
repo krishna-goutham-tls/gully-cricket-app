@@ -7,10 +7,7 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
-import {
-  requireActiveMembership,
-  requireOrgAdmin,
-} from "./lib/session";
+import { requireOrgAdmin, requireOrgViewer } from "./lib/session";
 import { seasonsForOrg } from "./lib/seasons";
 import { loadRegularsBoard } from "./stats";
 import {
@@ -132,7 +129,7 @@ export const current = query({
   },
   handler: async (ctx, args) => {
     try {
-      await requireActiveMembership(ctx, args.token, args.orgId);
+      await requireOrgViewer(ctx, args.token, args.orgId);
     } catch {
       return null;
     }
@@ -153,7 +150,7 @@ export const list = query({
     // into the page's own "unavailable" copy, the way every sibling query
     // already does. A throw here takes the whole screen with it.
     try {
-      await requireActiveMembership(ctx, args.token, args.orgId);
+      await requireOrgViewer(ctx, args.token, args.orgId);
     } catch {
       return null;
     }
@@ -169,7 +166,7 @@ export const get = query({
   },
   handler: async (ctx, args) => {
     try {
-      await requireActiveMembership(ctx, args.token, args.orgId);
+      await requireOrgViewer(ctx, args.token, args.orgId);
     } catch {
       return null;
     }

@@ -33,26 +33,56 @@ export async function requireUser(
   return user;
 }
 
+export async function getActiveMembership(
+  ctx: QueryCtx | MutationCtx,
+  orgId: Id<"orgs">,
+  userId: Id<"users">,
+) {
+  const membership = await ctx.db
+    .query("orgMembers")
+    .withIndex("by_org_user", (q) => q.eq("orgId", orgId).eq("userId", userId))
+    .unique();
+  if (!membership || membership.status !== "active") return null;
+  return membership;
+}
+
 export async function requireActiveMembership(
   ctx: QueryCtx | MutationCtx,
   token: string | null | undefined,
   orgId: Id<"orgs">,
 ) {
   const user = await requireUser(ctx, token);
-  const membership = await ctx.db
-    .query("orgMembers")
-    .withIndex("by_org_user", (q) => q.eq("orgId", orgId).eq("userId", user._id))
-    .unique();
-  if (!membership || membership.status !== "active") {
+  const membership = await getActiveMembership(ctx, orgId, user._id);
+  if (!membership) {
     throw new Error("Not an active member of this org");
   }
   return { user, membership };
 }
 
 /**
- * The platform owner. Read-only surfaces may widen to this later; for now it
- * gates the access-request queue and the ability to create a community
- * without a vetted request.
+ * Read access to a community. A real member sees it as themselves. The
+ * platform owner may also watch a community they have not joined: no
+ * membership row, so they do not appear on the board or in team pickers.
+ */
+export async function requireOrgViewer(
+  ctx: QueryCtx | MutationCtx,
+  token: string | null | undefined,
+  orgId: Id<"orgs">,
+) {
+  const user = await requireUser(ctx, token);
+  const membership = await getActiveMembership(ctx, orgId, user._id);
+  if (membership) {
+    return { user, membership, isObserver: false as const };
+  }
+  if (user.isPlatformAdmin ?? false) {
+    return { user, membership: null, isObserver: true as const };
+  }
+  throw new Error("Not an active member of this org");
+}
+
+/**
+ * The platform owner. Gates the access-request queue, creating a community
+ * without a vetted request, and read-only observation of every community.
  */
 export async function requirePlatformAdmin(
   ctx: QueryCtx | MutationCtx,

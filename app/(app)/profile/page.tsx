@@ -405,7 +405,8 @@ function AccessRequestsRow() {
 }
 
 function SandboxRow() {
-  const { token, activeOrgId, activeOrg, isSandbox, selectOrg } = useAuth();
+  const { token, activeOrgId, activeOrg, isSandbox, isObserver, selectOrg } =
+    useAuth();
   const enterSandbox = useMutation(api.orgs.enterSandbox);
   const clearSandbox = useMutation(api.orgs.clearSandboxData);
   const [busy, setBusy] = useState(false);
@@ -413,7 +414,7 @@ function SandboxRow() {
   const [cleared, setCleared] = useState<number | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
 
-  if (!activeOrgId) return null;
+  if (!activeOrgId || isObserver) return null;
 
   async function toggle() {
     if (!token || !activeOrgId || busy) return;

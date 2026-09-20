@@ -85,7 +85,7 @@ function shareScore(card: Scorecard, side: "A" | "B") {
 export default function MatchDetailPage() {
   const params = useParams();
   const matchId = params.id as Id<"matches">;
-  const { token, user } = useAuth();
+  const { token, user, isObserver } = useAuth();
   const card = useQuery(
     api.scoring.scorecard,
     token ? { token, matchId } : "skip",
@@ -240,11 +240,18 @@ export default function MatchDetailPage() {
       </header>
 
       <main className="py-3">
-        {inPlay ? (
+        {inPlay && !isObserver ? (
           <div className="mx-auto mb-3 max-w-md px-4">
             <Button href={`/matches/${matchId}/score`} fullWidth>
               <Pencil className="h-[18px] w-[18px]" strokeWidth={2.4} />
               {card.status === "live" ? "Continue scoring" : "Start match"}
+            </Button>
+          </div>
+        ) : null}
+        {inPlay && isObserver && card.status === "live" ? (
+          <div className="mx-auto mb-3 max-w-md px-4">
+            <Button href={`/matches/${matchId}/watch`} fullWidth>
+              Watch live
             </Button>
           </div>
         ) : null}

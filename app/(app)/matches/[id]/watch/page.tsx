@@ -332,7 +332,7 @@ export default function WatchPage() {
           </p>
         ) : null}
 
-        {done ? null : (
+        {done || !state.canScore ? null : (
           <>
             <Button href={scoreHref} fullWidth size="lg">
               <Pencil className="h-5 w-5" strokeWidth={2.4} />

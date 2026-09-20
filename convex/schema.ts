@@ -153,10 +153,11 @@ export default defineSchema({
     secondaryRole: v.optional(playerRole),
     preferredOrgId: v.optional(v.id("orgs")),
     /**
-     * Platform owner — vets access requests and may create communities
-     * without one. Deliberately a flag on the row rather than a phone number
-     * hardcoded in source: a second owner needs no deploy, and no personal
-     * number enters git history. Set via `access:setPlatformAdmin`.
+     * Platform owner — vets access requests, may create communities without
+     * one, and may watch any community without a membership row. Deliberately
+     * a flag on the row rather than a phone number hardcoded in source: a
+     * second owner needs no deploy, and no personal number enters git
+     * history. Set via `access:setPlatformAdmin`.
      */
     isPlatformAdmin: v.optional(v.boolean()),
     failedPinAttempts: v.number(),

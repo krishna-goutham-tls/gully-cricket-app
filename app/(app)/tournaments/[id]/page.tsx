@@ -40,7 +40,7 @@ export default function TournamentDetailPage() {
   const params = useParams();
   const tournamentId = params.id as Id<"tournaments">;
   const router = useRouter();
-  const { token, isAdmin } = useAuth();
+  const { token, isAdmin, isObserver } = useAuth();
 
   const t = useQuery(
     api.tournaments.get,
@@ -410,7 +410,7 @@ export default function TournamentDetailPage() {
           ) : null}
         </div>
 
-        {t.status === "active" ? (
+        {t.status === "active" && !isObserver ? (
           <Button fullWidth size="lg" onClick={openPanel}>
             Start match
           </Button>
@@ -438,9 +438,11 @@ export default function TournamentDetailPage() {
             <div className="space-y-2">
               {t.matches.map((m, i) => {
                 const href =
-                  m.status === "live" || m.status === "scheduled"
-                    ? `/matches/${m._id}/score`
-                    : `/matches/${m._id}`;
+                  m.status === "live"
+                    ? `/matches/${m._id}/watch`
+                    : m.status === "scheduled" && !isObserver
+                      ? `/matches/${m._id}/score`
+                      : `/matches/${m._id}`;
                 return (
                   <Link
                     key={m._id}

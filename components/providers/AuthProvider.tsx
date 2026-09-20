@@ -40,13 +40,15 @@ type User = {
 };
 
 type Membership = {
-  membershipId: Id<"orgMembers">;
+  membershipId?: Id<"orgMembers">;
   orgId: Id<"orgs">;
   orgName: string;
   location?: string;
   status: "pending" | "active" | "rejected" | "left" | "removed";
   roles: Array<"admin" | "umpire" | "player">;
   requestedAt: number;
+  /** Platform owner watching a community they have not joined. */
+  isObserver?: boolean;
   isSandbox?: boolean;
   sandboxForOrgId?: Id<"orgs">;
   /** Absent on auth caches written before this field existed. */
@@ -69,6 +71,8 @@ type AuthContextValue = {
   activeOrgId: Id<"orgs"> | null;
   activeOrg: Membership | null;
   isAdmin: boolean;
+  /** Watching a community with no membership row. Invisible to that group. */
+  isObserver: boolean;
   /** Active org is a throwaway sandbox — nothing scored here counts. */
   isSandbox: boolean;
   loading: boolean;
@@ -248,7 +252,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const activeOrg =
     activeMemberships.find((m) => m.orgId === verifiedOrgId) ?? null;
-  const isAdmin = activeOrg?.roles.includes("admin") ?? false;
+  const isObserver = activeOrg?.isObserver === true;
+  const isAdmin = !isObserver && (activeOrg?.roles.includes("admin") ?? false);
   const isSandbox = activeOrg?.isSandbox ?? false;
 
   // Only block render on a true cold start: token present, no cache, live
@@ -264,6 +269,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     activeOrgId: verifiedOrgId,
     activeOrg,
     isAdmin,
+    isObserver,
     isSandbox,
     loading,
     setToken,

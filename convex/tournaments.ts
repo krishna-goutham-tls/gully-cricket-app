@@ -4,6 +4,7 @@ import { Id } from "./_generated/dataModel";
 import {
   requireActiveMembership,
   requireOrgAdmin,
+  requireOrgViewer,
 } from "./lib/session";
 import { buildRuleSnapshot } from "./lib/rules";
 import { buildMatchClock, DEFAULT_TEST_MINUTES } from "./lib/clock";
@@ -166,7 +167,7 @@ export const list = query({
   },
   handler: async (ctx, args) => {
     try {
-      await requireActiveMembership(ctx, args.token, args.orgId);
+      await requireOrgViewer(ctx, args.token, args.orgId);
     } catch {
       return [];
     }
@@ -215,7 +216,7 @@ export const get = query({
     const t = await ctx.db.get(args.tournamentId);
     if (!t) return null;
     try {
-      await requireActiveMembership(ctx, args.token, t.orgId);
+      await requireOrgViewer(ctx, args.token, t.orgId);
     } catch {
       return null;
     }

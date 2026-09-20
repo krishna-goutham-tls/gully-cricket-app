@@ -14,7 +14,7 @@ import { Id } from "@/convex/_generated/dataModel";
 import { errorMessage } from "@/lib/utils";
 
 export default function JoinPage() {
-  const { token, user, pendingMemberships, activeMemberships, logout } =
+  const { token, user, pendingMemberships, activeMemberships, logout, selectOrg } =
     useAuth();
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -33,10 +33,17 @@ export default function JoinPage() {
     token ? { token } : "skip",
   );
   const canCreate = allowance?.allowed ?? false;
+  const isPlatformAdmin =
+    useQuery(api.access.amPlatformAdmin, token ? { token } : "skip") ?? false;
 
   const list = useMemo(() => orgs ?? [], [orgs]);
   const waiting = pendingMemberships.length > 0;
   const waitingOn = pendingMemberships.map((m) => m.orgName).join(", ");
+
+  async function onWatch(orgId: Id<"orgs">) {
+    await selectOrg(orgId);
+    router.push("/home");
+  }
 
   async function onRequest(orgId: Id<"orgs">) {
     if (!token) return;
@@ -44,6 +51,10 @@ export default function JoinPage() {
     setError(null);
     try {
       await requestJoin({ token, orgId });
+      if (isPlatformAdmin) {
+        await selectOrg(orgId);
+        router.push("/home");
+      }
     } catch (e) {
       setError(errorMessage(e, "Could not request join"));
     } finally {
@@ -173,7 +184,7 @@ export default function JoinPage() {
                 <Button
                   variant="secondary"
                   className="shrink-0"
-                  onClick={() => router.push("/home")}
+                  onClick={() => void onWatch(org._id)}
                 >
                   Open
                 </Button>
@@ -181,6 +192,24 @@ export default function JoinPage() {
                 <span className="shrink-0 rounded-full border border-accent/30 bg-accent-soft px-3 py-1.5 text-[11px] font-semibold text-accent-deep">
                   Waiting
                 </span>
+              ) : isPlatformAdmin || org.observing ? (
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <Button
+                    variant="secondary"
+                    className="shrink-0"
+                    onClick={() => void onWatch(org._id)}
+                  >
+                    Open
+                  </Button>
+                  <button
+                    type="button"
+                    disabled={busyId === org._id}
+                    onClick={() => void onRequest(org._id)}
+                    className="min-h-11 px-1 text-[11px] font-medium text-muted underline-offset-4 hover:underline"
+                  >
+                    {busyId === org._id ? "…" : "Join as player"}
+                  </button>
+                </div>
               ) : (
                 <Button
                   className="shrink-0"

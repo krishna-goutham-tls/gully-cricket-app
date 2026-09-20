@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query, MutationCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
-import { requireActiveMembership } from "./lib/session";
+import { requireActiveMembership, requireOrgViewer } from "./lib/session";
 import { captainTeamLabel } from "./lib/teams";
 import { buildRuleSnapshot } from "./lib/rules";
 import {
@@ -108,7 +108,7 @@ export const list = query({
   },
   handler: async (ctx, args) => {
     try {
-      await requireActiveMembership(ctx, args.token, args.orgId);
+      await requireOrgViewer(ctx, args.token, args.orgId);
     } catch {
       return [];
     }
@@ -221,7 +221,7 @@ export const get = query({
     const match = await ctx.db.get(args.matchId);
     if (!match) return null;
     try {
-      await requireActiveMembership(ctx, args.token, match.orgId);
+      await requireOrgViewer(ctx, args.token, match.orgId);
     } catch {
       return null;
     }

@@ -11,7 +11,7 @@ import { Plus, Trophy } from "lucide-react";
 import { cn, TOURNAMENT_STATUS_LABEL as STATUS_LABEL } from "@/lib/utils";
 
 export default function TournamentsPage() {
-  const { token, activeOrgId } = useAuth();
+  const { token, activeOrgId, isObserver } = useAuth();
   const tournaments = useQuery(
     api.tournaments.list,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
@@ -25,10 +25,12 @@ export default function TournamentsPage() {
           Fixed two-team series with core squads.
         </p>
 
-        <Button href="/tournaments/new" fullWidth size="lg">
-          <Plus className="h-5 w-5" strokeWidth={2.4} />
-          New series
-        </Button>
+        {isObserver ? null : (
+          <Button href="/tournaments/new" fullWidth size="lg">
+            <Plus className="h-5 w-5" strokeWidth={2.4} />
+            New series
+          </Button>
+        )}
 
         <div className="mt-7 space-y-3">
           {tournaments === undefined ? (

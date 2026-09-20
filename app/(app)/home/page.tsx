@@ -67,7 +67,7 @@ function ExploreCard({
 }
 
 export default function HomePage() {
-  const { token, activeOrgId } = useAuth();
+  const { token, activeOrgId, isObserver } = useAuth();
   const matches = useQuery(
     api.matches.list,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
@@ -166,16 +166,18 @@ export default function HomePage() {
 
         {hero ? <LiveHero {...cardProps(hero)} /> : null}
 
-        <Button
-          href="/matches/new"
-          size="lg"
-          fullWidth
-          variant={hero ? "secondary" : "primary"}
-          className={cn(hero && "mt-3")}
-        >
-          <Plus className="h-5 w-5" strokeWidth={2.4} />
-          Start match
-        </Button>
+        {isObserver ? null : (
+          <Button
+            href="/matches/new"
+            size="lg"
+            fullWidth
+            variant={hero ? "secondary" : "primary"}
+            className={cn(hero && "mt-3")}
+          >
+            <Plus className="h-5 w-5" strokeWidth={2.4} />
+            Start match
+          </Button>
+        )}
 
         <SeasonStrip series={series} />
 
@@ -224,7 +226,11 @@ export default function HomePage() {
           <div className="mt-6">
             <EmptyState
               title="No matches yet"
-              body="Start your first match — pick two teams from your players and score ball by ball."
+              body={
+                isObserver
+                  ? "This community has not scored a match yet."
+                  : "Start your first match — pick two teams from your players and score ball by ball."
+              }
             />
           </div>
         ) : (
