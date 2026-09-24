@@ -1,5 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Shared match and poll links are public by link only — never indexed.
+  // The pages also say so in a meta tag; this covers their preview images.
+  async headers() {
+    return ["/m/:path*", "/p/:path*"].map((source) => ({
+      source,
+      headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+    }));
+  },
   async redirects() {
     return [
       {

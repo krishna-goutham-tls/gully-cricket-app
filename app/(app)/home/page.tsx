@@ -6,6 +6,8 @@ import {
   type MatchRow,
 } from "@/components/home/HomeCards";
 import { SeasonStrip } from "@/components/home/SeasonStrip";
+import { PollCard } from "@/components/poll/PollCard";
+import { PollSheet } from "@/components/poll/PollSheet";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { AppHeader } from "@/components/shell/AppHeader";
 import { Button } from "@/components/ui/Button";
@@ -17,7 +19,14 @@ import { groupByDay } from "@/lib/dates";
 import { TruncText } from "@/components/ui/TruncText";
 import { cn, errorMessage } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
-import { ChevronRight, History, Medal, Plus, Sparkles } from "lucide-react";
+import {
+  ChevronRight,
+  History,
+  Medal,
+  Plus,
+  Sparkles,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -67,7 +76,7 @@ function ExploreCard({
 }
 
 export default function HomePage() {
-  const { token, activeOrgId } = useAuth();
+  const { token, activeOrgId, isObserver } = useAuth();
   const matches = useQuery(
     api.matches.list,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
@@ -76,6 +85,11 @@ export default function HomePage() {
     api.tournaments.list,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
   );
+  const polls = useQuery(
+    api.polls.current,
+    token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
+  );
+  const [asking, setAsking] = useState(false);
   const abandonMatch = useMutation(api.matches.abandon);
   const removeMatch = useMutation(api.matches.remove);
   const [menuFor, setMenuFor] = useState<string | null>(null);
@@ -166,16 +180,36 @@ export default function HomePage() {
 
         {hero ? <LiveHero {...cardProps(hero)} /> : null}
 
-        <Button
-          href="/matches/new"
-          size="lg"
-          fullWidth
-          variant={hero ? "secondary" : "primary"}
-          className={cn(hero && "mt-3")}
-        >
-          <Plus className="h-5 w-5" strokeWidth={2.4} />
-          Start match
-        </Button>
+        {isObserver ? null : (
+          <Button
+            href="/matches/new"
+            size="lg"
+            fullWidth
+            variant={hero ? "secondary" : "primary"}
+            className={cn(hero && "mt-3")}
+          >
+            <Plus className="h-5 w-5" strokeWidth={2.4} />
+            Start match
+          </Button>
+        )}
+
+        {/* "Who's in?" — an open poll is a card with the answers on it; with
+            none, just a quiet line to ask. Never an empty card. */}
+        {(polls ?? []).map((p) => (
+          <div key={p._id} className="mt-3">
+            <PollCard poll={p} readOnly={isObserver} />
+          </div>
+        ))}
+        {!isObserver && polls !== undefined && polls.length === 0 ? (
+          <button
+            type="button"
+            onClick={() => setAsking(true)}
+            className="mt-1 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl text-[13px] font-semibold text-muted active:bg-ink/[0.04]"
+          >
+            <Users className="h-4 w-4" strokeWidth={2.2} />
+            Who&apos;s in? Ask everyone
+          </button>
+        ) : null}
 
         <SeasonStrip series={series} />
 
@@ -224,7 +258,11 @@ export default function HomePage() {
           <div className="mt-6">
             <EmptyState
               title="No matches yet"
-              body="Start your first match — pick two teams from your players and score ball by ball."
+              body={
+                isObserver
+                  ? "This community has not scored a match yet."
+                  : "Start your first match — pick two teams from your players and score ball by ball."
+              }
             />
           </div>
         ) : (
@@ -275,6 +313,8 @@ export default function HomePage() {
           </>
         )}
       </main>
+
+      <PollSheet open={asking} onClose={() => setAsking(false)} />
 
       <ConfirmDialog
         open={pending !== null}

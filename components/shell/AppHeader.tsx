@@ -101,10 +101,17 @@ export function AppHeader({
                             "font-semibold text-accent-deep",
                         )}
                       >
-                        <span className="truncate">{m.orgName}</span>
-                        {m.orgId === activeOrg?.orgId ? (
-                          <Check className="h-4 w-4 shrink-0" />
-                        ) : null}
+                        <span className="min-w-0 truncate">{m.orgName}</span>
+                        <span className="flex shrink-0 items-center gap-1.5">
+                          {m.isObserver ? (
+                            <span className="text-[11px] font-medium text-faint">
+                              Watching
+                            </span>
+                          ) : null}
+                          {m.orgId === activeOrg?.orgId ? (
+                            <Check className="h-4 w-4 shrink-0" />
+                          ) : null}
+                        </span>
                       </button>
                     ))}
                   </div>

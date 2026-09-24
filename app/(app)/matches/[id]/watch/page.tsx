@@ -7,11 +7,14 @@ import {
   TestClockProvider,
   TestClockStatus,
 } from "@/components/match/TestClock";
+import { OverTracker } from "@/components/match/OverTracker";
+import { ShareLinkButton } from "@/components/share/ShareLinkButton";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { matchBoardLabel, matchBoardLine } from "@/lib/matchBoard";
+import { publicMatchUrl } from "@/lib/share";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { ArrowLeft, ClipboardList, Pencil } from "lucide-react";
@@ -24,97 +27,10 @@ import { useParams } from "next/navigation";
  * route must never import a mutation — scoring is one deliberate tap away.
  */
 
-type BallChip = {
-  _id: string;
-  runsBat: number;
-  extrasType?: string;
-  extrasRuns: number;
-  isWicket: boolean;
-  isLegal: boolean;
-  isRetire?: boolean;
-};
-
-// Chip rendering mirrors the score pad (app/(app)/matches/[id]/score/page.tsx);
-// the helpers there are local to that file, so watch keeps its own copy.
-function ballLabel(b: BallChip) {
-  if (b.isRetire) return "R";
-  if (b.isWicket) return "W";
-  if (b.extrasType === "wide") return "Wd";
-  if (b.extrasType === "noball")
-    return b.runsBat > 0 ? `Nb${b.runsBat}` : "Nb";
-  if (b.extrasType === "bye") return `B${b.extrasRuns}`;
-  if (b.extrasType === "legbye") return `Lb${b.extrasRuns}`;
-  if (b.runsBat === 0) return "·";
-  return String(b.runsBat);
-}
-
-function chipClass(b: BallChip) {
-  if (b.isRetire) return "bg-white/15 text-bg/70";
-  if (b.isWicket) return "bg-danger text-white";
-  if (b.extrasType === "wide" || b.extrasType === "noball")
-    return "bg-accent/30 text-accent";
-  if (b.extrasType) return "bg-white/15 text-bg/80";
-  if (b.runsBat >= 4) return "bg-accent text-ink";
-  return "bg-white/10 text-bg";
-}
-
-function OverTracker({
-  current,
-  prev,
-  ballsPerOver,
-}: {
-  current: BallChip[];
-  prev: BallChip[];
-  ballsPerOver: number;
-}) {
-  const legalSoFar = current.filter((b) => b.isLegal).length;
-  const placeholders = Math.max(0, ballsPerOver - legalSoFar);
-  return (
-    <div className="mt-4 flex flex-col items-center gap-1.5">
-      {prev.length > 0 ? (
-        <div className="flex flex-wrap justify-center gap-1 opacity-40">
-          {prev.map((b) => (
-            <span
-              key={b._id}
-              className={cn(
-                "tabular flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold",
-                chipClass(b),
-              )}
-            >
-              {ballLabel(b)}
-            </span>
-          ))}
-        </div>
-      ) : null}
-      <div className="flex flex-wrap justify-center gap-1.5">
-        {current.map((b) => (
-          <span
-            key={b._id}
-            className={cn(
-              "tabular flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-[11px] font-semibold",
-              chipClass(b),
-            )}
-          >
-            {ballLabel(b)}
-          </span>
-        ))}
-        {Array.from({ length: placeholders }, (_, i) => (
-          <span
-            key={`slot-${i}`}
-            className="flex h-7 w-7 items-center justify-center rounded-full border border-white/20"
-          >
-            <span className="h-1 w-1 rounded-full bg-white/25" />
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export default function WatchPage() {
   const params = useParams();
   const matchId = params.id as Id<"matches">;
-  const { token } = useAuth();
+  const { token, isSandbox } = useAuth();
   const state = useQuery(
     api.scoring.liveState,
     token ? { token, matchId } : "skip",
@@ -203,16 +119,29 @@ export default function WatchPage() {
               ? `Innings ${live.inningsNo}${isTest ? " of 4" : ""} · ${battingName}`
               : `${state.sideA.name} vs ${state.sideB.name}`}
           </p>
-          {done ? (
-            <span className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-bg/70">
-              {state.status === "abandoned" ? "Ended" : "Result"}
-            </span>
-          ) : (
-            <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-accent/20 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-accent">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
-              Live
-            </span>
-          )}
+          <div className="flex shrink-0 items-center gap-0.5">
+            {done ? (
+              <span className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-bg/70">
+                {state.status === "abandoned" ? "Ended" : "Result"}
+              </span>
+            ) : (
+              <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-accent/20 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-accent">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+                Live
+              </span>
+            )}
+            {/* The no-login page, for the group chat. Sandbox games are
+                practice and have no public page. */}
+            {isSandbox ? null : (
+              <ShareLinkButton
+                url={() => publicMatchUrl(matchId)}
+                text={`${state.sideA.name} vs ${state.sideB.name} — ${
+                  done ? (state.resultText ?? "full score") : "live score"
+                }`}
+                className="-mr-2"
+              />
+            )}
+          </div>
         </div>
         <TestClockLine />
 
@@ -332,7 +261,7 @@ export default function WatchPage() {
           </p>
         ) : null}
 
-        {done ? null : (
+        {done || !state.canScore ? null : (
           <>
             <Button href={scoreHref} fullWidth size="lg">
               <Pencil className="h-5 w-5" strokeWidth={2.4} />

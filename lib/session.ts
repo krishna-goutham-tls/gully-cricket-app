@@ -222,3 +222,16 @@ export function getLastDurationMinutes(): number {
 export function setLastDurationMinutes(minutes: number) {
   localStorage.setItem(LAST_DURATION_KEY, String(minutes));
 }
+
+const LAST_POLL_TIME_KEY = "boundary_last_poll_time";
+
+/** "Who's in?" start time, HH:MM. Default 07:00 — gully cricket starts early. */
+export function getLastPollTime(): string {
+  if (typeof window === "undefined") return "07:00";
+  const raw = localStorage.getItem(LAST_POLL_TIME_KEY);
+  return raw && /^\d{2}:\d{2}$/.test(raw) ? raw : "07:00";
+}
+
+export function setLastPollTime(time: string) {
+  localStorage.setItem(LAST_POLL_TIME_KEY, time);
+}

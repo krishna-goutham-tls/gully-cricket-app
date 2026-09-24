@@ -547,3 +547,222 @@ export const setPin = internalMutation({
     return { phone, displayName: user.displayName, mustChange: args.mustChange ?? false };
   },
 });
+
+/**
+ * Ops: move a phone+PIN onto an existing guest, and disable the duplicate
+ * account that signed up with that number. Match history stays on the guest
+ * user id. Run via:
+ *   npx convex run admin:foldDuplicateLogin '{"keepUserId":"...","duplicateUserId":"...","phone":"9XXXXXXXXX","pin":"XXXX"}'
+ *
+ * Internal-only.
+ */
+export const foldDuplicateLogin = internalMutation({
+  args: {
+    keepUserId: v.id("users"),
+    duplicateUserId: v.id("users"),
+    phone: v.string(),
+    pin: v.string(),
+  },
+  handler: async (ctx, args) => {
+    if (String(args.keepUserId) === String(args.duplicateUserId)) {
+      throw new Error("keep and duplicate must be different users");
+    }
+    const phone = normalizePhone(args.phone);
+    if (!phone) throw new Error("Invalid phone");
+    if (!isValidPin(args.pin)) throw new Error("PIN must be 4 digits");
+
+    const keep = await ctx.db.get(args.keepUserId);
+    const dup = await ctx.db.get(args.duplicateUserId);
+    if (!keep) throw new Error("Keep user not found");
+    if (!dup) throw new Error("Duplicate user not found");
+
+    if (keep.phone && keep.phone !== phone) {
+      throw new Error(
+        `${keep.displayName} already has a different phone (${keep.phone})`,
+      );
+    }
+
+    const phoneOwner = await ctx.db
+      .query("users")
+      .withIndex("by_phone", (q) => q.eq("phone", phone))
+      .unique();
+    if (
+      phoneOwner &&
+      String(phoneOwner._id) !== String(dup._id) &&
+      String(phoneOwner._id) !== String(keep._id)
+    ) {
+      throw new Error(
+        `Phone already belongs to ${phoneOwner.displayName} (${phoneOwner._id})`,
+      );
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(dup._id, {
+      phone: undefined,
+      pinHash: undefined,
+      pinSalt: undefined,
+      isGuest: true,
+      failedPinAttempts: 0,
+      lockUntil: undefined,
+      updatedAt: now,
+    });
+
+    const keepMembers = await ctx.db
+      .query("orgMembers")
+      .withIndex("by_user", (q) => q.eq("userId", keep._id))
+      .collect();
+    const keepActiveOrgs = new Set(
+      keepMembers
+        .filter((m) => m.status === "active")
+        .map((m) => String(m.orgId)),
+    );
+    let preferredOrgId = keep.preferredOrgId;
+    for (const m of keepMembers) {
+      if (m.status !== "active") continue;
+      const org = await ctx.db.get(m.orgId);
+      if (org && !(org.isSandbox ?? false)) {
+        preferredOrgId = org._id;
+        break;
+      }
+    }
+
+    const { hash, salt } = await hashPin(args.pin);
+    await ctx.db.patch(keep._id, {
+      phone,
+      pinHash: hash,
+      pinSalt: salt,
+      isGuest: false,
+      mustChangePin: false,
+      failedPinAttempts: 0,
+      lockUntil: undefined,
+      preferredOrgId,
+      updatedAt: now,
+    });
+
+    const dupMembers = await ctx.db
+      .query("orgMembers")
+      .withIndex("by_user", (q) => q.eq("userId", dup._id))
+      .collect();
+    let rejectedMemberships = 0;
+    for (const m of dupMembers) {
+      if (m.status === "pending" && keepActiveOrgs.has(String(m.orgId))) {
+        await ctx.db.patch(m._id, {
+          status: "rejected",
+          decidedAt: now,
+        });
+        rejectedMemberships += 1;
+      }
+    }
+
+    const sessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_userId", (q) => q.eq("userId", dup._id))
+      .collect();
+    for (const s of sessions) {
+      await ctx.db.delete(s._id);
+    }
+
+    return {
+      keep: {
+        userId: keep._id,
+        displayName: keep.displayName,
+        phone,
+        preferredOrgId: preferredOrgId ?? null,
+      },
+      duplicateStripped: dup._id,
+      rejectedMemberships,
+      sessionsDeleted: sessions.length,
+    };
+  },
+});
+
+/**
+ * Ops: delete a player who never played — e.g. a duplicate signup an org
+ * admin asks us to remove. Refuses if the user appears in any match,
+ * tournament squad, season, wishlist, or created an org. Deletes the user,
+ * their memberships, sessions and PIN resets. Run via:
+ *   npx convex run admin:deleteUnusedPlayer '{"userId":"..."}'
+ *
+ * Internal-only.
+ */
+export const deleteUnusedPlayer = internalMutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) throw new Error("User not found");
+    if (user.isPlatformAdmin) throw new Error("Refusing to delete a platform admin");
+    const id = String(user._id);
+    const has = (ids: Array<Id<"users">> | undefined) =>
+      (ids ?? []).some((x) => String(x) === id);
+
+    const members = await ctx.db
+      .query("orgMembers")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+
+    for (const m of members) {
+      const org = await ctx.db.get(m.orgId);
+      if (org && String(org.createdBy) === id) {
+        throw new Error(`${user.displayName} created ${org.name}`);
+      }
+      const matches = await ctx.db
+        .query("matches")
+        .withIndex("by_org", (q) => q.eq("orgId", m.orgId))
+        .collect();
+      for (const mt of matches) {
+        if (has(mt.sideAPlayerIds) || has(mt.sideBPlayerIds) || String(mt.createdBy) === id) {
+          throw new Error(`${user.displayName} is in match ${mt._id}`);
+        }
+      }
+      const tournaments = await ctx.db
+        .query("tournaments")
+        .withIndex("by_org", (q) => q.eq("orgId", m.orgId))
+        .collect();
+      for (const t of tournaments) {
+        if (JSON.stringify(t).includes(id)) {
+          throw new Error(`${user.displayName} is in tournament ${t._id}`);
+        }
+      }
+      const seasons = await ctx.db
+        .query("seasons")
+        .withIndex("by_org", (q) => q.eq("orgId", m.orgId))
+        .collect();
+      for (const s of seasons) {
+        if (JSON.stringify(s).includes(id)) {
+          throw new Error(`${user.displayName} is in season ${s._id}`);
+        }
+      }
+      const wishes = await ctx.db
+        .query("wishlistRequests")
+        .withIndex("by_org_author", (q) => q.eq("orgId", m.orgId).eq("authorId", user._id))
+        .collect();
+      if (wishes.length) throw new Error(`${user.displayName} wrote wishlist requests`);
+    }
+    const votes = await ctx.db
+      .query("wishlistVotes")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    if (votes.length) throw new Error(`${user.displayName} has wishlist votes`);
+
+    const sessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .collect();
+    const resets = await ctx.db
+      .query("pinResets")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+
+    for (const m of members) await ctx.db.delete(m._id);
+    for (const s of sessions) await ctx.db.delete(s._id);
+    for (const r of resets) await ctx.db.delete(r._id);
+    await ctx.db.delete(user._id);
+
+    return {
+      deleted: user.displayName,
+      memberships: members.length,
+      sessions: sessions.length,
+      pinResets: resets.length,
+    };
+  },
+});

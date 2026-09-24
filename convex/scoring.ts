@@ -13,6 +13,7 @@ import {
   type WicketType,
 } from "./lib/scoring";
 import { captainTeamLabel } from "./lib/teams";
+import { clearMatchStamps, restampMatch } from "./lib/matchStats";
 import {
   pauseMatchClock,
   publicMatchClock,
@@ -232,10 +233,16 @@ export async function loadMatchAccess(
       q.eq("orgId", match.orgId).eq("userId", user._id),
     )
     .unique();
-  if (!membership || membership.status !== "active") return null;
-
-  // Gully cricket: umpires rotate — any active org member can score.
-  return { user, match, membership, canScore: true };
+  if (membership && membership.status === "active") {
+    // Gully cricket: umpires rotate — any active org member can score.
+    return { user, match, membership, canScore: true };
+  }
+  // Platform owner may watch a community they have not joined. Writes stay
+  // off: they are not on the board and must not take the pad.
+  if (user.isPlatformAdmin ?? false) {
+    return { user, match, membership: null, canScore: false };
+  }
+  return null;
 }
 
 async function requireCanScore(
@@ -244,7 +251,9 @@ async function requireCanScore(
   matchId: Id<"matches">,
 ) {
   const access = await loadMatchAccess(ctx, token, matchId);
-  if (!access) throw new Error("Match not found or not authorized");
+  if (!access || !access.canScore) {
+    throw new Error("Match not found or not authorized");
+  }
   return access;
 }
 
@@ -519,17 +528,17 @@ async function recomputeAndPersist(
   };
 }
 
-function totalInningsOf(match: Doc<"matches">): number {
+export function totalInningsOf(match: Doc<"matches">): number {
   return (match.ruleSnapshot.inningsPerSide ?? 1) * 2;
 }
 
-function aggregateRuns(innings: Doc<"innings">[], side: Side): number {
+export function aggregateRuns(innings: Doc<"innings">[], side: Side): number {
   return innings
     .filter((i) => i.battingSide === side)
     .reduce((sum, i) => sum + i.totalRuns, 0);
 }
 
-function leadText(
+export function leadText(
   nameA: string,
   nameB: string,
   aggA: number,
@@ -641,7 +650,12 @@ async function completeInningsAndMaybeMatch(
   let winnerSide: Side | undefined;
   let resultText: string;
 
-  if (forceMatchEnd) {
+  if (forceMatchEnd && totalInnings === 4) {
+    // A Test that runs out of time without a result is a draw — whoever
+    // leads on aggregate has not won it. Any real result (all out, target
+    // reached, an innings win) already ended the match before the clock did.
+    resultText = "Match drawn";
+  } else if (forceMatchEnd) {
     if (aggA > aggB) {
       winnerSide = "A";
       const margin = aggA - aggB;
@@ -701,6 +715,10 @@ async function completeInningsAndMaybeMatch(
     target: innings.target,
     resultText,
   });
+
+  // The boards read per-match stat stamps, never the ball log — fold this
+  // match into them now that it has counted.
+  await restampMatch(ctx, match._id);
 
   return { phase: "completed" as const, resultText, winnerSide, reason };
 }
@@ -1464,6 +1482,8 @@ export const undoLastBall = mutation({
         winnerSide: undefined,
         resultText: undefined,
       });
+      // Back to live, so off the boards until it completes again.
+      await clearMatchStamps(ctx, match._id);
       const reopened = await ctx.db.get(match._id);
       if (!reopened) throw new Error("Match not found");
       match = reopened;

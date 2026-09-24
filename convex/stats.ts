@@ -1,7 +1,15 @@
 import { v } from "convex/values";
-import { query, QueryCtx, MutationCtx } from "./_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  query,
+  QueryCtx,
+  MutationCtx,
+} from "./_generated/server";
+import { restampMatch } from "./lib/matchStats";
+import { homeGroundOf } from "./lib/grounds";
 import { Doc, Id } from "./_generated/dataModel";
-import { requireActiveMembership } from "./lib/session";
+import { requireOrgViewer } from "./lib/session";
 import { legalBallToOverText } from "./lib/scoring";
 import { captainTeamLabel } from "./lib/teams";
 import { matchFormat } from "./schema";
@@ -145,6 +153,10 @@ type Focus = {
 };
 
 /**
+ * LEGACY — the old read path, kept only so `compareStats` can diff it against
+ * the stamps on real data. Nothing user-facing calls it. Delete it (and the
+ * legacy* queries) once the comparison has passed on prod.
+ *
  * Folds every ball of the org's completed matches into per-player batting
  * and bowling aggregates. Attribution rules mirror the per-match scorecard:
  * bat runs/balls to the striker (legal + noball), wickets to the bowler
@@ -155,7 +167,7 @@ type Focus = {
  * player's own log and the org table it is ranked against, and doing it here
  * means one pass over the ball log and one copy of the attribution rules.
  */
-async function aggregateOrg(
+async function legacyAggregateOrg(
   ctx: QueryCtx | MutationCtx,
   orgId: Id<"orgs">,
   opts: {
@@ -663,7 +675,476 @@ async function aggregateOrg(
     reachedAt,
     focus,
     matchCount: completed.length,
+    teamResults: completed.map(teamResultOf),
   };
+}
+
+type OrgSnapshot = {
+  batting: Map<string, BatAgg>;
+  bowling: Map<string, BowlAgg>;
+  catches: Map<string, number>;
+  drops: Map<string, number>;
+  allRoundMatches: Map<string, Set<string>>;
+  turnout: Map<string, number>;
+  records: Map<string, RecordAgg>;
+  reachedAt: Map<string, Map<string, number>>;
+  focus: Focus;
+  matchCount: number;
+};
+
+type Window = { afterTs?: number; beforeTs?: number };
+
+/** One completed match's two sides, for the team-wins board. */
+type TeamResult = {
+  sideAName: string;
+  sideBName: string;
+  sideACaptainId?: Id<"users">;
+  sideBCaptainId?: Id<"users">;
+  winnerSide?: Side;
+};
+
+function teamResultOf(m: Doc<"matches">): TeamResult {
+  return {
+    sideAName: m.sideAName,
+    sideBName: m.sideBName,
+    sideACaptainId: m.sideAPlayerIds[0],
+    sideBCaptainId: m.sideBPlayerIds[0],
+    winnerSide: m.winnerSide,
+  };
+}
+
+function emptyFocus(): Focus {
+  return {
+    perMatch: new Map(),
+    dismissalTypes: new Map(),
+    wicketTypes: new Map(),
+    byBowler: new Map(),
+    byFielder: new Map(),
+    byBatter: new Map(),
+  };
+}
+
+/** afterTs inclusive, beforeTs exclusive — the same rule the replay used. */
+function inWindow(
+  row: { date: number; format: Format; groundId?: Id<"grounds"> },
+  opts: Window & { format?: Format; ground?: GroundFilter },
+) {
+  if (opts.afterTs !== undefined && row.date < opts.afterTs) return false;
+  if (opts.beforeTs !== undefined && row.date >= opts.beforeTs) return false;
+  if (opts.format !== undefined && row.format !== opts.format) return false;
+  if (opts.ground !== undefined) {
+    const at = row.groundId ?? opts.ground.homeId;
+    if (String(at) !== String(opts.ground.groundId)) return false;
+  }
+  return true;
+}
+
+/**
+ * One ground's slice of a board. A stamp with no ground was played before
+ * grounds existed, at Home — so it counts for whichever ground is Home now.
+ */
+type GroundFilter = { groundId: Id<"grounds">; homeId?: Id<"grounds"> };
+
+async function groundFilterFor(
+  ctx: QueryCtx,
+  orgId: Id<"orgs">,
+  groundId: Id<"grounds"> | undefined,
+): Promise<GroundFilter | undefined | null> {
+  if (!groundId) return undefined;
+  const ground = await ctx.db.get(groundId);
+  if (!ground || String(ground.orgId) !== String(orgId)) return null;
+  const home = await homeGroundOf(ctx, orgId);
+  return { groundId, homeId: home?._id };
+}
+
+type StampSet = {
+  matches: Doc<"matchStats">[];
+  players: Doc<"playerMatchStats">[];
+};
+
+/**
+ * Every stamp in a date window, read off the org+date indexes. This is the
+ * whole read cost of a board: one row per match and one per player per
+ * match, never a ball. Narrower windows (last week, a format) are filtered
+ * from this in memory, so a caller asks once for its widest window.
+ */
+async function loadStampSet(
+  ctx: QueryCtx | MutationCtx,
+  orgId: Id<"orgs">,
+  window: Window,
+): Promise<StampSet> {
+  const [lo, hi] = dateBounds(window);
+  const [matches, players] = await Promise.all([
+    ctx.db
+      .query("matchStats")
+      .withIndex("by_org_date", (q) =>
+        q.eq("orgId", orgId).gte("date", lo).lt("date", hi),
+      )
+      .collect(),
+    ctx.db
+      .query("playerMatchStats")
+      .withIndex("by_org_date", (q) =>
+        q.eq("orgId", orgId).gte("date", lo).lt("date", hi),
+      )
+      .collect(),
+  ]);
+  return { matches, players };
+}
+
+/** An open window end becomes a bound no match date can reach. */
+function dateBounds({ afterTs, beforeTs }: Window): [number, number] {
+  return [afterTs ?? 0, beforeTs ?? Number.MAX_SAFE_INTEGER];
+}
+
+/**
+ * The stamps summed back into exactly the aggregates `legacyAggregateOrg`
+ * builds from the ball log. Matches are folded in the replay's order, and
+ * inside a match each tally takes players in the order the replay first met
+ * them, so every Map comes out in the same insertion order and boards that
+ * sort without a final tie-break still list ties the same way.
+ */
+function aggregateStamps(
+  set: StampSet,
+  opts: Window & { format?: Format; ground?: GroundFilter },
+): OrgSnapshot {
+  const snap: OrgSnapshot = {
+    batting: new Map(),
+    bowling: new Map(),
+    catches: new Map(),
+    drops: new Map(),
+    allRoundMatches: new Map(),
+    turnout: new Map(),
+    records: new Map(),
+    reachedAt: new Map(),
+    focus: emptyFocus(),
+    matchCount: set.matches.filter((m) => inWindow(m, opts)).length,
+  };
+
+  const byMatch = new Map<string, Doc<"playerMatchStats">[]>();
+  for (const row of set.players) {
+    if (!inWindow(row, opts)) continue;
+    const key = String(row.matchId);
+    const list = byMatch.get(key);
+    if (list) list.push(row);
+    else byMatch.set(key, [row]);
+  }
+  const groups = Array.from(byMatch.values()).sort(
+    (a, b) => a[0].matchOrder - b[0].matchOrder,
+  );
+
+  const inOrder = (
+    rows: Doc<"playerMatchStats">[],
+    key: keyof Doc<"playerMatchStats">["order"],
+  ) =>
+    rows
+      .filter((r) => r.order[key] !== undefined)
+      .sort((a, b) => (a.order[key] ?? 0) - (b.order[key] ?? 0));
+
+  for (const rows of groups) {
+    const matchKey = String(rows[0].matchId);
+
+    for (const r of inOrder(rows, "turnout")) {
+      const key = String(r.userId);
+      snap.turnout.set(key, (snap.turnout.get(key) ?? 0) + 1);
+      if (!r.work) continue;
+      let rec = snap.records.get(key);
+      if (!rec) {
+        rec = {
+          userId: r.userId,
+          wins: 0,
+          decided: 0,
+          playerPoints: 0,
+          teamPoints: 0,
+        };
+        snap.records.set(key, rec);
+      }
+      const w = r.work;
+      if (r.winnerSide) {
+        rec.decided += 1;
+        if (matchResult({ ...w, winnerSide: r.winnerSide }) === "won")
+          rec.wins += 1;
+      }
+      if (w.onA && w.onB) {
+        rec.playerPoints += w.pointsA + w.pointsB;
+        rec.teamPoints += w.teamA + w.teamB;
+      } else if (w.onA) {
+        rec.playerPoints += w.pointsA;
+        rec.teamPoints += w.teamA;
+      } else if (w.onB) {
+        rec.playerPoints += w.pointsB;
+        rec.teamPoints += w.teamB;
+      }
+    }
+
+    for (const r of inOrder(rows, "bat")) {
+      const s = r.bat;
+      if (!s) continue;
+      const key = String(r.userId);
+      let agg = snap.batting.get(key);
+      if (!agg) {
+        agg = {
+          userId: r.userId,
+          runs: 0,
+          balls: 0,
+          fours: 0,
+          sixes: 0,
+          dots: 0,
+          singles: 0,
+          innings: new Set(),
+          dismissals: 0,
+          ducks: 0,
+          goldenDucks: 0,
+          facedDucks: 0,
+          bestScore: 0,
+          scoreThisInnings: new Map(),
+          ballsThisInnings: new Map(),
+        };
+        snap.batting.set(key, agg);
+      }
+      agg.runs += s.runs;
+      agg.balls += s.balls;
+      agg.fours += s.fours;
+      agg.sixes += s.sixes;
+      agg.dots += s.dots;
+      agg.singles += s.singles;
+      agg.dismissals += s.dismissals;
+      agg.ducks += s.ducks;
+      agg.goldenDucks += s.goldenDucks;
+      agg.facedDucks += s.facedDucks;
+      for (const inn of s.innings) {
+        const innKey = String(inn.inningsId);
+        agg.innings.add(innKey);
+        agg.scoreThisInnings.set(innKey, inn.runs);
+        agg.ballsThisInnings.set(innKey, inn.balls);
+        if (inn.runs > agg.bestScore) agg.bestScore = inn.runs;
+      }
+    }
+
+    for (const r of inOrder(rows, "bowl")) {
+      const s = r.bowl;
+      if (!s) continue;
+      const key = String(r.userId);
+      let agg = snap.bowling.get(key);
+      if (!agg) {
+        agg = {
+          userId: r.userId,
+          legalBalls: 0,
+          runs: 0,
+          wickets: 0,
+          dots: 0,
+          widesNoballs: 0,
+          sixesConceded: 0,
+          innings: new Set(),
+          perInnings: new Map(),
+          wicketsByMatch: new Map(),
+        };
+        snap.bowling.set(key, agg);
+      }
+      agg.legalBalls += s.legalBalls;
+      agg.runs += s.runs;
+      agg.wickets += s.wickets;
+      agg.dots += s.dots;
+      agg.widesNoballs += s.widesNoballs;
+      agg.sixesConceded += s.sixesConceded;
+      for (const inn of s.innings) {
+        const innKey = String(inn.inningsId);
+        agg.innings.add(innKey);
+        agg.perInnings.set(innKey, { wickets: inn.wickets, runs: inn.runs });
+      }
+      if (s.wickets > 0) agg.wicketsByMatch.set(matchKey, s.wickets);
+    }
+
+    for (const r of inOrder(rows, "catch")) {
+      const key = String(r.userId);
+      snap.catches.set(key, (snap.catches.get(key) ?? 0) + r.catches);
+    }
+    for (const r of inOrder(rows, "drop")) {
+      const key = String(r.userId);
+      snap.drops.set(key, (snap.drops.get(key) ?? 0) + r.drops);
+    }
+
+    for (const r of rows) {
+      const key = String(r.userId);
+      if (r.contributed) {
+        let set = snap.allRoundMatches.get(key);
+        if (!set) {
+          set = new Set();
+          snap.allRoundMatches.set(key, set);
+        }
+        set.add(matchKey);
+      }
+      if (r.reached.length === 0) continue;
+      let at = snap.reachedAt.get(key);
+      if (!at) {
+        at = new Map();
+        snap.reachedAt.set(key, at);
+      }
+      for (const { k, at: when } of r.reached) {
+        const seen = at.get(k);
+        if (seen === undefined || when > seen) at.set(k, when);
+      }
+    }
+  }
+
+  return snap;
+}
+
+/**
+ * One player's match-by-match log and head-to-heads, from their own stamps.
+ * The only per-match reads here are that player's: their match-ups rows and
+ * the match docs their log prints.
+ */
+async function stampFocus(
+  ctx: QueryCtx | MutationCtx,
+  set: StampSet,
+  orgId: Id<"orgs">,
+  userId: Id<"users">,
+  opts: Window & { format?: Format },
+): Promise<Focus> {
+  const focus = emptyFocus();
+  const key = String(userId);
+  const own = set.players
+    .filter((r) => String(r.userId) === key && inWindow(r, opts))
+    .sort((a, b) => a.matchOrder - b.matchOrder);
+
+  for (const r of own) {
+    // The log holds every match they were named in, plus any they batted or
+    // bowled in without being named — the replay's exact rule.
+    if (!r.named && !r.bat && !r.bowl) continue;
+    const match = await ctx.db.get(r.matchId);
+    if (!match) continue;
+    focus.perMatch.set(String(r.matchId), {
+      match,
+      bat: new Map(
+        (r.bat?.innings ?? []).map((i) => [
+          String(i.inningsId),
+          { runs: i.runs, balls: i.balls, out: i.outs > 0 },
+        ]),
+      ),
+      bowl: new Map(
+        (r.bowl?.innings ?? []).map((i) => [
+          String(i.inningsId),
+          { wickets: i.wickets, runs: i.runs, legalBalls: i.legalBalls },
+        ]),
+      ),
+      work: r.work
+        ? {
+            pointsA: r.work.pointsA,
+            pointsB: r.work.pointsB,
+            teamA: r.work.teamA,
+            teamB: r.work.teamB,
+            sizeA: r.work.sizeA,
+            sizeB: r.work.sizeB,
+          }
+        : undefined,
+    });
+  }
+
+  const [lo, hi] = dateBounds(opts);
+  const matchups = (
+    await ctx.db
+      .query("playerMatchups")
+      .withIndex("by_org_user_date", (q) =>
+        q
+          .eq("orgId", orgId)
+          .eq("userId", userId)
+          .gte("date", lo)
+          .lt("date", hi),
+      )
+      .collect()
+  )
+    .filter((r) => inWindow(r, opts))
+    .sort((a, b) => a.matchOrder - b.matchOrder);
+
+  const addCounts = (
+    m: Map<string, number>,
+    counts: Array<{ type: string; count: number }>,
+  ) => {
+    for (const c of counts) m.set(c.type, (m.get(c.type) ?? 0) + c.count);
+  };
+  const merge = (
+    m: Map<string, Head2Head>,
+    rows: Doc<"playerMatchups">["byBowler"],
+    at: number,
+  ) => {
+    for (const s of rows) {
+      const k = String(s.userId);
+      let e = m.get(k);
+      if (!e) {
+        e = {
+          userId: s.userId,
+          outs: 0,
+          runs: 0,
+          balls: 0,
+          fours: 0,
+          sixes: 0,
+          dots: 0,
+          types: new Map(),
+          at: 0,
+          seq: 0,
+        };
+        m.set(k, e);
+      }
+      e.outs += s.outs;
+      e.runs += s.runs;
+      e.balls += s.balls;
+      e.fours += s.fours;
+      e.sixes += s.sixes;
+      e.dots += s.dots;
+      addCounts(e.types, s.types);
+      if (at > e.at || (at === e.at && s.seq > e.seq)) {
+        e.at = at;
+        e.seq = s.seq;
+      }
+    }
+  };
+  for (const r of matchups) {
+    addCounts(focus.dismissalTypes, r.dismissalTypes);
+    addCounts(focus.wicketTypes, r.wicketTypes);
+    merge(focus.byBowler, r.byBowler, r.date);
+    merge(focus.byFielder, r.byFielder, r.date);
+    merge(focus.byBatter, r.byBatter, r.date);
+  }
+  return focus;
+}
+
+/**
+ * Most wins by a team. Sides are free text on each match, so a team is its
+ * display label — the stored name, or "Team {captain}" where the side kept
+ * the "Team A"/"Team B" default — grouped trimmed and case-insensitive. The
+ * label shown is the one from the latest match.
+ */
+async function buildTeamRows(
+  ctx: QueryCtx | MutationCtx,
+  results: TeamResult[],
+) {
+  const captainIds = new Set<string>();
+  for (const r of results) {
+    if (r.sideACaptainId) captainIds.add(String(r.sideACaptainId));
+    if (r.sideBCaptainId) captainIds.add(String(r.sideBCaptainId));
+  }
+  const names = await resolveNames(ctx, captainIds);
+  const teams = new Map<string, { name: string; wins: number; played: number }>();
+  for (const r of results) {
+    for (const s of ["A", "B"] as const) {
+      const captain = s === "A" ? r.sideACaptainId : r.sideBCaptainId;
+      const name = captainTeamLabel(
+        (s === "A" ? r.sideAName : r.sideBName).trim(),
+        captain ? names.get(String(captain)) : undefined,
+      );
+      const key = name.trim().toLowerCase();
+      if (!key) continue;
+      const row = teams.get(key) ?? { name, wins: 0, played: 0 };
+      row.name = name;
+      row.played += 1;
+      if (r.winnerSide === s) row.wins += 1;
+      teams.set(key, row);
+    }
+  }
+  return Array.from(teams.values()).sort(
+    (a, b) =>
+      b.wins - a.wins || a.played - b.played || a.name.localeCompare(b.name),
+  );
 }
 
 function bestFigures(agg: BowlAgg): { wickets: number; runs: number } | null {
@@ -988,9 +1469,13 @@ function stampContender<T extends { userId: Id<"users"> }>(
 export async function loadRegularsBoard(
   ctx: QueryCtx | MutationCtx,
   orgId: Id<"orgs">,
-  window: { afterTs?: number; beforeTs?: number } = {},
+  window: Window = {},
+  /** Old ball replay — `compareStats` only. */
+  legacy = false,
 ) {
-  const snap = await aggregateOrg(ctx, orgId, window);
+  const snap: OrgSnapshot = legacy
+    ? await legacyAggregateOrg(ctx, orgId, window)
+    : aggregateStamps(await loadStampSet(ctx, orgId, window), window);
   // Drops and turnout reach players who never batted, bowled or held a catch —
   // the Butterfingers roast and the roast floor both need those names.
   const keys = [
@@ -1065,137 +1550,185 @@ export async function loadRegularsBoard(
   };
 }
 
+type LeaderboardArgs = {
+  orgId: Id<"orgs">;
+  includeVisitorsAndJuniors?: boolean;
+  seasonId?: Id<"seasons">;
+  format?: Format;
+  /** One ground only. Stamps path only — the legacy replay has no ground. */
+  groundId?: Id<"grounds">;
+};
+
+async function leaderboardFor(
+  ctx: QueryCtx,
+  args: LeaderboardArgs,
+  now: number,
+  /** Old ball replay — `compareStats` only. */
+  legacy = false,
+) {
+  const includeExtras = args.includeVisitorsAndJuniors === true;
+  let afterTs: number | undefined;
+  let beforeTs: number | undefined;
+  let prevAfterTs: number | undefined;
+  let prevBeforeTs: number | undefined = now - WEEK_MS;
+
+  if (args.seasonId) {
+    const season = await ctx.db.get(args.seasonId);
+    if (!season || String(season.orgId) !== String(args.orgId)) return null;
+    afterTs = season.startedAt;
+    // Completed seasons freeze at endedAt; active ones use now.
+    const windowEnd = Math.min(now, season.endedAt ?? now);
+    beforeTs = windowEnd;
+    prevAfterTs = season.startedAt;
+    // Weekly lookback clipped into the season. If this is before startedAt
+    // the previous snapshot is empty and baselineMatches is 0.
+    prevBeforeTs = windowEnd - WEEK_MS;
+  }
+
+  if (legacy && args.groundId) {
+    throw new Error("The legacy replay cannot filter by ground");
+  }
+  const ground = await groundFilterFor(ctx, args.orgId, args.groundId);
+  if (ground === null) return null;
+
+  const currentWindow = { afterTs, beforeTs, format: args.format, ground };
+  const previousWindow = {
+    afterTs: prevAfterTs,
+    beforeTs: prevBeforeTs,
+    format: args.format,
+    ground,
+  };
+  let current: OrgSnapshot;
+  let previous: OrgSnapshot;
+  let teamResults: TeamResult[];
+  if (legacy) {
+    const cur = await legacyAggregateOrg(ctx, args.orgId, currentWindow);
+    current = cur;
+    previous = await legacyAggregateOrg(ctx, args.orgId, previousWindow);
+    teamResults = cur.teamResults;
+  } else {
+    // One read for both snapshots: last week's window always sits inside
+    // this one (same start, earlier end), so it is a filter, not a rescan.
+    const set = await loadStampSet(ctx, args.orgId, { afterTs, beforeTs });
+    current = aggregateStamps(set, currentWindow);
+    previous = aggregateStamps(set, previousWindow);
+    teamResults = set.matches
+      .filter((m) => inWindow(m, currentWindow))
+      .sort((a, b) => a.matchOrder - b.matchOrder);
+  }
+
+  // One name map for both snapshots — a week-ago player is always a subset of
+  // today's, so today's keys cover everyone either snapshot can name.
+  const keys = [
+    ...Array.from(current.batting.keys()),
+    ...Array.from(current.bowling.keys()),
+    ...Array.from(current.catches.keys()),
+    // Turnout reaches players who never touched the ball, so its keys are
+    // not a subset of the three above — without this they'd render "Player".
+    ...Array.from(current.turnout.keys()),
+    // Same trap for drops: a fielder can put one down without ever batting,
+    // bowling or holding a catch that innings.
+    ...Array.from(current.drops.keys()),
+    ...Array.from(current.records.keys()),
+  ];
+  const names = await resolveNames(ctx, keys);
+  const tags = await tagsForUsers(ctx, args.orgId, keys);
+
+  const rows = (snap: typeof current) => ({
+    allRound: boardFilter(
+      stampTags(
+        buildAllRoundRows(
+          snap.batting,
+          snap.bowling,
+          snap.catches,
+          snap.allRoundMatches,
+          names,
+        ),
+        tags,
+      ),
+      includeExtras,
+    ),
+    batting: boardFilter(
+      stampTags(buildBattingRows(snap.batting, names), tags),
+      includeExtras,
+    ),
+    bowling: boardFilter(
+      stampTags(buildBowlingRows(snap.bowling, names), tags),
+      includeExtras,
+    ),
+    turnout: boardFilter(
+      stampTags(buildTurnoutRows(snap.turnout, names), tags),
+      includeExtras,
+    ),
+    drops: boardFilter(
+      stampTags(buildDropsRows(snap.drops, names), tags),
+      includeExtras,
+    ),
+    records: boardFilter(
+      stampTags(buildRecordRows(snap.records, names), tags),
+      includeExtras,
+    ),
+  });
+  const cur = rows(current);
+  const prev = rows(previous);
+
+  const seen = new Set(keys);
+  let excludedCount = 0;
+  for (const key of Array.from(seen)) {
+    if (!isBoardRegular(tags.get(key) ?? [])) excludedCount += 1;
+  }
+
+  return {
+    matchCount: current.matchCount,
+    excludedCount,
+    includeVisitorsAndJuniors: includeExtras,
+    // The reader only trusts movement once there's a past to move from —
+    // with no baseline every name would flag "new", which is just noise.
+    weekly: {
+      baselineMatches: previous.matchCount,
+      newMatches: current.matchCount - previous.matchCount,
+    },
+    allRound: withMovement(cur.allRound, prev.allRound),
+    batting: withMovement(cur.batting, prev.batting),
+    bowling: withMovement(cur.bowling, prev.bowling),
+    turnout: withMovement(cur.turnout, prev.turnout),
+    // No weekly movement — drops back only the Butterfingers roast tile,
+    // which is all-time, not a ranked board with its own ↑/↓ arrows.
+    drops: cur.drops,
+    records: cur.records,
+    // Not a player board: no tags, no arrows. Records reads the top row.
+    teams: await buildTeamRows(ctx, teamResults),
+  };
+}
+
+/** The board args the legacy replay understands — everything but ground. */
+const boardArgs = {
+  orgId: v.id("orgs"),
+  /**
+   * Default hides visitors and juniors. Pass true for auto-form teams and
+   * the Leaders "Everyone" toggle, so ranks and weekly arrows stay honest.
+   */
+  includeVisitorsAndJuniors: v.optional(v.boolean()),
+  seasonId: v.optional(v.id("seasons")),
+  /** Tests or limited only. Omit for the mixed board (the default). */
+  format: v.optional(matchFormat),
+};
+
+const leaderboardArgs = {
+  ...boardArgs,
+  /** One ground's matches. Unset stamps count as the Home ground. */
+  groundId: v.optional(v.id("grounds")),
+};
+
 export const leaderboard = query({
-  args: {
-    token: v.optional(v.string()),
-    orgId: v.id("orgs"),
-    /**
-     * Default hides visitors and juniors. Pass true for auto-form teams and
-     * the Leaders "Everyone" toggle, so ranks and weekly arrows stay honest.
-     */
-    includeVisitorsAndJuniors: v.optional(v.boolean()),
-    seasonId: v.optional(v.id("seasons")),
-    /** Tests or limited only. Omit for the mixed board (the default). */
-    format: v.optional(matchFormat),
-  },
-  handler: async (ctx, args) => {
+  args: { token: v.optional(v.string()), ...leaderboardArgs },
+  handler: async (ctx, { token, ...args }) => {
     try {
-      await requireActiveMembership(ctx, args.token, args.orgId);
+      await requireOrgViewer(ctx, token, args.orgId);
     } catch {
       return null;
     }
-
-    const includeExtras = args.includeVisitorsAndJuniors === true;
-    const now = Date.now();
-    let afterTs: number | undefined;
-    let beforeTs: number | undefined;
-    let prevAfterTs: number | undefined;
-    let prevBeforeTs: number | undefined = now - WEEK_MS;
-
-    if (args.seasonId) {
-      const season = await ctx.db.get(args.seasonId);
-      if (!season || String(season.orgId) !== String(args.orgId)) return null;
-      afterTs = season.startedAt;
-      // Completed seasons freeze at endedAt; active ones use now.
-      const windowEnd = Math.min(now, season.endedAt ?? now);
-      beforeTs = windowEnd;
-      prevAfterTs = season.startedAt;
-      // Weekly lookback clipped into the season. If this is before startedAt
-      // the previous snapshot is empty and baselineMatches is 0.
-      prevBeforeTs = windowEnd - WEEK_MS;
-    }
-
-    const current = await aggregateOrg(ctx, args.orgId, {
-      afterTs,
-      beforeTs,
-      format: args.format,
-    });
-    const previous = await aggregateOrg(ctx, args.orgId, {
-      afterTs: prevAfterTs,
-      beforeTs: prevBeforeTs,
-      format: args.format,
-    });
-
-    // One name map for both snapshots — a week-ago player is always a subset of
-    // today's, so today's keys cover everyone either snapshot can name.
-    const keys = [
-      ...Array.from(current.batting.keys()),
-      ...Array.from(current.bowling.keys()),
-      ...Array.from(current.catches.keys()),
-      // Turnout reaches players who never touched the ball, so its keys are
-      // not a subset of the three above — without this they'd render "Player".
-      ...Array.from(current.turnout.keys()),
-      // Same trap for drops: a fielder can put one down without ever batting,
-      // bowling or holding a catch that innings.
-      ...Array.from(current.drops.keys()),
-      ...Array.from(current.records.keys()),
-    ];
-    const names = await resolveNames(ctx, keys);
-    const tags = await tagsForUsers(ctx, args.orgId, keys);
-
-    const rows = (snap: typeof current) => ({
-      allRound: boardFilter(
-        stampTags(
-          buildAllRoundRows(
-            snap.batting,
-            snap.bowling,
-            snap.catches,
-            snap.allRoundMatches,
-            names,
-          ),
-          tags,
-        ),
-        includeExtras,
-      ),
-      batting: boardFilter(
-        stampTags(buildBattingRows(snap.batting, names), tags),
-        includeExtras,
-      ),
-      bowling: boardFilter(
-        stampTags(buildBowlingRows(snap.bowling, names), tags),
-        includeExtras,
-      ),
-      turnout: boardFilter(
-        stampTags(buildTurnoutRows(snap.turnout, names), tags),
-        includeExtras,
-      ),
-      drops: boardFilter(
-        stampTags(buildDropsRows(snap.drops, names), tags),
-        includeExtras,
-      ),
-      records: boardFilter(
-        stampTags(buildRecordRows(snap.records, names), tags),
-        includeExtras,
-      ),
-    });
-    const cur = rows(current);
-    const prev = rows(previous);
-
-    const seen = new Set(keys);
-    let excludedCount = 0;
-    for (const key of Array.from(seen)) {
-      if (!isBoardRegular(tags.get(key) ?? [])) excludedCount += 1;
-    }
-
-    return {
-      matchCount: current.matchCount,
-      excludedCount,
-      includeVisitorsAndJuniors: includeExtras,
-      // The reader only trusts movement once there's a past to move from —
-      // with no baseline every name would flag "new", which is just noise.
-      weekly: {
-        baselineMatches: previous.matchCount,
-        newMatches: current.matchCount - previous.matchCount,
-      },
-      allRound: withMovement(cur.allRound, prev.allRound),
-      batting: withMovement(cur.batting, prev.batting),
-      bowling: withMovement(cur.bowling, prev.bowling),
-      turnout: withMovement(cur.turnout, prev.turnout),
-      // No weekly movement — drops back only the Butterfingers roast tile,
-      // which is all-time, not a ranked board with its own ↑/↓ arrows.
-      drops: cur.drops,
-      records: cur.records,
-    };
+    return leaderboardFor(ctx, args, Date.now());
   },
 });
 
@@ -1273,7 +1806,7 @@ export const shelf = query({
   },
   handler: async (ctx, args) => {
     try {
-      await requireActiveMembership(ctx, args.token, args.orgId);
+      await requireOrgViewer(ctx, args.token, args.orgId);
     } catch {
       return null;
     }
@@ -1304,250 +1837,187 @@ export const shelf = query({
   },
 });
 
-export const playerStats = query({
+async function playerStatsFor(
+  ctx: QueryCtx,
   args: {
-    token: v.optional(v.string()),
-    orgId: v.id("orgs"),
-    userId: v.id("users"),
-    /** Omit for the career numbers — the default every profile shows. */
-    seasonId: v.optional(v.id("seasons")),
+    orgId: Id<"orgs">;
+    userId: Id<"users">;
+    seasonId?: Id<"seasons">;
   },
-  handler: async (ctx, args) => {
-    try {
-      await requireActiveMembership(ctx, args.token, args.orgId);
-    } catch {
-      return null;
-    }
+  /** Old ball replay — `compareStats` only. */
+  legacy = false,
+) {
+  const player = await ctx.db.get(args.userId);
+  if (!player) return null;
 
-    const player = await ctx.db.get(args.userId);
-    if (!player) return null;
+  let window: Window = {};
+  if (args.seasonId) {
+    const w = await seasonWindow(ctx, args.orgId, args.seasonId);
+    if (!w) return null;
+    window = w;
+  }
 
-    let window: { afterTs?: number; beforeTs?: number } = {};
-    if (args.seasonId) {
-      const w = await seasonWindow(ctx, args.orgId, args.seasonId);
-      if (!w) return null;
-      window = w;
-    }
-
-    const { batting, bowling, focus } = await aggregateOrg(ctx, args.orgId, {
+  let snap: OrgSnapshot;
+  if (legacy) {
+    snap = await legacyAggregateOrg(ctx, args.orgId, {
       ...window,
       focusPlayerId: args.userId,
     });
-    const names = await resolveNames(ctx, [
-      ...Array.from(batting.keys()),
-      ...Array.from(bowling.keys()),
-    ]);
-    const labels = await tagsForUsers(ctx, args.orgId, [
-      ...Array.from(batting.keys()),
-      ...Array.from(bowling.keys()),
-      String(args.userId),
-    ]);
-    const key = String(args.userId);
-    const bat = batting.get(key);
-    const bowl = bowling.get(key);
-    const best = bowl ? bestFigures(bowl) : null;
+  } else {
+    // The profile ranks against the whole board, so it still sums every
+    // player's rows in the window — but its own log comes off its own rows.
+    const set = await loadStampSet(ctx, args.orgId, window);
+    snap = aggregateStamps(set, window);
+    snap.focus = await stampFocus(ctx, set, args.orgId, args.userId, window);
+  }
+  const { batting, bowling, focus } = snap;
+  const names = await resolveNames(ctx, [
+    ...Array.from(batting.keys()),
+    ...Array.from(bowling.keys()),
+  ]);
+  const labels = await tagsForUsers(ctx, args.orgId, [
+    ...Array.from(batting.keys()),
+    ...Array.from(bowling.keys()),
+    String(args.userId),
+  ]);
+  const key = String(args.userId);
+  const bat = batting.get(key);
+  const bowl = bowling.get(key);
+  const best = bowl ? bestFigures(bowl) : null;
 
-    // Distinct innings they took part in, batting or bowling — a Test where
-    // they came out twice and bowled twice is 4 innings, not the 1 match it
-    // sits inside, and a specialist bowler's 0 batting innings never drags
-    // this down since it's a union, not a sum.
-    const inningsPlayed = new Set([
-      ...Array.from(bat?.innings ?? []),
-      ...Array.from(bowl?.innings ?? []),
-    ]).size;
+  // Distinct innings they took part in, batting or bowling — a Test where
+  // they came out twice and bowled twice is 4 innings, not the 1 match it
+  // sits inside, and a specialist bowler's 0 batting innings never drags
+  // this down since it's a union, not a sum.
+  const inningsPlayed = new Set([
+    ...Array.from(bat?.innings ?? []),
+    ...Array.from(bowl?.innings ?? []),
+  ]).size;
 
-    // Rank against the default Leaders board (regulars only), so "#3 of 14"
-    // cannot disagree with what the tab shows until someone flips Everyone.
-    const battingRows = boardFilter(
-      stampTags(buildBattingRows(batting, names), labels),
-      false,
+  // Rank against the default Leaders board (regulars only), so "#3 of 14"
+  // cannot disagree with what the tab shows until someone flips Everyone.
+  const battingRows = boardFilter(
+    stampTags(buildBattingRows(batting, names), labels),
+    false,
+  );
+  const bowlingRows = boardFilter(
+    stampTags(buildBowlingRows(bowling, names), labels),
+    false,
+  );
+  const rankOf = (
+    rows: Array<{ userId: Id<"users">; qualified: boolean }>,
+  ) => {
+    const ranked = rows.filter((r) => r.qualified);
+    const idx = ranked.findIndex((r) => String(r.userId) === key);
+    return idx >= 0 ? { rank: idx + 1, of: ranked.length } : null;
+  };
+
+  const counts = (m: Map<string, number>) =>
+    Array.from(m.entries())
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => b.count - a.count);
+
+  // Four match-ups: for each situation this player can be in, the opponent
+  // who gets the better of them and the one they get the better of. Both
+  // sides of the same head-to-head tables, so the two always agree.
+  const faced = Array.from(focus.byBowler.values()).filter((e) => e.balls > 0);
+  const bowledAt = Array.from(focus.byBatter.values()).filter(
+    (e) => e.balls > 0,
+  );
+  const enough = (list: Head2Head[]) =>
+    list.filter((e) => e.balls >= NEMESIS_MIN_BALLS);
+  const not = (list: Head2Head[], exclude: Head2Head | null) =>
+    exclude ? list.filter((e) => e !== exclude) : list;
+  const sr = (e: Head2Head) => (e.runs / e.balls) * 100;
+
+  // Batting. Toughest is whoever takes the wicket most; failing that — a
+  // batter whose dismissals are all run-outs has no bowler to their name —
+  // whoever they score slowest against. Easiest is simply who they get after.
+  const dismissers = faced.filter((e) => e.outs >= NEMESIS_MIN_OUTS);
+  const batToughest = dismissers.length
+    ? pickH2H(dismissers, (e) => e.outs)
+    : pickH2H(enough(faced), sr, (a, b) => a < b);
+  const batEasiest = pickH2H(not(enough(faced), batToughest), sr);
+
+  // Bowling, mirrored: toughest is whoever scores most off them, easiest is
+  // whoever they dismiss most — or keep quietest, if nobody qualifies.
+  const bowlToughest = pickH2H(enough(bowledAt), (e) => e.runs);
+  const victims = bowledAt.filter((e) => e.outs >= NEMESIS_MIN_OUTS);
+  const bowlEasiest = victims.length
+    ? pickH2H(not(victims, bowlToughest), (e) => e.outs)
+    : pickH2H(not(enough(bowledAt), bowlToughest), sr, (a, b) => a < b);
+
+  const fielderNemesis = pickH2H(
+    Array.from(focus.byFielder.values()).filter(
+      (e) => e.outs >= NEMESIS_MIN_OUTS,
+    ),
+    (e) => e.outs,
+  );
+
+  // One resolve covering the nemesis picks and every opponent in the full
+  // per-bowler / per-batter tables (the picks are a subset of those lists,
+  // plus the fielder nemesis which is not).
+  const nemesisNames = await resolveNames(ctx, [
+    ...faced.map((e) => String(e.userId)),
+    ...bowledAt.map((e) => String(e.userId)),
+    ...(fielderNemesis ? [String(fielderNemesis.userId)] : []),
+  ]);
+  const named = (e: Head2Head) => ({
+    userId: e.userId,
+    displayName: nemesisNames.get(String(e.userId)) ?? "Player",
+    runs: e.runs,
+    balls: e.balls,
+    outs: e.outs,
+  });
+
+  // The full match-up tables behind the nemesis card: how this player fares
+  // against every bowler they've faced, and every batter they've bowled to.
+  // Most-faced opponents first — the rivalries with the deepest history.
+  const matchupRow = (e: Head2Head) => ({
+    userId: e.userId,
+    displayName: nemesisNames.get(String(e.userId)) ?? "Player",
+    runs: e.runs,
+    balls: e.balls,
+    outs: e.outs,
+    fours: e.fours,
+    sixes: e.sixes,
+    dots: e.dots,
+    strikeRate: e.balls > 0 ? (e.runs / e.balls) * 100 : 0,
+  });
+  const byEncounters = (
+    a: { balls: number; runs: number },
+    b: { balls: number; runs: number },
+  ) => b.balls - a.balls || b.runs - a.runs;
+  const vsBowlers = faced.map(matchupRow).sort(byEncounters);
+  const vsBatters = bowledAt.map(matchupRow).sort(byEncounters);
+
+  // Newest first — a profile is read for current form, not for history.
+  const focusMatches = Array.from(focus.perMatch.values()).sort(
+    (a, b) => b.match.createdAt - a.match.createdAt,
+  );
+
+  const sideLabel = async (m: Doc<"matches">, side: "A" | "B") => {
+    const ids = side === "A" ? m.sideAPlayerIds : m.sideBPlayerIds;
+    const captain = ids[0] ? await ctx.db.get(ids[0]) : null;
+    return captainTeamLabel(
+      side === "A" ? m.sideAName : m.sideBName,
+      captain && "displayName" in captain
+        ? (captain.displayName as string)
+        : undefined,
     );
-    const bowlingRows = boardFilter(
-      stampTags(buildBowlingRows(bowling, names), labels),
-      false,
-    );
-    const rankOf = (
-      rows: Array<{ userId: Id<"users">; qualified: boolean }>,
-    ) => {
-      const ranked = rows.filter((r) => r.qualified);
-      const idx = ranked.findIndex((r) => String(r.userId) === key);
-      return idx >= 0 ? { rank: idx + 1, of: ranked.length } : null;
-    };
+  };
 
-    const counts = (m: Map<string, number>) =>
-      Array.from(m.entries())
-        .map(([type, count]) => ({ type, count }))
-        .sort((a, b) => b.count - a.count);
-
-    // Four match-ups: for each situation this player can be in, the opponent
-    // who gets the better of them and the one they get the better of. Both
-    // sides of the same head-to-head tables, so the two always agree.
-    const faced = Array.from(focus.byBowler.values()).filter((e) => e.balls > 0);
-    const bowledAt = Array.from(focus.byBatter.values()).filter(
-      (e) => e.balls > 0,
-    );
-    const enough = (list: Head2Head[]) =>
-      list.filter((e) => e.balls >= NEMESIS_MIN_BALLS);
-    const not = (list: Head2Head[], exclude: Head2Head | null) =>
-      exclude ? list.filter((e) => e !== exclude) : list;
-    const sr = (e: Head2Head) => (e.runs / e.balls) * 100;
-
-    // Batting. Toughest is whoever takes the wicket most; failing that — a
-    // batter whose dismissals are all run-outs has no bowler to their name —
-    // whoever they score slowest against. Easiest is simply who they get after.
-    const dismissers = faced.filter((e) => e.outs >= NEMESIS_MIN_OUTS);
-    const batToughest = dismissers.length
-      ? pickH2H(dismissers, (e) => e.outs)
-      : pickH2H(enough(faced), sr, (a, b) => a < b);
-    const batEasiest = pickH2H(not(enough(faced), batToughest), sr);
-
-    // Bowling, mirrored: toughest is whoever scores most off them, easiest is
-    // whoever they dismiss most — or keep quietest, if nobody qualifies.
-    const bowlToughest = pickH2H(enough(bowledAt), (e) => e.runs);
-    const victims = bowledAt.filter((e) => e.outs >= NEMESIS_MIN_OUTS);
-    const bowlEasiest = victims.length
-      ? pickH2H(not(victims, bowlToughest), (e) => e.outs)
-      : pickH2H(not(enough(bowledAt), bowlToughest), sr, (a, b) => a < b);
-
-    const fielderNemesis = pickH2H(
-      Array.from(focus.byFielder.values()).filter(
-        (e) => e.outs >= NEMESIS_MIN_OUTS,
-      ),
-      (e) => e.outs,
-    );
-
-    // One resolve covering the nemesis picks and every opponent in the full
-    // per-bowler / per-batter tables (the picks are a subset of those lists,
-    // plus the fielder nemesis which is not).
-    const nemesisNames = await resolveNames(ctx, [
-      ...faced.map((e) => String(e.userId)),
-      ...bowledAt.map((e) => String(e.userId)),
-      ...(fielderNemesis ? [String(fielderNemesis.userId)] : []),
-    ]);
-    const named = (e: Head2Head) => ({
-      userId: e.userId,
-      displayName: nemesisNames.get(String(e.userId)) ?? "Player",
-      runs: e.runs,
-      balls: e.balls,
-      outs: e.outs,
-    });
-
-    // The full match-up tables behind the nemesis card: how this player fares
-    // against every bowler they've faced, and every batter they've bowled to.
-    // Most-faced opponents first — the rivalries with the deepest history.
-    const matchupRow = (e: Head2Head) => ({
-      userId: e.userId,
-      displayName: nemesisNames.get(String(e.userId)) ?? "Player",
-      runs: e.runs,
-      balls: e.balls,
-      outs: e.outs,
-      fours: e.fours,
-      sixes: e.sixes,
-      dots: e.dots,
-      strikeRate: e.balls > 0 ? (e.runs / e.balls) * 100 : 0,
-    });
-    const byEncounters = (
-      a: { balls: number; runs: number },
-      b: { balls: number; runs: number },
-    ) => b.balls - a.balls || b.runs - a.runs;
-    const vsBowlers = faced.map(matchupRow).sort(byEncounters);
-    const vsBatters = bowledAt.map(matchupRow).sort(byEncounters);
-
-    // Newest first — a profile is read for current form, not for history.
-    const focusMatches = Array.from(focus.perMatch.values()).sort(
-      (a, b) => b.match.createdAt - a.match.createdAt,
-    );
-
-    const sideLabel = async (m: Doc<"matches">, side: "A" | "B") => {
-      const ids = side === "A" ? m.sideAPlayerIds : m.sideBPlayerIds;
-      const captain = ids[0] ? await ctx.db.get(ids[0]) : null;
-      return captainTeamLabel(
-        side === "A" ? m.sideAName : m.sideBName,
-        captain && "displayName" in captain
-          ? (captain.displayName as string)
-          : undefined,
-      );
-    };
-
-    const log = await Promise.all(
-      focusMatches.map(async (fm) => {
-        const m = fm.match;
-        const onA = m.sideAPlayerIds.some((id) => String(id) === key);
-        const onB = m.sideBPlayerIds.some((id) => String(id) === key);
-        // Common players turn out for both sides, so there is no "opponent"
-        // and no win or loss to claim — say so rather than pick a side.
-        const side = onA && !onB ? "A" : onB && !onA ? "B" : undefined;
-        const work = fm.work;
-        const args = work
-          ? {
-              onA,
-              onB,
-              winnerSide: m.winnerSide,
-              pointsA: work.pointsA,
-              pointsB: work.pointsB,
-              teamA: work.teamA,
-              teamB: work.teamB,
-              sizeA: work.sizeA,
-              sizeB: work.sizeB,
-            }
-          : null;
-        const [labelA, labelB] = await Promise.all([
-          sideLabel(m, "A"),
-          sideLabel(m, "B"),
-        ]);
-        return {
-          matchId: m._id,
-          date: m.createdAt,
-          format: m.ruleSnapshot.format,
-          opponent:
-            side === "A" ? labelB : side === "B" ? labelA : `${labelA} v ${labelB}`,
-          bothSides: side === undefined,
-          result: args
-            ? matchResult(args)
-            : side === undefined || m.winnerSide === undefined
-              ? ("none" as const)
-              : m.winnerSide === side
-                ? ("won" as const)
-                : ("lost" as const),
-          contributionPct: args
-            ? asPct(
-                matchContribution({
-                  onA,
-                  onB,
-                  pointsA: args.pointsA,
-                  pointsB: args.pointsB,
-                  teamA: args.teamA,
-                  teamB: args.teamB,
-                }),
-              )
-            : null,
-          // Innings order within the match, so a Test reads "34 & 12*".
-          bat: Array.from(fm.bat.values()),
-          bowl: Array.from(fm.bowl.values()).map((s) => ({
-            ...s,
-            oversText: legalBallToOverText(s.legalBalls, 6),
-          })),
-        };
-      }),
-    );
-
-    const scores = log
-      .flatMap((r) => r.bat)
-      .filter((b) => b.balls > 0 || b.out);
-
-    let wins = 0;
-    let decided = 0;
-    const contribRows: Array<{ playerPoints: number; teamPoints: number }> = [];
-    for (const fm of Array.from(focus.perMatch.values())) {
+  const log = await Promise.all(
+    focusMatches.map(async (fm) => {
       const m = fm.match;
       const onA = m.sideAPlayerIds.some((id) => String(id) === key);
       const onB = m.sideBPlayerIds.some((id) => String(id) === key);
+      // Common players turn out for both sides, so there is no "opponent"
+      // and no win or loss to claim — say so rather than pick a side.
+      const side = onA && !onB ? "A" : onB && !onA ? "B" : undefined;
       const work = fm.work;
-      if (!work) continue;
-      if (m.winnerSide) {
-        decided += 1;
-        if (
-          matchResult({
+      const args = work
+        ? {
             onA,
             onB,
             winnerSide: m.winnerSide,
@@ -1557,117 +2027,376 @@ export const playerStats = query({
             teamB: work.teamB,
             sizeA: work.sizeA,
             sizeB: work.sizeB,
-          }) === "won"
-        ) {
-          wins += 1;
-        }
-      }
-      if (onA && onB) {
-        contribRows.push({
-          playerPoints: work.pointsA + work.pointsB,
-          teamPoints: work.teamA + work.teamB,
-        });
-      } else if (onA) {
-        contribRows.push({
-          playerPoints: work.pointsA,
-          teamPoints: work.teamA,
-        });
-      } else if (onB) {
-        contribRows.push({
-          playerPoints: work.pointsB,
-          teamPoints: work.teamB,
-        });
+          }
+        : null;
+      const [labelA, labelB] = await Promise.all([
+        sideLabel(m, "A"),
+        sideLabel(m, "B"),
+      ]);
+      return {
+        matchId: m._id,
+        date: m.createdAt,
+        format: m.ruleSnapshot.format,
+        opponent:
+          side === "A" ? labelB : side === "B" ? labelA : `${labelA} v ${labelB}`,
+        bothSides: side === undefined,
+        result: args
+          ? matchResult(args)
+          : side === undefined || m.winnerSide === undefined
+            ? ("none" as const)
+            : m.winnerSide === side
+              ? ("won" as const)
+              : ("lost" as const),
+        contributionPct: args
+          ? asPct(
+              matchContribution({
+                onA,
+                onB,
+                pointsA: args.pointsA,
+                pointsB: args.pointsB,
+                teamA: args.teamA,
+                teamB: args.teamB,
+              }),
+            )
+          : null,
+        // Innings order within the match, so a Test reads "34 & 12*".
+        bat: Array.from(fm.bat.values()),
+        bowl: Array.from(fm.bowl.values()).map((s) => ({
+          ...s,
+          oversText: legalBallToOverText(s.legalBalls, 6),
+        })),
+      };
+    }),
+  );
+
+  const scores = log
+    .flatMap((r) => r.bat)
+    .filter((b) => b.balls > 0 || b.out);
+
+  let wins = 0;
+  let decided = 0;
+  const contribRows: Array<{ playerPoints: number; teamPoints: number }> = [];
+  for (const fm of Array.from(focus.perMatch.values())) {
+    const m = fm.match;
+    const onA = m.sideAPlayerIds.some((id) => String(id) === key);
+    const onB = m.sideBPlayerIds.some((id) => String(id) === key);
+    const work = fm.work;
+    if (!work) continue;
+    if (m.winnerSide) {
+      decided += 1;
+      if (
+        matchResult({
+          onA,
+          onB,
+          winnerSide: m.winnerSide,
+          pointsA: work.pointsA,
+          pointsB: work.pointsB,
+          teamA: work.teamA,
+          teamB: work.teamB,
+          sizeA: work.sizeA,
+          sizeB: work.sizeB,
+        }) === "won"
+      ) {
+        wins += 1;
       }
     }
+    if (onA && onB) {
+      contribRows.push({
+        playerPoints: work.pointsA + work.pointsB,
+        teamPoints: work.teamA + work.teamB,
+      });
+    } else if (onA) {
+      contribRows.push({
+        playerPoints: work.pointsA,
+        teamPoints: work.teamA,
+      });
+    } else if (onB) {
+      contribRows.push({
+        playerPoints: work.pointsB,
+        teamPoints: work.teamB,
+      });
+    }
+  }
 
+  return {
+    userId: args.userId,
+    displayName: player.displayName,
+    isGuest: player.isGuest ?? false,
+    playerTags: labels.get(key) ?? [],
+    photoUrl: player.photoUrl,
+    bio: player.bio,
+    primaryRole: player.primaryRole,
+    secondaryRole: player.secondaryRole,
+    matchesPlayed: focus.perMatch.size,
+    inningsPlayed,
+    record: {
+      wins,
+      decided,
+      winPct: decided > 0 ? (wins / decided) * 100 : null,
+      contributionPct: asPct(careerContribution(contribRows)),
+    },
+    /**
+     * Both sides of every match-up, in one shape so the card can render all
+     * four cells identically: name, runs off balls, and how often it ended
+     * in a wicket. Nothing for the reader to convert in their head.
+     */
+    matchups: {
+      batting: {
+        toughest: batToughest ? named(batToughest) : null,
+        easiest: batEasiest ? named(batEasiest) : null,
+      },
+      bowling: {
+        toughest: bowlToughest ? named(bowlToughest) : null,
+        easiest: bowlEasiest ? named(bowlEasiest) : null,
+      },
+      // Who keeps ending it in the field — across every dismissal, so it is
+      // reported on its own rather than folded into a bowler's tally.
+      fielder: fielderNemesis
+        ? {
+            userId: fielderNemesis.userId,
+            displayName:
+              nemesisNames.get(String(fielderNemesis.userId)) ?? "Player",
+            outs: fielderNemesis.outs,
+          }
+        : null,
+    },
+    // The full match-up tables — every bowler faced, every batter bowled to.
+    // vsBowlers reads as batting (runs scored, strike rate); vsBatters reads
+    // as bowling (runs conceded, wickets), so each sits under its own card.
+    vsBowlers,
+    vsBatters,
+    batting: bat
+      ? {
+          runs: bat.runs,
+          innings: bat.innings.size,
+          balls: bat.balls,
+          fours: bat.fours,
+          sixes: bat.sixes,
+          dots: bat.dots,
+          notOuts: Math.max(0, bat.innings.size - bat.dismissals),
+          bestScore: bat.bestScore,
+          strikeRate: bat.balls > 0 ? (bat.runs / bat.balls) * 100 : 0,
+          average: bat.dismissals > 0 ? bat.runs / bat.dismissals : bat.runs,
+          /** Share of runs that came in fours and sixes. */
+          boundaryRuns: bat.fours * 4 + bat.sixes * 6,
+          thirties: scores.filter((s) => s.runs >= 30 && s.runs < 50).length,
+          fifties: scores.filter((s) => s.runs >= 50).length,
+          dismissalTypes: counts(focus.dismissalTypes),
+          rank: rankOf(battingRows),
+        }
+      : null,
+    bowling: bowl
+      ? {
+          wickets: bowl.wickets,
+          oversText: legalBallToOverText(bowl.legalBalls, 6),
+          legalBalls: bowl.legalBalls,
+          runs: bowl.runs,
+          dots: bowl.dots,
+          innings: bowl.innings.size,
+          economy:
+            bowl.legalBalls > 0 ? bowl.runs / (bowl.legalBalls / 6) : 0,
+          average: bowl.wickets > 0 ? bowl.runs / bowl.wickets : null,
+          /** Balls per wicket — the wicket-taker vs container axis. */
+          strikeRate:
+            bowl.wickets > 0 ? bowl.legalBalls / bowl.wickets : null,
+          best: best ? `${best.wickets}/${best.runs}` : null,
+          wicketTypes: counts(focus.wicketTypes),
+          rank: rankOf(bowlingRows),
+        }
+      : null,
+    log,
+  };
+}
+
+const playerStatsArgs = {
+  orgId: v.id("orgs"),
+  userId: v.id("users"),
+  /** Omit for the career numbers — the default every profile shows. */
+  seasonId: v.optional(v.id("seasons")),
+};
+
+export const playerStats = query({
+  args: { token: v.optional(v.string()), ...playerStatsArgs },
+  handler: async (ctx, { token, ...args }) => {
+    try {
+      await requireOrgViewer(ctx, token, args.orgId);
+    } catch {
+      return null;
+    }
+    return playerStatsFor(ctx, args);
+  },
+});
+
+// ─── Stamp upkeep and verification (internal) ────────────────
+
+/**
+ * Stamps every match in an org (or everywhere), a page at a time. Idempotent:
+ * each match is cleared and refolded from its balls, and anything not
+ * completed is simply cleared. Rerun with `continueCursor` until `isDone`.
+ */
+export const backfillStamps = internalMutation({
+  args: {
+    orgId: v.optional(v.id("orgs")),
+    cursor: v.optional(v.union(v.string(), v.null())),
+    /** Matches per call. Each reads its own balls, so keep it small. */
+    batchSize: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const source = args.orgId
+      ? ctx.db
+          .query("matches")
+          .withIndex("by_org", (q) => q.eq("orgId", args.orgId!))
+      : ctx.db.query("matches");
+    const page = await source.paginate({
+      cursor: args.cursor ?? null,
+      numItems: args.batchSize ?? 10,
+    });
+    let stamped = 0;
+    for (const m of page.page) {
+      if (await restampMatch(ctx, m._id)) stamped += 1;
+    }
     return {
-      userId: args.userId,
-      displayName: player.displayName,
-      isGuest: player.isGuest ?? false,
-      playerTags: labels.get(key) ?? [],
-      photoUrl: player.photoUrl,
-      bio: player.bio,
-      primaryRole: player.primaryRole,
-      secondaryRole: player.secondaryRole,
-      matchesPlayed: focus.perMatch.size,
-      inningsPlayed,
-      record: {
-        wins,
-        decided,
-        winPct: decided > 0 ? (wins / decided) * 100 : null,
-        contributionPct: asPct(careerContribution(contribRows)),
-      },
-      /**
-       * Both sides of every match-up, in one shape so the card can render all
-       * four cells identically: name, runs off balls, and how often it ended
-       * in a wicket. Nothing for the reader to convert in their head.
-       */
-      matchups: {
-        batting: {
-          toughest: batToughest ? named(batToughest) : null,
-          easiest: batEasiest ? named(batEasiest) : null,
-        },
-        bowling: {
-          toughest: bowlToughest ? named(bowlToughest) : null,
-          easiest: bowlEasiest ? named(bowlEasiest) : null,
-        },
-        // Who keeps ending it in the field — across every dismissal, so it is
-        // reported on its own rather than folded into a bowler's tally.
-        fielder: fielderNemesis
-          ? {
-              userId: fielderNemesis.userId,
-              displayName:
-                nemesisNames.get(String(fielderNemesis.userId)) ?? "Player",
-              outs: fielderNemesis.outs,
-            }
-          : null,
-      },
-      // The full match-up tables — every bowler faced, every batter bowled to.
-      // vsBowlers reads as batting (runs scored, strike rate); vsBatters reads
-      // as bowling (runs conceded, wickets), so each sits under its own card.
-      vsBowlers,
-      vsBatters,
-      batting: bat
-        ? {
-            runs: bat.runs,
-            innings: bat.innings.size,
-            balls: bat.balls,
-            fours: bat.fours,
-            sixes: bat.sixes,
-            dots: bat.dots,
-            notOuts: Math.max(0, bat.innings.size - bat.dismissals),
-            bestScore: bat.bestScore,
-            strikeRate: bat.balls > 0 ? (bat.runs / bat.balls) * 100 : 0,
-            average: bat.dismissals > 0 ? bat.runs / bat.dismissals : bat.runs,
-            /** Share of runs that came in fours and sixes. */
-            boundaryRuns: bat.fours * 4 + bat.sixes * 6,
-            thirties: scores.filter((s) => s.runs >= 30 && s.runs < 50).length,
-            fifties: scores.filter((s) => s.runs >= 50).length,
-            dismissalTypes: counts(focus.dismissalTypes),
-            rank: rankOf(battingRows),
-          }
-        : null,
-      bowling: bowl
-        ? {
-            wickets: bowl.wickets,
-            oversText: legalBallToOverText(bowl.legalBalls, 6),
-            legalBalls: bowl.legalBalls,
-            runs: bowl.runs,
-            dots: bowl.dots,
-            innings: bowl.innings.size,
-            economy:
-              bowl.legalBalls > 0 ? bowl.runs / (bowl.legalBalls / 6) : 0,
-            average: bowl.wickets > 0 ? bowl.runs / bowl.wickets : null,
-            /** Balls per wicket — the wicket-taker vs container axis. */
-            strikeRate:
-              bowl.wickets > 0 ? bowl.legalBalls / bowl.wickets : null,
-            best: best ? `${best.wickets}/${best.runs}` : null,
-            wicketTypes: counts(focus.wicketTypes),
-            rank: rankOf(bowlingRows),
-          }
-        : null,
-      log,
+      scanned: page.page.length,
+      stamped,
+      isDone: page.isDone,
+      continueCursor: page.continueCursor,
     };
   },
 });
 
+/** The old leaderboard, replayed from every ball. Verification only. */
+export const legacyLeaderboard = internalQuery({
+  args: { ...boardArgs, now: v.optional(v.number()) },
+  handler: async (ctx, { now, ...args }) =>
+    leaderboardFor(ctx, args, now ?? Date.now(), true),
+});
+
+/** The old profile, replayed from every ball. Verification only. */
+export const legacyPlayerStats = internalQuery({
+  args: playerStatsArgs,
+  handler: async (ctx, args) => playerStatsFor(ctx, args, true),
+});
+
+/** Maps and Sets to plain values, so two outputs can be walked side by side. */
+function plain(x: unknown): unknown {
+  if (x instanceof Map)
+    return Object.fromEntries(
+      Array.from(x.entries()).map(([k, val]) => [String(k), plain(val)]),
+    );
+  if (x instanceof Set) return Array.from(x).map(plain);
+  if (Array.isArray(x)) return x.map(plain);
+  if (x && typeof x === "object")
+    return Object.fromEntries(
+      Object.entries(x).map(([k, val]) => [k, plain(val)]),
+    );
+  return x;
+}
+
+function diffInto(
+  a: unknown,
+  b: unknown,
+  path: string,
+  out: string[],
+  limit = 50,
+) {
+  if (out.length >= limit) return;
+  if (typeof a === "number" && typeof b === "number") {
+    if (Math.abs(a - b) > 1e-9 * Math.max(1, Math.abs(a), Math.abs(b)))
+      out.push(`${path}: legacy ${a} ≠ stamps ${b}`);
+    return;
+  }
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length)
+      out.push(`${path}: legacy length ${a.length} ≠ stamps ${b.length}`);
+    for (let i = 0; i < Math.min(a.length, b.length); i++)
+      diffInto(a[i], b[i], `${path}[${i}]`, out, limit);
+    return;
+  }
+  if (a && b && typeof a === "object" && typeof b === "object") {
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    for (const k of Array.from(keys))
+      diffInto(
+        (a as Record<string, unknown>)[k],
+        (b as Record<string, unknown>)[k],
+        `${path}.${k}`,
+        out,
+        limit,
+      );
+    return;
+  }
+  if (a !== b)
+    out.push(
+      `${path}: legacy ${JSON.stringify(a)} ≠ stamps ${JSON.stringify(b)}`,
+    );
+}
+
+/**
+ * Old ball replay vs stamps, on real data. Empty `mismatches` is a pass.
+ *
+ * Always compares the leaderboard for the given args, and checks every
+ * completed match has a stamp and nothing else does. `userId` adds that
+ * profile; `board` adds the regulars board behind the trophy shelf and season
+ * awards. Each legacy call replays every ball in the org, so on a big org ask
+ * for one thing per call.
+ */
+export const compareStats = internalQuery({
+  args: {
+    // No ground: the legacy replay has none, so there is nothing to compare.
+    ...boardArgs,
+    userId: v.optional(v.id("users")),
+    board: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { userId, board, ...args }) => {
+    const mismatches: string[] = [];
+
+    const completed = await ctx.db
+      .query("matches")
+      .withIndex("by_org_status", (q) =>
+        q.eq("orgId", args.orgId).eq("status", "completed"),
+      )
+      .collect();
+    const stamped = await ctx.db
+      .query("matchStats")
+      .withIndex("by_org_date", (q) => q.eq("orgId", args.orgId))
+      .collect();
+    const stampedIds = new Set(stamped.map((m) => String(m.matchId)));
+    const completedIds = new Set(completed.map((m) => String(m._id)));
+    for (const m of completed)
+      if (!stampedIds.has(String(m._id)))
+        mismatches.push(`match ${m._id}: completed but not stamped`);
+    for (const m of stamped)
+      if (!completedIds.has(String(m.matchId)))
+        mismatches.push(`match ${m.matchId}: stamped but not completed`);
+
+    const now = Date.now();
+    diffInto(
+      plain(await leaderboardFor(ctx, args, now, true)),
+      plain(await leaderboardFor(ctx, args, now)),
+      "leaderboard",
+      mismatches,
+    );
+    if (userId) {
+      const p = { orgId: args.orgId, userId, seasonId: args.seasonId };
+      diffInto(
+        plain(await playerStatsFor(ctx, p, true)),
+        plain(await playerStatsFor(ctx, p)),
+        "playerStats",
+        mismatches,
+      );
+    }
+    if (board) {
+      const w = args.seasonId
+        ? await seasonWindow(ctx, args.orgId, args.seasonId)
+        : {};
+      if (w) {
+        diffInto(
+          plain(await loadRegularsBoard(ctx, args.orgId, w, true)),
+          plain(await loadRegularsBoard(ctx, args.orgId, w)),
+          "regularsBoard",
+          mismatches,
+        );
+      }
+    }
+    return { matchesCompleted: completed.length, mismatches };
+  },
+});

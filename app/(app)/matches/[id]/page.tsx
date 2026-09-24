@@ -9,10 +9,12 @@ import { MatchStory } from "@/components/match/MatchStory";
 import { useAuth } from "@/components/providers/AuthProvider";
 import type { MatchShareData } from "@/components/share/ShareCard";
 import { ShareButton } from "@/components/share/ShareButton";
+import { ShareLinkButton } from "@/components/share/ShareLinkButton";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import { publicMatchUrl } from "@/lib/share";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { ArrowLeft, Pencil, Trophy } from "lucide-react";
@@ -85,7 +87,7 @@ function shareScore(card: Scorecard, side: "A" | "B") {
 export default function MatchDetailPage() {
   const params = useParams();
   const matchId = params.id as Id<"matches">;
-  const { token, user } = useAuth();
+  const { token, user, isObserver, isSandbox } = useAuth();
   const card = useQuery(
     api.scoring.scorecard,
     token ? { token, matchId } : "skip",
@@ -95,6 +97,11 @@ export default function MatchDetailPage() {
   const story = useQuery(
     api.story.matchStory,
     token && card?.status === "completed" ? { token, matchId } : "skip",
+  );
+  // Null for a one-ground community — every game there is at the same place.
+  const ground = useQuery(
+    api.grounds.ofMatch,
+    token ? { token, matchId } : "skip",
   );
   const [view, setView] = useState<"story" | "scorecard">("story");
 
@@ -148,6 +155,14 @@ export default function MatchDetailPage() {
             >
               <ArrowLeft className="h-5 w-5" />
             </Link>
+            {ground ? (
+              <span
+                className="min-w-0 flex-1 truncate text-[13px] text-bg/70"
+                title={ground.name}
+              >
+                At {ground.name}
+              </span>
+            ) : null}
             <div className="flex shrink-0 items-center gap-1.5">
               {card.status === "live" ? (
                 <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-accent/20 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-accent">
@@ -170,6 +185,12 @@ export default function MatchDetailPage() {
                   data={shareData}
                   filename={`gully-match-${matchId}.png`}
                   tone="dark"
+                />
+              ) : inPlay && !isSandbox ? (
+                // Before the result there is no poster — share the live page.
+                <ShareLinkButton
+                  url={() => publicMatchUrl(matchId)}
+                  text={`${card.sideA.name} vs ${card.sideB.name} — live score`}
                 />
               ) : null}
             </div>
@@ -240,11 +261,18 @@ export default function MatchDetailPage() {
       </header>
 
       <main className="py-3">
-        {inPlay ? (
+        {inPlay && !isObserver ? (
           <div className="mx-auto mb-3 max-w-md px-4">
             <Button href={`/matches/${matchId}/score`} fullWidth>
               <Pencil className="h-[18px] w-[18px]" strokeWidth={2.4} />
               {card.status === "live" ? "Continue scoring" : "Start match"}
+            </Button>
+          </div>
+        ) : null}
+        {inPlay && isObserver && card.status === "live" ? (
+          <div className="mx-auto mb-3 max-w-md px-4">
+            <Button href={`/matches/${matchId}/watch`} fullWidth>
+              Watch live
             </Button>
           </div>
         ) : null}

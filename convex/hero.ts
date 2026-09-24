@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { query, QueryCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
-import { requireActiveMembership } from "./lib/session";
+import { requireOrgViewer } from "./lib/session";
 import { legalBallToOverText } from "./lib/scoring";
 import {
   basePoints,
@@ -50,7 +50,7 @@ export const heroDays = query({
   },
   handler: async (ctx, args) => {
     try {
-      await requireActiveMembership(ctx, args.token, args.orgId);
+      await requireOrgViewer(ctx, args.token, args.orgId);
     } catch {
       return null;
     }
@@ -114,7 +114,7 @@ export const heroDay = query({
   },
   handler: async (ctx, args) => {
     try {
-      await requireActiveMembership(ctx, args.token, args.orgId);
+      await requireOrgViewer(ctx, args.token, args.orgId);
     } catch {
       return null;
     }
@@ -707,7 +707,7 @@ export const dayShares = query({
   },
   handler: async (ctx, args) => {
     try {
-      await requireActiveMembership(ctx, args.token, args.orgId);
+      await requireOrgViewer(ctx, args.token, args.orgId);
     } catch {
       return null;
     }

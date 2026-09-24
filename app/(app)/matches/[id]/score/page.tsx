@@ -4,6 +4,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { CoinToss } from "@/components/match/CoinToss";
+import { ConnectionChip } from "@/components/match/ConnectionChip";
 import {
   TestClockLine,
   TestClockOverlays,
@@ -11,15 +12,18 @@ import {
   TestClockStatus,
 } from "@/components/match/TestClock";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { TruncText } from "@/components/ui/TruncText";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import { buzzBall } from "@/lib/haptics";
 import { matchBoardLabel, matchBoardLine } from "@/lib/matchBoard";
+import { useWakeLock } from "@/lib/useWakeLock";
 import { cn, errorMessage } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
-import { ArrowLeft, Eye, Undo2, UserPlus } from "lucide-react";
+import { ArrowLeft, Eye, Undo2, Users } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Sheet =
   | null
@@ -50,6 +54,9 @@ type BallChip = {
   isLegal: boolean;
   isRetire?: boolean;
 };
+
+/** A tapped ball the server has not confirmed yet. */
+type PendingBall = Omit<BallChip, "_id">;
 
 function ballLabel(b: {
   runsBat: number;
@@ -86,12 +93,16 @@ function OverTracker({
   current,
   prev,
   ballsPerOver,
+  pending,
 }: {
   current: BallChip[];
   prev: BallChip[];
   ballsPerOver: number;
+  /** Shown outlined until the server's copy of the ball replaces it. */
+  pending: PendingBall | null;
 }) {
-  const legalSoFar = current.filter((b) => b.isLegal).length;
+  const legalSoFar =
+    current.filter((b) => b.isLegal).length + (pending?.isLegal ? 1 : 0);
   const placeholders = Math.max(0, ballsPerOver - legalSoFar);
   return (
     <div className="mt-4 flex flex-col items-center gap-1.5">
@@ -122,6 +133,14 @@ function OverTracker({
             {ballLabel(b)}
           </span>
         ))}
+        {pending ? (
+          <span
+            aria-label="Sending"
+            className="tabular flex h-7 min-w-7 items-center justify-center rounded-full border border-dashed border-bg/70 px-2 text-[11px] font-semibold text-bg/70"
+          >
+            {ballLabel(pending)}
+          </span>
+        ) : null}
         {Array.from({ length: placeholders }, (_, i) => (
           <span
             key={`slot-${i}`}
@@ -139,7 +158,7 @@ export default function ScorePage() {
   const params = useParams();
   const matchId = params.id as Id<"matches">;
   const router = useRouter();
-  const { token, activeOrgId, user } = useAuth();
+  const { token, activeOrgId, user, isObserver } = useAuth();
   const state = useQuery(
     api.scoring.liveState,
     token ? { token, matchId } : "skip",
@@ -165,6 +184,10 @@ export default function ScorePage() {
   const [playerOutId, setPlayerOutId] = useState<string | null>(null);
   const [fielderId, setFielderId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // State lags a render behind; the ref stops a double-tap in the same frame
+  // from sending two balls against one server state.
+  const inFlight = useRef(false);
+  const [pendingBall, setPendingBall] = useState<PendingBall | null>(null);
   const [pulse, setPulse] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pickStriker, setPickStriker] = useState<string | null>(null);
@@ -174,7 +197,11 @@ export default function ScorePage() {
   const [retireTarget, setRetireTarget] = useState<string | null>(null);
   const [dropId, setDropId] = useState<string | null>(null);
   const [squadBusyId, setSquadBusyId] = useState<string | null>(null);
-  const [squadError, setSquadError] = useState<string | null>(null);
+  // userId pins the message under the row it came from; null = the guest box.
+  const [squadError, setSquadError] = useState<{
+    userId: string | null;
+    message: string;
+  } | null>(null);
   const [guestName, setGuestName] = useState("");
   const [guestBusy, setGuestBusy] = useState(false);
   const [confirmEndInnings, setConfirmEndInnings] = useState(false);
@@ -183,6 +210,19 @@ export default function ScorePage() {
   // gets steered to the spectator view by default — any org member is still
   // allowed to score, so this is a one-tap override, never a hard block.
   const [spectatorOverride, setSpectatorOverride] = useState(false);
+
+  useEffect(() => {
+    if (!isObserver) return;
+    if (state === undefined || state === null) return;
+    if (state.status === "live") {
+      router.replace(`/matches/${matchId}/watch`);
+    } else {
+      router.replace(`/matches/${matchId}`);
+    }
+  }, [isObserver, state, matchId, router]);
+
+  // Keep the scorer's screen awake for the whole live match, breaks included.
+  useWakeLock(state?.status === "live" && !isObserver);
 
   // Subscribed to only while the squad sheet is open — the scoring screen is
   // the hot path and doesn't otherwise need the org pool.
@@ -193,24 +233,51 @@ export default function ScorePage() {
       : "skip",
   );
 
-  async function tap(label: string, fn: () => Promise<unknown>) {
-    if (!token || busy) return;
+  /**
+   * One scoring action at a time. The pad stays locked until the server
+   * answers, because the next ball depends on what this one did (over done,
+   * new batter, innings over). A ball shows as a pending chip straight away;
+   * Convex holds the mutation while offline and sends it once signal returns,
+   * and the promise resolves only after the live state includes the ball, so
+   * the pending chip hands over to the real one without a gap.
+   */
+  async function tap(
+    label: string,
+    fn: () => Promise<unknown>,
+    ball?: PendingBall,
+  ) {
+    if (!token || inFlight.current) return;
+    inFlight.current = true;
     setError(null);
     setBusy(true);
     setPulse(label);
+    if (ball) {
+      setPendingBall(ball);
+      buzzBall(
+        ball.isWicket ? "wicket" : ball.runsBat >= 4 ? "boundary" : "ball",
+      );
+    }
     try {
       await fn();
     } catch (e) {
       setError(errorMessage(e, "That didn’t register — try again"));
     } finally {
+      inFlight.current = false;
       setBusy(false);
+      setPendingBall(null);
       setTimeout(() => setPulse(null), 180);
     }
   }
 
+  function openSquad() {
+    setSquadError(null);
+    setSheet({ kind: "squad" });
+  }
+
   /**
-   * One control does all three squad moves: adding a late arrival to a side,
-   * adding them to both, and releasing a common player to a single side.
+   * One call does every squad move: adding a late arrival to a side or both,
+   * releasing a common player to a single side, or (empty `sides`) taking
+   * someone who has not played back out of the match.
    */
   async function assignSides(userId: string, sides: Array<"A" | "B">) {
     if (!token || squadBusyId) return;
@@ -224,7 +291,10 @@ export default function ScorePage() {
         sides,
       });
     } catch (e) {
-      setSquadError(errorMessage(e, "Could not update the squads"));
+      setSquadError({
+        userId,
+        message: errorMessage(e, "Could not update the squads"),
+      });
     } finally {
       setSquadBusyId(null);
     }
@@ -239,7 +309,10 @@ export default function ScorePage() {
       await addGuest({ token, orgId: activeOrgId, name });
       setGuestName("");
     } catch (e) {
-      setSquadError(errorMessage(e, "Could not add that player"));
+      setSquadError({
+        userId: null,
+        message: errorMessage(e, "Could not add that player"),
+      });
     } finally {
       setGuestBusy(false);
     }
@@ -247,50 +320,81 @@ export default function ScorePage() {
 
   async function sendRuns(runs: number) {
     if (!token) return;
-    await tap(String(runs), () =>
-      recordBall({ token, matchId, runsBat: runs, extrasRuns: 0 }),
+    await tap(
+      String(runs),
+      () => recordBall({ token, matchId, runsBat: runs, extrasRuns: 0 }),
+      { runsBat: runs, extrasRuns: 0, isWicket: false, isLegal: true },
     );
   }
 
   async function sendExtra(type: "wide") {
     if (!token) return;
-    await tap(type, () =>
-      recordBall({
-        token,
-        matchId,
+    await tap(
+      type,
+      () =>
+        recordBall({
+          token,
+          matchId,
+          runsBat: 0,
+          extrasType: type,
+          extrasRuns: 1,
+        }),
+      {
         runsBat: 0,
         extrasType: type,
         extrasRuns: 1,
-      }),
+        isWicket: false,
+        isLegal: false,
+      },
     );
   }
 
+  // Sheets close on the tap, not on the server's answer, so the pending chip
+  // is in view on a slow signal.
   async function sendNoBall(runsBat: number) {
     if (!token) return;
-    await tap("noball", () =>
-      recordBall({
-        token,
-        matchId,
+    setSheet(null);
+    await tap(
+      "noball",
+      () =>
+        recordBall({
+          token,
+          matchId,
+          runsBat,
+          extrasType: "noball",
+          extrasRuns: 1,
+        }),
+      {
         runsBat,
         extrasType: "noball",
         extrasRuns: 1,
-      }),
+        isWicket: false,
+        isLegal: false,
+      },
     );
-    setSheet(null);
   }
 
   async function sendByeLb(type: "bye" | "legbye", runs: number) {
     if (!token) return;
-    await tap(type, () =>
-      recordBall({
-        token,
-        matchId,
+    setSheet(null);
+    await tap(
+      type,
+      () =>
+        recordBall({
+          token,
+          matchId,
+          runsBat: 0,
+          extrasType: type,
+          extrasRuns: runs,
+        }),
+      {
         runsBat: 0,
         extrasType: type,
         extrasRuns: runs,
-      }),
+        isWicket: false,
+        isLegal: true,
+      },
     );
-    setSheet(null);
   }
 
   async function sendWicket() {
@@ -299,27 +403,30 @@ export default function ScorePage() {
       wicketType === "caught" ||
       wicketType === "runout" ||
       wicketType === "stumped";
-    await tap("W", () =>
-      recordBall({
-        token,
-        matchId,
-        runsBat: 0,
-        extrasRuns: 0,
-        isWicket: true,
-        wicketType: wicketType as
-          | "bowled"
-          | "caught"
-          | "lbw"
-          | "runout"
-          | "stumped"
-          | "hitwicket"
-          | "other",
-        playerOutId: playerOutId as Id<"users">,
-        fielderId:
-          needsFielder && fielderId ? (fielderId as Id<"users">) : undefined,
-      }),
-    );
     setSheet(null);
+    await tap(
+      "W",
+      () =>
+        recordBall({
+          token,
+          matchId,
+          runsBat: 0,
+          extrasRuns: 0,
+          isWicket: true,
+          wicketType: wicketType as
+            | "bowled"
+            | "caught"
+            | "lbw"
+            | "runout"
+            | "stumped"
+            | "hitwicket"
+            | "other",
+          playerOutId: playerOutId as Id<"users">,
+          fielderId:
+            needsFielder && fielderId ? (fielderId as Id<"users">) : undefined,
+        }),
+      { runsBat: 0, extrasRuns: 0, isWicket: true, isLegal: true },
+    );
     setPlayerOutId(null);
     setFielderId(null);
   }
@@ -378,13 +485,15 @@ export default function ScorePage() {
             <Eye className="h-5 w-5" strokeWidth={2.4} />
             Watch live
           </Link>
-          <button
-            type="button"
-            onClick={() => setSpectatorOverride(true)}
-            className="mt-4 min-h-11 text-[13px] font-medium text-muted underline underline-offset-4"
-          >
-            I&apos;m scoring instead
-          </button>
+          {state.canScore ? (
+            <button
+              type="button"
+              onClick={() => setSpectatorOverride(true)}
+              className="mt-4 min-h-11 text-[13px] font-medium text-muted underline underline-offset-4"
+            >
+              I&apos;m scoring instead
+            </button>
+          ) : null}
         </div>
       </div>
     );
@@ -864,17 +973,15 @@ export default function ScorePage() {
             {isFollowOnInnings ? " · follow-on" : ""}
           </p>
           <div className="flex shrink-0 items-center gap-0.5">
-            {/* Late arrivals are the norm — squads stay editable mid-match. */}
+            {/* Late arrivals are the norm — squads stay editable mid-match.
+                Labelled, not a bare icon: nobody guessed what it did. */}
             <button
               type="button"
-              aria-label="Edit squads"
-              onClick={() => {
-                setSquadError(null);
-                setSheet({ kind: "squad" });
-              }}
-              className="-my-1 inline-flex h-11 w-11 items-center justify-center rounded-xl text-bg/70 active:bg-white/10 hover:bg-white/10"
+              onClick={openSquad}
+              className="-my-1 inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-[11px] font-semibold uppercase tracking-wide text-bg/70 active:bg-white/10 hover:bg-white/10"
             >
-              <UserPlus className="h-5 w-5" />
+              <Users className="h-4 w-4" />
+              Players
             </button>
             <button
               type="button"
@@ -1029,6 +1136,7 @@ export default function ScorePage() {
           current={live.currentOverBalls}
           prev={live.prevOverBalls}
           ballsPerOver={state.ruleSnapshot.ballsPerOver}
+          pending={pendingBall}
         />
       </header>
       <TestClockStatus />
@@ -1040,7 +1148,8 @@ export default function ScorePage() {
       ) : null}
 
       <div className="flex flex-1 flex-col justify-end px-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-3">
-        <div className="mb-1 flex items-center justify-end">
+        <div className="mb-1 flex min-h-11 items-center justify-between gap-3">
+          <ConnectionChip sending={busy} />
           <button
             type="button"
             disabled={live.needBowler || live.needBatsman || busy}
@@ -1048,7 +1157,7 @@ export default function ScorePage() {
               setRetireTarget(live.striker ? String(live.striker.userId) : null);
               setSheet({ kind: "retire" });
             }}
-            className="-mr-1 inline-flex min-h-11 items-center rounded-xl px-3 text-[13px] font-semibold text-muted disabled:opacity-30"
+            className="-mr-1 inline-flex min-h-11 shrink-0 items-center rounded-xl px-3 text-[13px] font-semibold text-muted disabled:opacity-30"
           >
             Retire batter
           </button>
@@ -1332,13 +1441,16 @@ export default function ScorePage() {
                     </p>
                     <p className="mt-1 text-[13px] text-muted">
                       Everyone eligible either just bowled that over or is
-                      currently batting. Undo the last ball to carry on, or add
-                      a player to the squad.
+                      currently batting. Add a player, or undo the last ball
+                      to carry on.
                     </p>
+                    <Button fullWidth className="mt-3" onClick={openSquad}>
+                      Add a player
+                    </Button>
                     <Button
                       fullWidth
                       variant="secondary"
-                      className="mt-3"
+                      className="mt-2"
                       disabled={busy || live.lastBalls.length === 0}
                       onClick={() =>
                         tap("undo", async () => {
@@ -1351,7 +1463,9 @@ export default function ScorePage() {
                     </Button>
                   </div>
                 ) : null}
-                <SquadEscapeHatch onOpen={() => setSheet({ kind: "squad" })} />
+                {noBowlerToFollow ? null : (
+                  <SquadEscapeHatch onOpen={openSquad} />
+                )}
                 {!live.needBowler ? (
                   <Button
                     variant="ghost"
@@ -1439,13 +1553,16 @@ export default function ScorePage() {
                     </p>
                     <p className="mt-1 text-[13px] text-muted">
                       {lastWasRetire
-                        ? "Everyone else is out or already at the crease. Undo the retirement to put them back in, or add a player to the squad."
-                        : "Everyone else is out or already at the crease. Undo the last ball to carry on, or add a player to the squad."}
+                        ? "Everyone else is out or already at the crease. Add a player, or undo the retirement to put them back in."
+                        : "Everyone else is out or already at the crease. Add a player, or undo the last ball to carry on."}
                     </p>
+                    <Button fullWidth className="mt-3" onClick={openSquad}>
+                      Add a player
+                    </Button>
                     <Button
                       fullWidth
                       variant="secondary"
-                      className="mt-3"
+                      className="mt-2"
                       disabled={busy || live.lastBalls.length === 0}
                       onClick={() =>
                         tap("undo", async () => {
@@ -1458,7 +1575,9 @@ export default function ScorePage() {
                     </Button>
                   </div>
                 ) : null}
-                <SquadEscapeHatch onOpen={() => setSheet({ kind: "squad" })} />
+                {noBatterToFollow ? null : (
+                  <SquadEscapeHatch onOpen={openSquad} />
+                )}
               </>
             ) : null}
 
@@ -1628,70 +1747,67 @@ export default function ScorePage() {
 
             {activeSheet.kind === "squad" ? (
               <>
-                <p className="text-[15px] font-semibold text-ink">Squads</p>
+                <p className="text-[15px] font-semibold text-ink">Players</p>
                 <p className="mt-1 text-[13px] text-muted">
-                  Someone turned up late? Put them on a side, or on both. Tap a
-                  common player&apos;s team to release them to just that side.
+                  Someone turned up late? Add them to a side. Anyone who
+                  hasn&apos;t batted, bowled or fielded yet can be moved or
+                  removed.
                 </p>
 
-                <div className="mt-4 space-y-2">
-                  {squadRows.map((row) => (
-                    <div
-                      key={row.userId}
-                      className="rounded-2xl border border-line p-3"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="truncate text-[15px] font-semibold text-ink">
-                          {row.displayName}
-                        </p>
-                        {row.sides.length === 2 ? (
-                          <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent-deep">
-                            Both
-                          </span>
-                        ) : row.sides.length === 0 ? (
-                          <span className="shrink-0 rounded-full bg-bg px-2 py-0.5 text-[11px] font-medium text-muted">
-                            Not playing
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="mt-2 grid grid-cols-3 gap-1.5">
-                        {(
-                          [
-                            { key: "A", label: state.sideA.name, sides: ["A"] },
-                            {
-                              key: "both",
-                              label: "Both",
-                              sides: ["A", "B"],
-                            },
-                            { key: "B", label: state.sideB.name, sides: ["B"] },
-                          ] as const
-                        ).map((opt) => {
-                          const on =
-                            opt.sides.length === row.sides.length &&
-                            opt.sides.every((s) =>
-                              row.sides.includes(s as "A" | "B"),
-                            );
-                          return (
-                            <button
-                              key={opt.key}
-                              type="button"
-                              disabled={squadBusyId !== null}
-                              onClick={() => assignSides(row.userId, [...opt.sides])}
-                              className={cn(
-                                "min-h-11 truncate rounded-xl border px-2 py-2 text-[13px] font-medium transition disabled:opacity-40",
-                                on
-                                  ? "border-accent bg-accent-soft text-accent-deep"
-                                  : "border-line text-muted",
-                              )}
-                            >
-                              {opt.label}
-                            </button>
-                          );
-                        })}
+                {(
+                  [
+                    {
+                      key: "in",
+                      label: "In this match",
+                      rows: squadRows.filter((r) => r.sides.length > 0),
+                    },
+                    {
+                      key: "out",
+                      label: "Not playing",
+                      rows: squadRows.filter((r) => r.sides.length === 0),
+                    },
+                  ] as const
+                ).map((group) =>
+                  group.rows.length === 0 ? null : (
+                    <div key={group.key} className="mt-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">
+                        {group.label}
+                      </p>
+                      <div className="mt-2 space-y-2">
+                        {group.rows.map((row) => (
+                          <SquadRow
+                            key={row.userId}
+                            name={row.displayName}
+                            sides={row.sides}
+                            nameA={state.sideA.name}
+                            nameB={state.sideB.name}
+                            // Index 0 of a side is its captain; the server
+                            // refuses to take them off it, so don't offer it.
+                            captainOf={
+                              [
+                                String(state.sideA.players[0]?.userId) ===
+                                row.userId
+                                  ? "A"
+                                  : null,
+                                String(state.sideB.players[0]?.userId) ===
+                                row.userId
+                                  ? "B"
+                                  : null,
+                              ].filter(Boolean) as Array<"A" | "B">
+                            }
+                            disabled={squadBusyId !== null}
+                            error={
+                              squadError?.userId === row.userId
+                                ? squadError.message
+                                : null
+                            }
+                            onAssign={(sides) => assignSides(row.userId, sides)}
+                          />
+                        ))}
                       </div>
                     </div>
-                  ))}
-                </div>
+                  ),
+                )}
 
                 <div className="mt-4 flex gap-2">
                   <input
@@ -1709,8 +1825,10 @@ export default function ScorePage() {
                   </Button>
                 </div>
 
-                {squadError ? (
-                  <p className="mt-3 text-[13px] text-danger">{squadError}</p>
+                {squadError && squadError.userId === null ? (
+                  <p className="mt-3 text-[13px] text-danger">
+                    {squadError.message}
+                  </p>
                 ) : null}
 
                 <Button
@@ -1760,8 +1878,117 @@ function SquadEscapeHatch({ onOpen }: { onOpen: () => void }) {
       onClick={onOpen}
       className="mt-4 min-h-11 w-full rounded-xl py-2 text-[13px] font-medium text-muted underline underline-offset-4"
     >
-      Someone else here? Edit squads
+      Someone else here? Add a player
     </button>
+  );
+}
+
+/**
+ * One player in the squad sheet: which side they are on, then only the moves
+ * that change something, each named for what it does.
+ */
+function SquadRow({
+  name,
+  sides,
+  nameA,
+  nameB,
+  captainOf,
+  disabled,
+  error,
+  onAssign,
+}: {
+  name: string;
+  sides: Array<"A" | "B">;
+  nameA: string;
+  nameB: string;
+  captainOf: Array<"A" | "B">;
+  disabled: boolean;
+  error: string | null;
+  onAssign: (sides: Array<"A" | "B">) => void;
+}) {
+  const onA = sides.includes("A");
+  const onB = sides.includes("B");
+  const canLeaveA = !captainOf.includes("A");
+  const canLeaveB = !captainOf.includes("B");
+  const nameOf = (s: "A" | "B") => (s === "A" ? nameA : nameB);
+
+  const where =
+    onA && onB
+      ? "Plays for both sides"
+      : onA || onB
+        ? `Plays for ${nameOf(onA ? "A" : "B")}`
+        : "Not playing";
+
+  type Move = {
+    key: string;
+    label: string;
+    sides: Array<"A" | "B">;
+    danger?: boolean;
+  };
+  const moves: Move[] = [];
+  if (!onA && !onB) {
+    moves.push(
+      { key: "A", label: `Add to ${nameA}`, sides: ["A"] },
+      { key: "B", label: `Add to ${nameB}`, sides: ["B"] },
+      { key: "AB", label: "Both sides", sides: ["A", "B"] },
+    );
+  } else if (onA && onB) {
+    if (canLeaveB) moves.push({ key: "A", label: `Only ${nameA}`, sides: ["A"] });
+    if (canLeaveA) moves.push({ key: "B", label: `Only ${nameB}`, sides: ["B"] });
+    if (canLeaveA && canLeaveB)
+      moves.push({ key: "none", label: "Remove", sides: [], danger: true });
+  } else {
+    const here: "A" | "B" = onA ? "A" : "B";
+    const other: "A" | "B" = onA ? "B" : "A";
+    const canLeave = here === "A" ? canLeaveA : canLeaveB;
+    moves.push({ key: "AB", label: "Both sides", sides: ["A", "B"] });
+    if (canLeave) {
+      moves.push(
+        { key: other, label: `Move to ${nameOf(other)}`, sides: [other] },
+        { key: "none", label: "Remove", sides: [], danger: true },
+      );
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-line p-3">
+      <TruncText lines={2} className="text-[15px] font-semibold text-ink">
+        {name}
+      </TruncText>
+      <p
+        className={cn(
+          "mt-0.5 line-clamp-2 text-[13px] [overflow-wrap:anywhere]",
+          onA || onB ? "font-semibold text-accent-deep" : "text-muted",
+        )}
+      >
+        {where}
+        {captainOf.length > 0 ? " · captain" : ""}
+      </p>
+      {moves.length > 0 ? (
+        <div className="mt-2 grid grid-cols-3 gap-1.5">
+          {moves.map((m) => (
+            <button
+              key={m.key}
+              type="button"
+              disabled={disabled}
+              title={m.label}
+              onClick={() => onAssign(m.sides)}
+              className={cn(
+                "min-h-11 rounded-xl border px-2 py-2 text-[13px] font-semibold active:scale-[0.98] active:bg-bg disabled:cursor-not-allowed disabled:opacity-40",
+                m.danger
+                  ? "border-danger/20 text-danger"
+                  : "border-line text-ink",
+              )}
+            >
+              <span className="line-clamp-2 [overflow-wrap:anywhere]">
+                {m.label}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {error ? <p className="mt-2 text-[13px] text-danger">{error}</p> : null}
+    </div>
   );
 }
 

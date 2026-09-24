@@ -203,6 +203,7 @@ export const listDiscoverable = query({
     const byOrg = new Map(myMemberships.map((m) => [m.orgId, m]));
 
     const q = args.search?.trim().toLowerCase();
+    const watching = user.isPlatformAdmin ?? false;
     return orgs
       .filter((o) => {
         if (!q) return true;
@@ -211,13 +212,19 @@ export const listDiscoverable = query({
           (o.location?.toLowerCase().includes(q) ?? false)
         );
       })
-      .map((o) => ({
-        _id: o._id,
-        name: o.name,
-        location: o.location,
-        membershipStatus: byOrg.get(o._id)?.status ?? null,
-        myRoles: byOrg.get(o._id)?.roles ?? [],
-      }))
+      .map((o) => {
+        const mem = byOrg.get(o._id);
+        const membershipStatus = mem?.status ?? null;
+        return {
+          _id: o._id,
+          name: o.name,
+          location: o.location,
+          membershipStatus,
+          myRoles: mem?.roles ?? [],
+          observing:
+            watching && membershipStatus !== "active" && membershipStatus !== "pending",
+        };
+      })
       .sort((a, b) => a.name.localeCompare(b.name));
   },
 });
@@ -269,29 +276,41 @@ export const requestJoin = mutation({
       .unique();
 
     const now = Date.now();
+    // Platform owner joining a community they were only watching: skip the
+    // queue so they appear as a player immediately, not as a pending request.
+    const instant = user.isPlatformAdmin ?? false;
+    const nextStatus = instant ? ("active" as const) : ("pending" as const);
     if (existing) {
       if (existing.status === "active") throw new Error("Already a member");
-      if (existing.status === "pending") throw new Error("Request already pending");
-      if (existing.status === "rejected" || existing.status === "left" || existing.status === "removed") {
+      if (existing.status === "pending" && !instant) {
+        throw new Error("Request already pending");
+      }
+      if (
+        existing.status === "pending" ||
+        existing.status === "rejected" ||
+        existing.status === "left" ||
+        existing.status === "removed"
+      ) {
         await ctx.db.patch(existing._id, {
-          status: "pending",
+          status: nextStatus,
           roles: ["player"],
           requestedAt: now,
-          decidedAt: undefined,
-          decidedBy: undefined,
+          decidedAt: instant ? now : undefined,
+          decidedBy: instant ? user._id : undefined,
         });
-        return { membershipId: existing._id, status: "pending" as const };
+        return { membershipId: existing._id, status: nextStatus };
       }
     }
 
     const membershipId = await ctx.db.insert("orgMembers", {
       orgId: args.orgId,
       userId: user._id,
-      status: "pending",
+      status: nextStatus,
       roles: ["player"],
       requestedAt: now,
+      ...(instant ? { decidedAt: now, decidedBy: user._id } : {}),
     });
-    return { membershipId, status: "pending" as const };
+    return { membershipId, status: nextStatus };
   },
 });
 
@@ -308,7 +327,11 @@ export const listPending = query({
       .query("orgMembers")
       .withIndex("by_org_user", (q) => q.eq("orgId", args.orgId).eq("userId", user._id))
       .unique();
-    if (!membership || membership.status !== "active" || !membership.roles.includes("admin")) {
+    const isAdmin =
+      membership?.status === "active" && membership.roles.includes("admin");
+    const isObserver =
+      (user.isPlatformAdmin ?? false) && membership?.status !== "active";
+    if (!isAdmin && !isObserver) {
       return [];
     }
 
@@ -422,7 +445,9 @@ export const listActiveMembers = query({
       .query("orgMembers")
       .withIndex("by_org_user", (q) => q.eq("orgId", args.orgId).eq("userId", user._id))
       .unique();
-    if (!me || me.status !== "active") return [];
+    const isMember = me?.status === "active";
+    const isObserver = (user.isPlatformAdmin ?? false) && !isMember;
+    if (!isMember && !isObserver) return [];
 
     const members = await ctx.db
       .query("orgMembers")
@@ -468,12 +493,15 @@ export const getOrg = query({
       .query("orgMembers")
       .withIndex("by_org_user", (q) => q.eq("orgId", args.orgId).eq("userId", user._id))
       .unique();
-    if (!membership || membership.status !== "active") return null;
+    const isMember = membership?.status === "active";
+    const isObserver = (user.isPlatformAdmin ?? false) && !isMember;
+    if (!isMember && !isObserver) return null;
     return {
       _id: org._id,
       name: org.name,
       location: org.location,
-      roles: membership.roles,
+      roles: membership?.roles ?? [],
+      isObserver,
     };
   },
 });

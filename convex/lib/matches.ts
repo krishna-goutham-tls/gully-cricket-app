@@ -1,5 +1,6 @@
 import { MutationCtx } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
+import { clearMatchStamps } from "./matchStats";
 
 /**
  * Delete a match and everything scored in it (balls, innings, live state).
@@ -30,5 +31,6 @@ export async function deleteMatchCascade(
     .unique();
   if (live) await ctx.db.delete(live._id);
 
+  await clearMatchStamps(ctx, matchId);
   await ctx.db.delete(matchId);
 }

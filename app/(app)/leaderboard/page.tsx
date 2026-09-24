@@ -1,5 +1,6 @@
 "use client";
 
+import { GroundChips, usePlayableGrounds } from "@/components/ground/GroundChips";
 import { RankedList, type RankRow } from "@/components/leaderboard/RankedList";
 import {
   RECORD_MIN_BALLS,
@@ -545,6 +546,13 @@ export default function LeaderboardPage() {
     return seasons.find((s) => s._id === scope.seasonId) ?? currentSeason;
   }, [seasons, scope, currentSeason]);
   const usingSeason = selectedSeason !== null;
+  const grounds = usePlayableGrounds();
+  // null = all grounds. A ground archived since it was picked drops back.
+  const [groundPick, setGroundPick] = useState<Id<"grounds"> | null>(null);
+  const ground =
+    grounds.length >= 2
+      ? (grounds.find((g) => g._id === groundPick) ?? null)
+      : null;
   const data = useQuery(
     api.stats.leaderboard,
     token && activeOrgId && seasons !== undefined
@@ -554,6 +562,7 @@ export default function LeaderboardPage() {
           includeVisitorsAndJuniors: includeExtras,
           ...(selectedSeason ? { seasonId: selectedSeason._id } : {}),
           ...(format === "all" ? {} : { format }),
+          ...(ground ? { groundId: ground._id } : {}),
         }
       : "skip",
   );
@@ -611,10 +620,15 @@ export default function LeaderboardPage() {
         : format === "limited"
           ? "ODI"
           : null;
-    const subtitle =
-      selectedSeason
-        ? [org, selectedSeason.name, formatBit, count].filter(Boolean).join(" · ")
-        : [org, formatBit, count].filter(Boolean).join(" · ");
+    const subtitle = [
+      org,
+      selectedSeason?.name,
+      ground?.name,
+      formatBit,
+      count,
+    ]
+      .filter(Boolean)
+      .join(" · ");
     return {
       kind: "leaderboard" as const,
       title: measure.shareTitle,
@@ -628,7 +642,7 @@ export default function LeaderboardPage() {
           value: r.display ?? String(r.value),
         })),
     };
-  }, [data, rows, measure, activeOrg, selectedSeason, format]);
+  }, [data, rows, measure, activeOrg, selectedSeason, format, ground]);
 
   const [scrolled, setScrolled] = useState(false);
   const [chipsOpen, setChipsOpen] = useState(false);
@@ -644,7 +658,12 @@ export default function LeaderboardPage() {
   }, []);
   const compactChips = scrolled && !chipsOpen;
 
-  const empty = emptyCopy(format, selectedSeason);
+  const empty = ground
+    ? {
+        title: `Nothing at ${ground.name} yet`,
+        body: "No finished match here fits this board.",
+      }
+    : emptyCopy(format, selectedSeason);
 
   const capLabel =
     format === "all" && usingSeason && measure.key === "runs"
@@ -759,6 +778,15 @@ export default function LeaderboardPage() {
               ]}
             />
           </div>
+        ) : null}
+
+        {!scrolled ? (
+          <GroundChips
+            grounds={grounds}
+            value={ground?._id ?? null}
+            onChange={setGroundPick}
+            className="mt-1"
+          />
         ) : null}
 
         {data === undefined ? (

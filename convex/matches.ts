@@ -1,9 +1,11 @@
 import { v } from "convex/values";
 import { mutation, query, MutationCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
-import { requireActiveMembership } from "./lib/session";
+import { requireActiveMembership, requireOrgViewer } from "./lib/session";
 import { captainTeamLabel } from "./lib/teams";
 import { buildRuleSnapshot } from "./lib/rules";
+import { clearMatchStamps } from "./lib/matchStats";
+import { resolvePlayableGround } from "./lib/grounds";
 import {
   buildMatchClock,
   DEFAULT_TEST_MINUTES,
@@ -32,9 +34,19 @@ export const create = mutation({
     lastBatsmanAlone: v.optional(v.boolean()),
     /** Test only. Ignored for limited. Default 90. */
     durationMinutes: v.optional(v.number()),
+    /** Absent = the community's Home ground (none if it has no grounds). */
+    groundId: v.optional(v.id("grounds")),
+    /** Started from a "Who's in?" poll: the poll is linked and closed. */
+    pollId: v.optional(v.id("polls")),
   },
   handler: async (ctx, args) => {
     const { user } = await requireActiveMembership(ctx, args.token, args.orgId);
+    const groundId = await resolvePlayableGround(ctx, args.orgId, args.groundId);
+    const poll = args.pollId ? await ctx.db.get(args.pollId) : null;
+    if (args.pollId && (!poll || String(poll.orgId) !== String(args.orgId))) {
+      throw new Error("That poll is not one of this community's");
+    }
+    if (poll?.status === "cancelled") throw new Error("That game was called off");
 
     if (args.sideAPlayerIds.length < 2 || args.sideBPlayerIds.length < 2) {
       throw new Error("Each team needs at least 2 players");
@@ -93,9 +105,12 @@ export const create = mutation({
       sideBPlayerIds: args.sideBPlayerIds,
       ruleSnapshot,
       ...(clock ? { clock } : {}),
+      ...(groundId ? { groundId } : {}),
       createdBy: user._id,
       createdAt: Date.now(),
     });
+
+    if (poll) await ctx.db.patch(poll._id, { matchId, status: "closed" });
 
     return { matchId };
   },
@@ -108,7 +123,7 @@ export const list = query({
   },
   handler: async (ctx, args) => {
     try {
-      await requireActiveMembership(ctx, args.token, args.orgId);
+      await requireOrgViewer(ctx, args.token, args.orgId);
     } catch {
       return [];
     }
@@ -221,7 +236,7 @@ export const get = query({
     const match = await ctx.db.get(args.matchId);
     if (!match) return null;
     try {
-      await requireActiveMembership(ctx, args.token, match.orgId);
+      await requireOrgViewer(ctx, args.token, match.orgId);
     } catch {
       return null;
     }
@@ -325,6 +340,7 @@ async function sidesPlayedFor(
     if (b.playerOutId && String(b.playerOutId) === id) played.add(bat);
     if (String(b.bowlerId) === id) played.add(bowl);
     if (b.fielderId && String(b.fielderId) === id) played.add(bowl);
+    if (b.droppedById && String(b.droppedById) === id) played.add(bowl);
   }
 
   return played;
@@ -332,7 +348,8 @@ async function sidesPlayedFor(
 
 /**
  * Mid-match squad edit: put a player on one side, on both sides (a gully
- * "common" player), or move them between those states while the match runs.
+ * "common" player), move them between those states, or take someone who has
+ * not played yet back out of the match, while the match runs.
  *
  * Late arrivals are the norm — someone turns up at over 4 and the teams
  * reshuffle around them, usually by releasing a common player to a single
@@ -348,7 +365,10 @@ export const setPlayerSides = mutation({
     token: v.string(),
     matchId: v.id("matches"),
     userId: v.id("users"),
-    /** Sides the player should be on afterwards: ["A"], ["B"], or both. */
+    /**
+     * Sides the player should be on afterwards: ["A"], ["B"], both, or none
+     * (take a late arrival added by mistake back out of the match).
+     */
     sides: v.array(side),
   },
   handler: async (ctx, args) => {
@@ -362,9 +382,6 @@ export const setPlayerSides = mutation({
     const wanted = new Set<Side>(args.sides as Side[]);
     if (wanted.size !== args.sides.length) {
       throw new Error("Duplicate side");
-    }
-    if (wanted.size === 0) {
-      throw new Error("Pick at least one team");
     }
 
     const player = await ctx.db.get(args.userId);
@@ -381,6 +398,27 @@ export const setPlayerSides = mutation({
 
     const id = String(args.userId);
     const played = await sidesPlayedFor(ctx, match, args.userId);
+
+    // Someone at the crease or holding the ball has not "played" until a ball
+    // is logged, but pulling them off that side would orphan the innings.
+    const liveInnings = (
+      await ctx.db
+        .query("innings")
+        .withIndex("by_match", (q) => q.eq("matchId", match._id))
+        .collect()
+    ).find((inn) => inn.status === "in_progress");
+    if (liveInnings) {
+      const bowlSide: Side = liveInnings.battingSide === "A" ? "B" : "A";
+      const atCrease = [
+        liveInnings.currentStrikerId,
+        liveInnings.currentNonStrikerId,
+      ].some((p) => p && String(p) === id);
+      const bowling =
+        !!liveInnings.currentBowlerId &&
+        String(liveInnings.currentBowlerId) === id;
+      if (atCrease) played.add(liveInnings.battingSide);
+      if (bowling) played.add(bowlSide);
+    }
 
     // Error messages name the team the way the scoreboard does.
     const captainNameOf = async (s: Side) => {
@@ -470,6 +508,7 @@ export const remove = mutation({
       .unique();
     if (live) await ctx.db.delete(live._id);
 
+    await clearMatchStamps(ctx, match._id);
     await ctx.db.delete(match._id);
     return { ok: true };
   },
