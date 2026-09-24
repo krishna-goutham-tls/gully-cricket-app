@@ -36,6 +36,7 @@ import type * as matches from "../matches.js";
 import type * as orgs from "../orgs.js";
 import type * as players from "../players.js";
 import type * as polls from "../polls.js";
+import type * as publicView from "../publicView.js";
 import type * as scoring from "../scoring.js";
 import type * as seasons from "../seasons.js";
 import type * as stats from "../stats.js";
@@ -78,6 +79,7 @@ declare const fullApi: ApiFromModules<{
   orgs: typeof orgs;
   players: typeof players;
   polls: typeof polls;
+  publicView: typeof publicView;
   scoring: typeof scoring;
   seasons: typeof seasons;
   stats: typeof stats;

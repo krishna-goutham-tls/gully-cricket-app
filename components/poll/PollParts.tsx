@@ -96,7 +96,8 @@ export function PollNames({
   poll,
   clamp,
 }: {
-  poll: PollRow;
+  /** Names only, so the public poll page can pass its stripped copy. */
+  poll: { groups: Record<Answer, Array<{ displayName: string }>> };
   /** Home keeps each group to two lines; the poll page shows everyone. */
   clamp?: boolean;
 }) {

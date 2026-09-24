@@ -528,17 +528,17 @@ async function recomputeAndPersist(
   };
 }
 
-function totalInningsOf(match: Doc<"matches">): number {
+export function totalInningsOf(match: Doc<"matches">): number {
   return (match.ruleSnapshot.inningsPerSide ?? 1) * 2;
 }
 
-function aggregateRuns(innings: Doc<"innings">[], side: Side): number {
+export function aggregateRuns(innings: Doc<"innings">[], side: Side): number {
   return innings
     .filter((i) => i.battingSide === side)
     .reduce((sum, i) => sum + i.totalRuns, 0);
 }
 
-function leadText(
+export function leadText(
   nameA: string,
   nameB: string,
   aggA: number,

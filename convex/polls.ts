@@ -29,7 +29,7 @@ function pollStatusAt(poll: Doc<"polls">, now: number): Status {
   return poll.status === "open" && now >= poll.closesAt ? "closed" : poll.status;
 }
 
-async function pollView(
+export async function pollView(
   ctx: QueryCtx,
   poll: Doc<"polls">,
   viewer: { userId: Id<"users">; isAdmin: boolean } | null,

@@ -1,43 +1,22 @@
 "use client";
 
-import { useAuth } from "@/components/providers/AuthProvider";
-import {
-  TestClockLine,
-  TestClockOverlays,
-  TestClockProvider,
-  TestClockStatus,
-} from "@/components/match/TestClock";
 import { OverTracker } from "@/components/match/OverTracker";
-import { ShareLinkButton } from "@/components/share/ShareLinkButton";
-import { Button } from "@/components/ui/Button";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { PublicFooter, PublicMark } from "@/components/public/PublicChrome";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
 import { matchBoardLabel, matchBoardLine } from "@/lib/matchBoard";
-import { publicMatchUrl } from "@/lib/share";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
-import { ArrowLeft, ClipboardList, Pencil } from "lucide-react";
-import Link from "next/link";
-import { useParams } from "next/navigation";
 
 /**
- * Read-only live view. Every active member can score, so a spectator tapping a
- * live match used to land on the pad and could corrupt it by mis-tap. This
- * route must never import a mutation — scoring is one deliberate tap away.
+ * The watch page for people with no login: same scoreboard, fed by
+ * publicView.match, which carries names and the score and nothing else.
+ * Live over the same WebSocket as the app. Imports no mutation.
  */
-
-export default function WatchPage() {
-  const params = useParams();
-  const matchId = params.id as Id<"matches">;
-  const { token, isSandbox } = useAuth();
-  const state = useQuery(
-    api.scoring.liveState,
-    token ? { token, matchId } : "skip",
-  );
-
-  const scoreHref = `/matches/${matchId}/score`;
-  const cardHref = `/matches/${matchId}`;
+export function PublicMatchView({ matchId }: { matchId: string }) {
+  const { token } = useAuth();
+  const state = useQuery(api.publicView.match, { matchId });
 
   if (state === undefined) {
     return (
@@ -48,45 +27,35 @@ export default function WatchPage() {
   }
   if (state === null) {
     return (
-      <div className="px-5 py-8">
-        <EmptyState title="Match not found" />
+      <div className="min-h-dvh bg-bg px-5 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-[calc(var(--safe-top)+1rem)]">
+        <PublicMark tone="light" />
+        <div className="mt-6">
+          <EmptyState
+            title="Match not found"
+            body="The link may be cut short, or the match was deleted."
+          />
+        </div>
       </div>
     );
   }
 
-  const done = state.status === "completed" || state.status === "abandoned";
-  // matchLiveState survives an innings break with the *finished* innings'
-  // totals still in totalRuns/wickets/oversText while battingSide already
-  // points at whoever bats next — so a completed match or a break both fall
-  // through to the waitingText branch instead of misattributing the score.
-  const live =
-    done || state.phase === "innings_break" ? null : state.live;
-  const solo = state.ruleSnapshot.battingModeDefault === "single";
-  const isTest = state.ruleSnapshot.inningsPerSide === 2;
-
+  const done = state.phase === "completed";
+  const live = state.live;
+  const isTest = state.inningsPerSide === 2;
   const battingName =
     live?.battingSide === "A" ? state.sideA.name : state.sideB.name;
-  const board =
-    live?.battingSide
-      ? matchBoardLine({
-          inningsPerSide: state.ruleSnapshot.inningsPerSide ?? 1,
-          innings: state.innings,
-          live: {
-            battingSide: live.battingSide,
-            totalRuns: live.totalRuns,
-            inningsNo: live.inningsNo,
-            currentInningsId: live.currentInningsId,
-            target: live.target,
-          },
-        })
-      : null;
+  const board = live
+    ? matchBoardLine({
+        inningsPerSide: state.inningsPerSide,
+        innings: state.innings,
+        live,
+      })
+    : null;
 
   const waitingText = (() => {
     switch (state.phase) {
-      case "need_batting_side":
-        return "Waiting for the toss";
-      case "need_openers":
-        return "Waiting for the openers";
+      case "not_started":
+        return "Not started yet";
       case "innings_break":
         return state.breakInfo?.leadText ?? "Innings break";
       case "need_batsman":
@@ -99,51 +68,35 @@ export default function WatchPage() {
   })();
 
   return (
-    <TestClockProvider
-      clock={done ? null : state.clock}
-      role="watcher"
-      matchId={matchId}
-    >
     <div className="min-h-dvh bg-bg">
       <header className="bg-ink px-4 pb-6 pt-[calc(var(--safe-top)+1rem)] text-bg">
         <div className="flex items-center justify-between gap-2">
-          <Link
-            href="/home"
-            aria-label="Back to home"
-            className="-ml-2 flex h-11 w-11 items-center justify-center rounded-xl text-bg/70 active:bg-white/10"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-          <p className="min-w-0 truncate text-[13px] font-medium text-bg/70">
-            {live
-              ? `Innings ${live.inningsNo}${isTest ? " of 4" : ""} · ${battingName}`
-              : `${state.sideA.name} vs ${state.sideB.name}`}
-          </p>
-          <div className="flex shrink-0 items-center gap-0.5">
-            {done ? (
-              <span className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-bg/70">
-                {state.status === "abandoned" ? "Ended" : "Result"}
-              </span>
-            ) : (
-              <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-accent/20 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-accent">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
-                Live
-              </span>
-            )}
-            {/* The no-login page, for the group chat. Sandbox games are
-                practice and have no public page. */}
-            {isSandbox ? null : (
-              <ShareLinkButton
-                url={() => publicMatchUrl(matchId)}
-                text={`${state.sideA.name} vs ${state.sideB.name} — ${
-                  done ? (state.resultText ?? "full score") : "live score"
-                }`}
-                className="-mr-2"
-              />
-            )}
-          </div>
+          <PublicMark tone="dark" />
+          {state.groundName ? (
+            <span
+              className="min-w-0 flex-1 truncate text-center text-[13px] text-bg/70"
+              title={state.groundName}
+            >
+              At {state.groundName}
+            </span>
+          ) : null}
+          {done ? (
+            <span className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-bg/70">
+              {state.status === "abandoned" ? "Ended" : "Result"}
+            </span>
+          ) : (
+            <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-accent/20 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-accent">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+              Live
+            </span>
+          )}
         </div>
-        <TestClockLine />
+
+        <p className="mt-3 text-center text-[13px] font-medium text-bg/70">
+          {live
+            ? `Innings ${live.inningsNo}${isTest ? " of 4" : ""} · ${battingName}`
+            : `${state.sideA.name} vs ${state.sideB.name}`}
+        </p>
 
         {live ? (
           <>
@@ -160,8 +113,8 @@ export default function WatchPage() {
               {board?.kind === "target" ? (
                 <p className="tabular mt-1.5 inline-block rounded-full bg-accent/15 px-3 py-1 text-[13px] font-medium text-accent">
                   {matchBoardLabel(board)}
-                  {!isTest && live.requiredRunRate != null
-                    ? ` · ${live.requiredRunRate.toFixed(1)}/ov`
+                  {live.ballsLeft !== undefined
+                    ? ` off ${live.ballsLeft}`
                     : ""}
                 </p>
               ) : board ? (
@@ -174,19 +127,19 @@ export default function WatchPage() {
             <div
               className={cn(
                 "mt-4 grid gap-2 text-center text-[11px]",
-                solo ? "grid-cols-2" : "grid-cols-3",
+                state.solo ? "grid-cols-2" : "grid-cols-3",
               )}
             >
               <div className="rounded-2xl bg-accent/20 px-2 py-2 ring-1 ring-accent/60">
                 <p className="font-semibold uppercase tracking-wide text-accent">
-                  {solo ? "Batting" : "On strike"}
+                  {state.solo ? "Batting" : "On strike"}
                 </p>
                 <p
                   className="mt-0.5 line-clamp-2 text-[15px] font-semibold text-bg [overflow-wrap:anywhere]"
-                  title={live.striker?.displayName ?? undefined}
+                  title={live.striker ?? undefined}
                 >
-                  {live.striker?.displayName ?? "—"}
-                  {solo ? null : <span className="text-accent">*</span>}
+                  {live.striker ?? "—"}
+                  {state.solo ? null : <span className="text-accent">*</span>}
                 </p>
                 {live.figures.striker ? (
                   <p className="tabular mt-0.5 text-[13px] text-bg/70">
@@ -194,16 +147,16 @@ export default function WatchPage() {
                   </p>
                 ) : null}
               </div>
-              {solo ? null : (
+              {state.solo ? null : (
                 <div className="rounded-2xl bg-white/[0.05] px-2 py-2">
                   <p className="font-semibold uppercase tracking-wide text-bg/70">
                     Non-striker
                   </p>
                   <p
                     className="mt-0.5 line-clamp-2 text-[15px] font-semibold text-bg/70 [overflow-wrap:anywhere]"
-                    title={live.nonStriker?.displayName ?? undefined}
+                    title={live.nonStriker ?? undefined}
                   >
-                    {live.nonStriker?.displayName ?? "—"}
+                    {live.nonStriker ?? "—"}
                   </p>
                   {live.figures.nonStriker ? (
                     <p className="tabular mt-0.5 text-[13px] text-bg/70">
@@ -219,9 +172,9 @@ export default function WatchPage() {
                 </p>
                 <p
                   className="mt-0.5 line-clamp-2 text-[15px] font-semibold text-bg [overflow-wrap:anywhere]"
-                  title={live.bowler?.displayName ?? undefined}
+                  title={live.bowler ?? undefined}
                 >
-                  {live.bowler?.displayName ?? "—"}
+                  {live.bowler ?? "—"}
                 </p>
                 {live.figures.bowler ? (
                   <p className="tabular mt-0.5 text-[13px] text-bg/70">
@@ -234,17 +187,20 @@ export default function WatchPage() {
             <OverTracker
               current={live.currentOverBalls}
               prev={live.prevOverBalls}
-              ballsPerOver={state.ruleSnapshot.ballsPerOver}
+              ballsPerOver={state.ballsPerOver}
             />
           </>
         ) : (
           <div className="mt-6 text-center">
             <p className="text-xl font-semibold text-bg">
               {done
-                ? (state.resultText ?? "No result")
-                : (waitingText ?? "Not started yet")}
+                ? (state.resultText ??
+                  (state.status === "abandoned"
+                    ? "Ended without a result"
+                    : "No result"))
+                : waitingText}
             </p>
-            {!done && state.phase === "innings_break" && state.breakInfo?.target != null ? (
+            {!done && state.breakInfo?.target != null ? (
               <p className="tabular mt-1.5 inline-block rounded-full bg-accent/15 px-3 py-1 text-[13px] font-medium text-accent">
                 Target {state.breakInfo.target}
               </p>
@@ -252,39 +208,16 @@ export default function WatchPage() {
           </div>
         )}
       </header>
-      <TestClockStatus />
 
-      <main className="mx-auto max-w-md px-5 py-5">
+      <main className="mx-auto max-w-md px-5 pb-[calc(2rem+env(safe-area-inset-bottom))] pt-5">
         {waitingText && live ? (
           <p className="mb-4 rounded-2xl border border-line bg-surface px-4 py-3 text-center text-[13px] text-muted">
             {waitingText}
           </p>
         ) : null}
 
-        {done || !state.canScore ? null : (
-          <>
-            <Button href={scoreHref} fullWidth size="lg">
-              <Pencil className="h-5 w-5" strokeWidth={2.4} />
-              Resume scoring
-            </Button>
-            <p className="mt-2 text-center text-[11px] text-faint">
-              You&apos;re watching — nothing here changes the score.
-            </p>
-          </>
-        )}
-
-        <Button
-          href={cardHref}
-          variant="secondary"
-          fullWidth
-          className={done ? undefined : "mt-4"}
-        >
-          <ClipboardList className="h-[18px] w-[18px]" strokeWidth={2.2} />
-          Full scorecard
-        </Button>
-
-        {state.innings.length > 1 ? (
-          <div className="mt-6 rounded-2xl border border-line bg-surface p-4">
+        {state.innings.length > (live ? 1 : 0) ? (
+          <div className="mb-5 rounded-2xl border border-line bg-surface p-4 shadow-card">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">
               Innings
             </p>
@@ -308,9 +241,13 @@ export default function WatchPage() {
             </div>
           </div>
         ) : null}
+
+        <PublicFooter
+          signedIn={!!token}
+          appHref={`/matches/${matchId}/watch`}
+          appLabel="Open in Gully Cricket"
+        />
       </main>
-      <TestClockOverlays />
     </div>
-    </TestClockProvider>
   );
 }

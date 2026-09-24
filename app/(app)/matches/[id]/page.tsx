@@ -9,10 +9,12 @@ import { MatchStory } from "@/components/match/MatchStory";
 import { useAuth } from "@/components/providers/AuthProvider";
 import type { MatchShareData } from "@/components/share/ShareCard";
 import { ShareButton } from "@/components/share/ShareButton";
+import { ShareLinkButton } from "@/components/share/ShareLinkButton";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import { publicMatchUrl } from "@/lib/share";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { ArrowLeft, Pencil, Trophy } from "lucide-react";
@@ -85,7 +87,7 @@ function shareScore(card: Scorecard, side: "A" | "B") {
 export default function MatchDetailPage() {
   const params = useParams();
   const matchId = params.id as Id<"matches">;
-  const { token, user, isObserver } = useAuth();
+  const { token, user, isObserver, isSandbox } = useAuth();
   const card = useQuery(
     api.scoring.scorecard,
     token ? { token, matchId } : "skip",
@@ -183,6 +185,12 @@ export default function MatchDetailPage() {
                   data={shareData}
                   filename={`gully-match-${matchId}.png`}
                   tone="dark"
+                />
+              ) : inPlay && !isSandbox ? (
+                // Before the result there is no poster — share the live page.
+                <ShareLinkButton
+                  url={() => publicMatchUrl(matchId)}
+                  text={`${card.sideA.name} vs ${card.sideB.name} — live score`}
                 />
               ) : null}
             </div>

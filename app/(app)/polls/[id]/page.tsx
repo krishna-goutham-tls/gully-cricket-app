@@ -2,16 +2,19 @@
 
 import {
   MIN_TO_START,
+  pollShareText,
   startFromPollHref,
 } from "@/components/poll/PollCard";
 import { AnswerBar, PollNames } from "@/components/poll/PollParts";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { ShareLinkButton } from "@/components/share/ShareLinkButton";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { pollWhen } from "@/lib/polls";
+import { publicPollUrl } from "@/lib/share";
 import { errorMessage } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { ArrowLeft, Play } from "lucide-react";
@@ -33,7 +36,7 @@ const STATUS_LABEL = {
 export default function PollPage() {
   const params = useParams();
   const pollId = params.id as Id<"polls">;
-  const { token, isObserver } = useAuth();
+  const { token, isObserver, isSandbox } = useAuth();
   const poll = useQuery(api.polls.get, token ? { token, pollId } : "skip");
   const setStatus = useMutation(api.polls.setStatus);
   const [confirm, setConfirm] = useState<"closed" | "cancelled" | null>(null);
@@ -84,6 +87,14 @@ export default function PollPage() {
               </p>
             ) : null}
           </div>
+          {poll && !isSandbox ? (
+            <ShareLinkButton
+              url={() => publicPollUrl(poll._id)}
+              text={pollShareText(poll)}
+              tone="light"
+              className="-mr-2"
+            />
+          ) : null}
         </div>
       </header>
 
