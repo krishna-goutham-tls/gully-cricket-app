@@ -96,6 +96,11 @@ export default function MatchDetailPage() {
     api.story.matchStory,
     token && card?.status === "completed" ? { token, matchId } : "skip",
   );
+  // Null for a one-ground community — every game there is at the same place.
+  const ground = useQuery(
+    api.grounds.ofMatch,
+    token ? { token, matchId } : "skip",
+  );
   const [view, setView] = useState<"story" | "scorecard">("story");
 
   if (card === undefined) {
@@ -148,6 +153,14 @@ export default function MatchDetailPage() {
             >
               <ArrowLeft className="h-5 w-5" />
             </Link>
+            {ground ? (
+              <span
+                className="min-w-0 flex-1 truncate text-[13px] text-bg/70"
+                title={ground.name}
+              >
+                At {ground.name}
+              </span>
+            ) : null}
             <div className="flex shrink-0 items-center gap-1.5">
               {card.status === "live" ? (
                 <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-accent/20 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-accent">

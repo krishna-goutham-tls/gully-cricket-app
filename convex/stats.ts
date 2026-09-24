@@ -7,6 +7,7 @@ import {
   MutationCtx,
 } from "./_generated/server";
 import { restampMatch } from "./lib/matchStats";
+import { homeGroundOf } from "./lib/grounds";
 import { Doc, Id } from "./_generated/dataModel";
 import { requireOrgViewer } from "./lib/session";
 import { legalBallToOverText } from "./lib/scoring";
@@ -725,13 +726,35 @@ function emptyFocus(): Focus {
 
 /** afterTs inclusive, beforeTs exclusive — the same rule the replay used. */
 function inWindow(
-  row: { date: number; format: Format },
-  opts: Window & { format?: Format },
+  row: { date: number; format: Format; groundId?: Id<"grounds"> },
+  opts: Window & { format?: Format; ground?: GroundFilter },
 ) {
   if (opts.afterTs !== undefined && row.date < opts.afterTs) return false;
   if (opts.beforeTs !== undefined && row.date >= opts.beforeTs) return false;
   if (opts.format !== undefined && row.format !== opts.format) return false;
+  if (opts.ground !== undefined) {
+    const at = row.groundId ?? opts.ground.homeId;
+    if (String(at) !== String(opts.ground.groundId)) return false;
+  }
   return true;
+}
+
+/**
+ * One ground's slice of a board. A stamp with no ground was played before
+ * grounds existed, at Home — so it counts for whichever ground is Home now.
+ */
+type GroundFilter = { groundId: Id<"grounds">; homeId?: Id<"grounds"> };
+
+async function groundFilterFor(
+  ctx: QueryCtx,
+  orgId: Id<"orgs">,
+  groundId: Id<"grounds"> | undefined,
+): Promise<GroundFilter | undefined | null> {
+  if (!groundId) return undefined;
+  const ground = await ctx.db.get(groundId);
+  if (!ground || String(ground.orgId) !== String(orgId)) return null;
+  const home = await homeGroundOf(ctx, orgId);
+  return { groundId, homeId: home?._id };
 }
 
 type StampSet = {
@@ -782,7 +805,7 @@ function dateBounds({ afterTs, beforeTs }: Window): [number, number] {
  */
 function aggregateStamps(
   set: StampSet,
-  opts: Window & { format?: Format },
+  opts: Window & { format?: Format; ground?: GroundFilter },
 ): OrgSnapshot {
   const snap: OrgSnapshot = {
     batting: new Map(),
@@ -1532,6 +1555,8 @@ type LeaderboardArgs = {
   includeVisitorsAndJuniors?: boolean;
   seasonId?: Id<"seasons">;
   format?: Format;
+  /** One ground only. Stamps path only — the legacy replay has no ground. */
+  groundId?: Id<"grounds">;
 };
 
 async function leaderboardFor(
@@ -1560,11 +1585,18 @@ async function leaderboardFor(
     prevBeforeTs = windowEnd - WEEK_MS;
   }
 
-  const currentWindow = { afterTs, beforeTs, format: args.format };
+  if (legacy && args.groundId) {
+    throw new Error("The legacy replay cannot filter by ground");
+  }
+  const ground = await groundFilterFor(ctx, args.orgId, args.groundId);
+  if (ground === null) return null;
+
+  const currentWindow = { afterTs, beforeTs, format: args.format, ground };
   const previousWindow = {
     afterTs: prevAfterTs,
     beforeTs: prevBeforeTs,
     format: args.format,
+    ground,
   };
   let current: OrgSnapshot;
   let previous: OrgSnapshot;
@@ -1669,7 +1701,8 @@ async function leaderboardFor(
   };
 }
 
-const leaderboardArgs = {
+/** The board args the legacy replay understands — everything but ground. */
+const boardArgs = {
   orgId: v.id("orgs"),
   /**
    * Default hides visitors and juniors. Pass true for auto-form teams and
@@ -1679,6 +1712,12 @@ const leaderboardArgs = {
   seasonId: v.optional(v.id("seasons")),
   /** Tests or limited only. Omit for the mixed board (the default). */
   format: v.optional(matchFormat),
+};
+
+const leaderboardArgs = {
+  ...boardArgs,
+  /** One ground's matches. Unset stamps count as the Home ground. */
+  groundId: v.optional(v.id("grounds")),
 };
 
 export const leaderboard = query({
@@ -2227,7 +2266,7 @@ export const backfillStamps = internalMutation({
 
 /** The old leaderboard, replayed from every ball. Verification only. */
 export const legacyLeaderboard = internalQuery({
-  args: { ...leaderboardArgs, now: v.optional(v.number()) },
+  args: { ...boardArgs, now: v.optional(v.number()) },
   handler: async (ctx, { now, ...args }) =>
     leaderboardFor(ctx, args, now ?? Date.now(), true),
 });
@@ -2302,7 +2341,8 @@ function diffInto(
  */
 export const compareStats = internalQuery({
   args: {
-    ...leaderboardArgs,
+    // No ground: the legacy replay has none, so there is nothing to compare.
+    ...boardArgs,
     userId: v.optional(v.id("users")),
     board: v.optional(v.boolean()),
   },

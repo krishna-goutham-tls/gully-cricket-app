@@ -1,5 +1,6 @@
 "use client";
 
+import { GroundsSettings } from "@/components/ground/GroundsSettings";
 import { AppHeader } from "@/components/shell/AppHeader";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/Button";
@@ -22,7 +23,8 @@ import { cn, errorMessage } from "@/lib/utils";
 const ROLES = ["batsman", "bowler", "all-rounder", "keeper"] as const;
 
 export default function ProfilePage() {
-  const { token, user, logout } = useAuth();
+  const { token, user, logout, isAdmin } = useAuth();
+  const [groundsOpen, setGroundsOpen] = useState(false);
   const updateProfile = useMutation(api.auth.updateProfile);
   const changePin = useMutation(api.auth.changePin);
   const router = useRouter();
@@ -239,6 +241,18 @@ export default function ProfilePage() {
                 {pinBusy ? "Saving…" : "Save PIN"}
               </Button>
             </div>
+          ) : null}
+
+          {/* Grounds — admins only, collapsed like the rest. */}
+          {isAdmin ? (
+            <>
+              <Row
+                label="Grounds"
+                open={groundsOpen}
+                onClick={() => setGroundsOpen((v) => !v)}
+              />
+              {groundsOpen ? <GroundsSettings /> : null}
+            </>
           ) : null}
 
           {/* Sandbox — a single toggle, not a card. */}

@@ -5,6 +5,7 @@ import {
   buildRecords,
   type FeatRecord,
 } from "@/components/leaderboard/records";
+import { GroundChips, usePlayableGrounds } from "@/components/ground/GroundChips";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
   SeasonScopeMenu,
@@ -19,6 +20,7 @@ import {
 import { AppHeader } from "@/components/shell/AppHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { Flame, Trophy } from "lucide-react";
@@ -227,9 +229,23 @@ export default function RecordsPage() {
         }
       : "skip",
   );
+  // Records only — trophies are the season's, wherever it was played.
+  const grounds = usePlayableGrounds();
+  const [groundPick, setGroundPick] = useState<Id<"grounds"> | null>(null);
+  const ground =
+    grounds.length >= 2
+      ? (grounds.find((g) => g._id === groundPick) ?? null)
+      : null;
   const board = useQuery(
     api.stats.leaderboard,
-    ready ? { token: token!, orgId: activeOrgId!, ...seasonArg } : "skip",
+    ready
+      ? {
+          token: token!,
+          orgId: activeOrgId!,
+          ...seasonArg,
+          ...(ground ? { groundId: ground._id } : {}),
+        }
+      : "skip",
   );
 
   const scopeLabel = selectedSeason ? selectedSeason.name : "All time";
@@ -399,6 +415,12 @@ export default function RecordsPage() {
       ) : (
         <>
           <main className="mx-auto max-w-md px-5 py-4">
+            <GroundChips
+              grounds={grounds}
+              value={ground?._id ?? null}
+              onChange={setGroundPick}
+              className="mb-4"
+            />
             <ToneHeading>Honours</ToneHeading>
             <div className="mt-3">
               {records.honour.length > 0 ? (

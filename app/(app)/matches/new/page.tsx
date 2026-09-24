@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { PlayerMultiSelect } from "@/components/match/PlayerMultiSelect";
+import { usePlayableGrounds } from "@/components/ground/GroundChips";
 import {
   DEFAULT_TEST_MINUTES,
   MAX_TEST_MINUTES,
@@ -26,12 +27,13 @@ import { balanceTeams } from "@/lib/autoTeams";
 import { cn, errorMessage } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { NumberField } from "@/components/ui/NumberField";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
   Crown,
   History,
+  MapPin,
   Minus,
   Plus,
   Scale,
@@ -62,13 +64,36 @@ function whenLabel(ts: number) {
     : d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
+// useSearchParams needs a Suspense boundary to prerender.
 export default function NewMatchPage() {
+  return (
+    <Suspense fallback={<div className="min-h-dvh bg-bg" />}>
+      <NewMatchFlow />
+    </Suspense>
+  );
+}
+
+function NewMatchFlow() {
   const { token, activeOrgId } = useAuth();
   const router = useRouter();
+  const pollId = useSearchParams().get("poll") as Id<"polls"> | null;
   const pool = useQuery(
     api.players.listOrgPlayers,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
   );
+  // Started from "Who's in?": the In list arrives already ticked and the
+  // poll's ground already set. Nothing else about the flow changes.
+  const poll = useQuery(
+    api.polls.get,
+    token && pollId ? { token, pollId } : "skip",
+  );
+  const grounds = usePlayableGrounds();
+  const [groundId, setGroundId] = useState<Id<"grounds"> | null>(null);
+  const [groundOpen, setGroundOpen] = useState(false);
+  const chosenGround =
+    grounds.find((g) => g._id === groundId) ??
+    grounds.find((g) => g.isHome) ??
+    null;
   const recentMatches = useQuery(
     api.matches.list,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
@@ -115,6 +140,21 @@ export default function NewMatchPage() {
   const [error, setError] = useState<string | null>(null);
 
   const players = useMemo(() => pool ?? [], [pool]);
+
+  // Applied once: after that the scorer owns the list, and a late answer on
+  // the poll must not tick someone they just unticked.
+  const pollApplied = useRef(false);
+  useEffect(() => {
+    if (pollApplied.current || !poll || !pool) return;
+    pollApplied.current = true;
+    const here = new Set(pool.map((p) => String(p.userId)));
+    setAvailable(
+      poll.groups.in
+        .map((p) => String(p.userId))
+        .filter((id) => here.has(id)),
+    );
+    if (poll.groundId) setGroundId(poll.groundId);
+  }, [poll, pool]);
   const nameOf = useMemo(() => {
     const m = new Map(players.map((p) => [String(p.userId), p.displayName]));
     return (id: string) => m.get(id) ?? "Player";
@@ -391,6 +431,8 @@ export default function NewMatchPage() {
                 Math.max(MIN_TEST_MINUTES, durationMinutes),
               )
             : undefined,
+        ...(chosenGround ? { groundId: chosenGround._id } : {}),
+        ...(poll && poll.status !== "cancelled" ? { pollId: poll._id } : {}),
       });
       setLastOvers(Math.min(200, Math.max(1, overs)), format);
       setLastFormat(format);
@@ -706,6 +748,50 @@ export default function NewMatchPage() {
               ))}
             </div>
           </section>
+        ) : null}
+
+        {/* Only a community with two or more grounds sees this, and the
+            default (Home, or the poll's ground) needs no tap at all. */}
+        {grounds.length >= 2 && chosenGround ? (
+          <div className="rounded-2xl border border-line bg-surface px-4 py-1">
+            <button
+              type="button"
+              aria-expanded={groundOpen}
+              onClick={() => setGroundOpen((v) => !v)}
+              className="flex min-h-11 w-full items-center gap-2 text-left"
+            >
+              <MapPin className="h-4 w-4 shrink-0 text-accent-deep" />
+              <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-ink">
+                At {chosenGround.name}
+              </span>
+              <span className="shrink-0 text-[13px] font-semibold text-muted">
+                {groundOpen ? "Done" : "Change"}
+              </span>
+            </button>
+            {groundOpen ? (
+              <div className="flex flex-wrap gap-2 pb-3 pt-1">
+                {grounds.map((g) => (
+                  <button
+                    key={g._id}
+                    type="button"
+                    aria-pressed={g._id === chosenGround._id}
+                    onClick={() => {
+                      setGroundId(g._id);
+                      setGroundOpen(false);
+                    }}
+                    className={cn(
+                      "min-h-11 rounded-lg border px-3 text-[13px] font-semibold",
+                      g._id === chosenGround._id
+                        ? "border-accent bg-accent-soft text-accent-deep"
+                        : "border-line text-muted active:bg-bg",
+                    )}
+                  >
+                    {g.name}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
         ) : null}
 
         <div className="rounded-2xl border border-line bg-surface p-4">

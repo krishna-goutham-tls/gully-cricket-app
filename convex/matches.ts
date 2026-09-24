@@ -5,6 +5,7 @@ import { requireActiveMembership, requireOrgViewer } from "./lib/session";
 import { captainTeamLabel } from "./lib/teams";
 import { buildRuleSnapshot } from "./lib/rules";
 import { clearMatchStamps } from "./lib/matchStats";
+import { resolvePlayableGround } from "./lib/grounds";
 import {
   buildMatchClock,
   DEFAULT_TEST_MINUTES,
@@ -33,9 +34,19 @@ export const create = mutation({
     lastBatsmanAlone: v.optional(v.boolean()),
     /** Test only. Ignored for limited. Default 90. */
     durationMinutes: v.optional(v.number()),
+    /** Absent = the community's Home ground (none if it has no grounds). */
+    groundId: v.optional(v.id("grounds")),
+    /** Started from a "Who's in?" poll: the poll is linked and closed. */
+    pollId: v.optional(v.id("polls")),
   },
   handler: async (ctx, args) => {
     const { user } = await requireActiveMembership(ctx, args.token, args.orgId);
+    const groundId = await resolvePlayableGround(ctx, args.orgId, args.groundId);
+    const poll = args.pollId ? await ctx.db.get(args.pollId) : null;
+    if (args.pollId && (!poll || String(poll.orgId) !== String(args.orgId))) {
+      throw new Error("That poll is not one of this community's");
+    }
+    if (poll?.status === "cancelled") throw new Error("That game was called off");
 
     if (args.sideAPlayerIds.length < 2 || args.sideBPlayerIds.length < 2) {
       throw new Error("Each team needs at least 2 players");
@@ -94,9 +105,12 @@ export const create = mutation({
       sideBPlayerIds: args.sideBPlayerIds,
       ruleSnapshot,
       ...(clock ? { clock } : {}),
+      ...(groundId ? { groundId } : {}),
       createdBy: user._id,
       createdAt: Date.now(),
     });
+
+    if (poll) await ctx.db.patch(poll._id, { matchId, status: "closed" });
 
     return { matchId };
   },

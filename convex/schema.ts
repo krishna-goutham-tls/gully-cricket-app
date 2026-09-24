@@ -89,6 +89,18 @@ export const wicketType = v.union(
 
 export const matchFormat = v.union(v.literal("limited"), v.literal("test"));
 
+export const pollStatus = v.union(
+  v.literal("open"),
+  v.literal("closed"),
+  v.literal("cancelled"),
+);
+
+export const pollAnswer = v.union(
+  v.literal("in"),
+  v.literal("maybe"),
+  v.literal("out"),
+);
+
 export const tournamentStatus = v.union(
   v.literal("active"),
   v.literal("paused"),
@@ -327,6 +339,8 @@ export default defineSchema({
   matches: defineTable({
     orgId: v.id("orgs"),
     tournamentId: v.optional(v.id("tournaments")),
+    /** Where it was played. Absent = the community's Home ground, read live. */
+    groundId: v.optional(v.id("grounds")),
     status: matchStatus,
     sideAName: v.string(),
     sideBName: v.string(),
@@ -343,6 +357,54 @@ export default defineSchema({
     .index("by_org", ["orgId"])
     .index("by_org_status", ["orgId", "status"])
     .index("by_tournament", ["tournamentId"]),
+
+  /**
+   * Where a community plays. Exactly one active ground per community is Home
+   * (enforced in convex/grounds.ts); it is the default everywhere, and a
+   * match with no groundId reads as Home. A community with no rows here
+   * behaves as if it had a single Home ground. Only admins write this table.
+   */
+  grounds: defineTable({
+    orgId: v.id("orgs"),
+    name: v.string(),
+    area: v.optional(v.string()),
+    mapsUrl: v.optional(v.string()),
+    isHome: v.boolean(),
+    archived: v.boolean(),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+  }).index("by_org", ["orgId"]),
+
+  /**
+   * "Who's in?" — one ask for one day's game. `date` is the local calendar
+   * day (YYYY-MM-DD) and `time` the local start (HH:MM), both as the creator
+   * typed them; `closesAt` is the end of that local day in ms, so a poll whose
+   * day has passed reads as closed without a cron. `matchId` is set when a
+   * match is started from it.
+   */
+  polls: defineTable({
+    orgId: v.id("orgs"),
+    createdBy: v.id("users"),
+    date: v.string(),
+    time: v.string(),
+    startsAt: v.number(),
+    closesAt: v.number(),
+    groundId: v.optional(v.id("grounds")),
+    note: v.optional(v.string()),
+    status: pollStatus,
+    matchId: v.optional(v.id("matches")),
+    createdAt: v.number(),
+  }).index("by_org_status_date", ["orgId", "status", "date"]),
+
+  /** One row per player per poll. Changing an answer rewrites the row. */
+  pollResponses: defineTable({
+    pollId: v.id("polls"),
+    userId: v.id("users"),
+    answer: pollAnswer,
+    updatedAt: v.number(),
+  })
+    .index("by_poll", ["pollId"])
+    .index("by_poll_user", ["pollId", "userId"]),
 
   innings: defineTable({
     matchId: v.id("matches"),
@@ -417,6 +479,8 @@ export default defineSchema({
     date: v.number(),
     matchOrder: v.number(),
     format: matchFormat,
+    /** The match's groundId as stamped. Absent = Home, resolved at read time. */
+    groundId: v.optional(v.id("grounds")),
     winnerSide: v.optional(side),
     sideAName: v.string(),
     sideBName: v.string(),
@@ -434,6 +498,7 @@ export default defineSchema({
     date: v.number(),
     matchOrder: v.number(),
     format: matchFormat,
+    groundId: v.optional(v.id("grounds")),
     winnerSide: v.optional(side),
     /** Named in either XI — turnout. */
     named: v.boolean(),

@@ -23,6 +23,10 @@ import type { Side } from "./contribution";
  *
  * Names and board tags are deliberately not stamped — they are read live, so
  * renaming or tagging a player never needs a restamp.
+ *
+ * The ground is stamped exactly as the match carries it. A match with no
+ * groundId stamps none, and the boards read that as the community's Home
+ * ground, so moving Home never needs a restamp either.
  */
 
 type Format = "limited" | "test";
@@ -445,6 +449,7 @@ export function foldMatch(
     playerRows.push({
       ...base,
       userId: p.userId,
+      groundId: match.groundId,
       winnerSide: match.winnerSide,
       named: p.named,
       contributed: p.contributed,
@@ -496,6 +501,7 @@ export function foldMatch(
   return {
     match: {
       ...base,
+      groundId: match.groundId,
       winnerSide: match.winnerSide,
       sideAName: match.sideAName,
       sideBName: match.sideBName,

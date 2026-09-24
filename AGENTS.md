@@ -6,8 +6,9 @@ an over with one thumb: tap ball outcome → instant register → next ball.
 Everything else (leaderboards, player profiles, match stories) is read-model
 on top of the ball log.
 
-Any active org member can create matches and score; **admin** only approves join
-requests and PIN resets.
+Any active org member can create matches, score, and ask "Who's in?"; **admin**
+only approves join requests and PIN resets, and manages the community's grounds
+(Profile → Grounds).
 
 **Stack:** Next.js 14 (App Router) · TypeScript · Tailwind · Convex · Netlify
 **Live:** https://gullycricket.space

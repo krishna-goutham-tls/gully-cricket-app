@@ -6,6 +6,8 @@ import {
   type MatchRow,
 } from "@/components/home/HomeCards";
 import { SeasonStrip } from "@/components/home/SeasonStrip";
+import { PollCard } from "@/components/poll/PollCard";
+import { PollSheet } from "@/components/poll/PollSheet";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { AppHeader } from "@/components/shell/AppHeader";
 import { Button } from "@/components/ui/Button";
@@ -17,7 +19,14 @@ import { groupByDay } from "@/lib/dates";
 import { TruncText } from "@/components/ui/TruncText";
 import { cn, errorMessage } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
-import { ChevronRight, History, Medal, Plus, Sparkles } from "lucide-react";
+import {
+  ChevronRight,
+  History,
+  Medal,
+  Plus,
+  Sparkles,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -76,6 +85,11 @@ export default function HomePage() {
     api.tournaments.list,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
   );
+  const polls = useQuery(
+    api.polls.current,
+    token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
+  );
+  const [asking, setAsking] = useState(false);
   const abandonMatch = useMutation(api.matches.abandon);
   const removeMatch = useMutation(api.matches.remove);
   const [menuFor, setMenuFor] = useState<string | null>(null);
@@ -179,6 +193,24 @@ export default function HomePage() {
           </Button>
         )}
 
+        {/* "Who's in?" — an open poll is a card with the answers on it; with
+            none, just a quiet line to ask. Never an empty card. */}
+        {(polls ?? []).map((p) => (
+          <div key={p._id} className="mt-3">
+            <PollCard poll={p} readOnly={isObserver} />
+          </div>
+        ))}
+        {!isObserver && polls !== undefined && polls.length === 0 ? (
+          <button
+            type="button"
+            onClick={() => setAsking(true)}
+            className="mt-1 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl text-[13px] font-semibold text-muted active:bg-ink/[0.04]"
+          >
+            <Users className="h-4 w-4" strokeWidth={2.2} />
+            Who&apos;s in? Ask the group
+          </button>
+        ) : null}
+
         <SeasonStrip series={series} />
 
         {/* The doorways: full history and the record book. Two thin cards on
@@ -281,6 +313,8 @@ export default function HomePage() {
           </>
         )}
       </main>
+
+      <PollSheet open={asking} onClose={() => setAsking(false)} />
 
       <ConfirmDialog
         open={pending !== null}
