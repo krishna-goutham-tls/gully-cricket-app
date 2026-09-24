@@ -325,6 +325,7 @@ async function sidesPlayedFor(
     if (b.playerOutId && String(b.playerOutId) === id) played.add(bat);
     if (String(b.bowlerId) === id) played.add(bowl);
     if (b.fielderId && String(b.fielderId) === id) played.add(bowl);
+    if (b.droppedById && String(b.droppedById) === id) played.add(bowl);
   }
 
   return played;
@@ -332,7 +333,8 @@ async function sidesPlayedFor(
 
 /**
  * Mid-match squad edit: put a player on one side, on both sides (a gully
- * "common" player), or move them between those states while the match runs.
+ * "common" player), move them between those states, or take someone who has
+ * not played yet back out of the match, while the match runs.
  *
  * Late arrivals are the norm — someone turns up at over 4 and the teams
  * reshuffle around them, usually by releasing a common player to a single
@@ -348,7 +350,10 @@ export const setPlayerSides = mutation({
     token: v.string(),
     matchId: v.id("matches"),
     userId: v.id("users"),
-    /** Sides the player should be on afterwards: ["A"], ["B"], or both. */
+    /**
+     * Sides the player should be on afterwards: ["A"], ["B"], both, or none
+     * (take a late arrival added by mistake back out of the match).
+     */
     sides: v.array(side),
   },
   handler: async (ctx, args) => {
@@ -362,9 +367,6 @@ export const setPlayerSides = mutation({
     const wanted = new Set<Side>(args.sides as Side[]);
     if (wanted.size !== args.sides.length) {
       throw new Error("Duplicate side");
-    }
-    if (wanted.size === 0) {
-      throw new Error("Pick at least one team");
     }
 
     const player = await ctx.db.get(args.userId);
