@@ -17,6 +17,7 @@ import type * as lib_awards from "../lib/awards.js";
 import type * as lib_clock from "../lib/clock.js";
 import type * as lib_contribution from "../lib/contribution.js";
 import type * as lib_crypto from "../lib/crypto.js";
+import type * as lib_matchStats from "../lib/matchStats.js";
 import type * as lib_matches from "../lib/matches.js";
 import type * as lib_phone from "../lib/phone.js";
 import type * as lib_playerLabel from "../lib/playerLabel.js";
@@ -55,6 +56,7 @@ declare const fullApi: ApiFromModules<{
   "lib/clock": typeof lib_clock;
   "lib/contribution": typeof lib_contribution;
   "lib/crypto": typeof lib_crypto;
+  "lib/matchStats": typeof lib_matchStats;
   "lib/matches": typeof lib_matches;
   "lib/phone": typeof lib_phone;
   "lib/playerLabel": typeof lib_playerLabel;

@@ -13,6 +13,7 @@ import {
   type WicketType,
 } from "./lib/scoring";
 import { captainTeamLabel } from "./lib/teams";
+import { clearMatchStamps, restampMatch } from "./lib/matchStats";
 import {
   pauseMatchClock,
   publicMatchClock,
@@ -649,7 +650,12 @@ async function completeInningsAndMaybeMatch(
   let winnerSide: Side | undefined;
   let resultText: string;
 
-  if (forceMatchEnd) {
+  if (forceMatchEnd && totalInnings === 4) {
+    // A Test that runs out of time without a result is a draw — whoever
+    // leads on aggregate has not won it. Any real result (all out, target
+    // reached, an innings win) already ended the match before the clock did.
+    resultText = "Match drawn";
+  } else if (forceMatchEnd) {
     if (aggA > aggB) {
       winnerSide = "A";
       const margin = aggA - aggB;
@@ -709,6 +715,10 @@ async function completeInningsAndMaybeMatch(
     target: innings.target,
     resultText,
   });
+
+  // The boards read per-match stat stamps, never the ball log — fold this
+  // match into them now that it has counted.
+  await restampMatch(ctx, match._id);
 
   return { phase: "completed" as const, resultText, winnerSide, reason };
 }
@@ -1472,6 +1482,8 @@ export const undoLastBall = mutation({
         winnerSide: undefined,
         resultText: undefined,
       });
+      // Back to live, so off the boards until it completes again.
+      await clearMatchStamps(ctx, match._id);
       const reopened = await ctx.db.get(match._id);
       if (!reopened) throw new Error("Match not found");
       match = reopened;

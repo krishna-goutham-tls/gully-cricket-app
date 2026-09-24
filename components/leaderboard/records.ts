@@ -8,7 +8,8 @@ export type FeatRecord = {
   label: string;
   value: string;
   holder: string;
-  holderId: Id<"users">;
+  /** Absent when a team holds the record — there is no profile to open. */
+  holderId?: Id<"users">;
 };
 export type RecordGroup = {
   title: string;
@@ -280,6 +281,16 @@ export function buildRecords(
     bestBy(attendance, (r) => r.matches, { tieBreak: tieHonourAllRound }),
     (r) => String(r.matches),
   );
+  // Teams arrive ranked (wins, then fewer games, then name), so the top row
+  // is the holder. Side names are free text, grouped by name on the server.
+  const topTeam = board.teams[0];
+  if (topTeam && topTeam.wins > 0) {
+    honour.push({
+      label: "Most team wins",
+      value: String(topTeam.wins),
+      holder: topTeam.name,
+    });
+  }
 
   // The Roast — the hot seat. Bad-thing counts keep zeroes out (a spotless
   // record isn't a roast), and every tie goes to the *least* accomplished

@@ -4,6 +4,7 @@ import { Doc, Id } from "./_generated/dataModel";
 import { requireActiveMembership, requireOrgViewer } from "./lib/session";
 import { captainTeamLabel } from "./lib/teams";
 import { buildRuleSnapshot } from "./lib/rules";
+import { clearMatchStamps } from "./lib/matchStats";
 import {
   buildMatchClock,
   DEFAULT_TEST_MINUTES,
@@ -470,6 +471,7 @@ export const remove = mutation({
       .unique();
     if (live) await ctx.db.delete(live._id);
 
+    await clearMatchStamps(ctx, match._id);
     await ctx.db.delete(match._id);
     return { ok: true };
   },

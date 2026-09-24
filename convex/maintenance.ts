@@ -4,6 +4,7 @@ import { Id } from "./_generated/dataModel";
 import { assertSeriesSides } from "./lib/tournamentLineup";
 import { buildRuleSnapshot } from "./lib/rules";
 import { legalBallToOverText } from "./lib/scoring";
+import { restampMatch } from "./lib/matchStats";
 import { looksLikeJunior, resolvePlayerTags, sortTags } from "./lib/playerLabel";
 
 const side = v.union(v.literal("A"), v.literal("B"));
@@ -44,6 +45,8 @@ export const reseatMatchCaptain = internalMutation({
         ...(teamName !== undefined ? { sideBName: teamName } : {}),
       });
     }
+    // The captain and name feed the team-wins board.
+    await restampMatch(ctx, matchId);
     return { ok: true };
   },
 });
@@ -118,6 +121,7 @@ export const expungeAbsentBatter = internalMutation({
       sideBPlayerIds: match.sideBPlayerIds.filter((id) => String(id) !== pid),
     });
 
+    await restampMatch(ctx, matchId);
     return { deletedBalls: deleted, innings: innings.length };
   },
 });
@@ -267,6 +271,9 @@ export const retagCompletedAsLimited = internalMutation({
       });
     }
 
+    // Format decides which Leaders board the match sits on.
+    await restampMatch(ctx, matchId);
+
     return {
       matchId,
       format: snapshot.format,
@@ -278,9 +285,38 @@ export const retagCompletedAsLimited = internalMutation({
 });
 
 /**
+ * Ops: a Test that ran out of time before the fix that makes time-up a draw
+ * was scored as a win on aggregate. The ball log cannot tell a time-up from a
+ * real finish, so a human names the match and this rewrites only the result.
+ */
+export const markTestDrawn = internalMutation({
+  args: { matchId: v.id("matches") },
+  handler: async (ctx, { matchId }) => {
+    const match = await ctx.db.get(matchId);
+    if (!match) throw new Error("Match not found");
+    if (match.status !== "completed")
+      throw new Error(`Match not completed (status=${match.status})`);
+    if (match.ruleSnapshot.format !== "test")
+      throw new Error("Only a Test can end in a draw");
+    const previous = match.resultText;
+    await ctx.db.patch(matchId, {
+      winnerSide: undefined,
+      resultText: "Match drawn",
+    });
+    const live = await ctx.db
+      .query("matchLiveState")
+      .withIndex("by_match", (q) => q.eq("matchId", matchId))
+      .unique();
+    if (live) await ctx.db.patch(live._id, { resultText: "Match drawn" });
+    await restampMatch(ctx, matchId);
+    return { matchId, previous, resultText: "Match drawn" };
+  },
+});
+
+/**
  * Ops: two overs were given to the wrong bowlers. Swaps bowlerId on every
  * delivery in those overs. Each over must already be a single bowler.
- * Stats replay from the ball log, so no recompute.
+ * Scores do not change, so no recompute — only the stat stamps are refolded.
  */
 export const swapOverBowlers = internalMutation({
   args: {
@@ -322,6 +358,7 @@ export const swapOverBowlers = internalMutation({
 
     for (const b of aBalls) await ctx.db.patch(b._id, { bowlerId: idB });
     for (const b of bBalls) await ctx.db.patch(b._id, { bowlerId: idA });
+    await restampMatch(ctx, matchId);
 
     const nameOf = async (id: Id<"users">) => {
       const u = await ctx.db.get(id);
@@ -379,7 +416,15 @@ export const renamePlayer = internalMutation({
   },
 });
 
-const WIPE_TABLES = ["balls", "matchLiveState", "innings", "matches"] as const;
+const WIPE_TABLES = [
+  "balls",
+  "matchLiveState",
+  "innings",
+  "matches",
+  "matchStats",
+  "playerMatchStats",
+  "playerMatchups",
+] as const;
 
 /**
  * Deletes all match data. Users, orgs, orgMembers, and sessions are untouched.
