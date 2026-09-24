@@ -384,6 +384,27 @@ export const setPlayerSides = mutation({
     const id = String(args.userId);
     const played = await sidesPlayedFor(ctx, match, args.userId);
 
+    // Someone at the crease or holding the ball has not "played" until a ball
+    // is logged, but pulling them off that side would orphan the innings.
+    const liveInnings = (
+      await ctx.db
+        .query("innings")
+        .withIndex("by_match", (q) => q.eq("matchId", match._id))
+        .collect()
+    ).find((inn) => inn.status === "in_progress");
+    if (liveInnings) {
+      const bowlSide: Side = liveInnings.battingSide === "A" ? "B" : "A";
+      const atCrease = [
+        liveInnings.currentStrikerId,
+        liveInnings.currentNonStrikerId,
+      ].some((p) => p && String(p) === id);
+      const bowling =
+        !!liveInnings.currentBowlerId &&
+        String(liveInnings.currentBowlerId) === id;
+      if (atCrease) played.add(liveInnings.battingSide);
+      if (bowling) played.add(bowlSide);
+    }
+
     // Error messages name the team the way the scoreboard does.
     const captainNameOf = async (s: Side) => {
       const first = (s === "A" ? match.sideAPlayerIds : match.sideBPlayerIds)[0];
