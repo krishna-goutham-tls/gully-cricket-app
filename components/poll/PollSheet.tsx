@@ -17,9 +17,9 @@ const CHIP_ON = "border-accent bg-accent-soft text-accent-deep";
 const CHIP_OFF = "border-line text-muted active:bg-bg";
 
 /**
- * Ask the group. Everything arrives filled in — the coming weekend day, the
+ * Ask everyone. Everything arrives filled in — the coming weekend day, the
  * last start time used, the Home ground — so the usual ask is one tap on
- * "Ask the group". Same bottom-sheet shell as the wishlist's AskSheet.
+ * "Ask everyone". Same bottom-sheet shell as the wishlist's AskSheet.
  */
 export function PollSheet({
   open,
@@ -75,7 +75,7 @@ function PollForm({
       onCreated?.(res.pollId);
       onClose();
     } catch (e) {
-      setError(errorMessage(e, "Could not ask the group"));
+      setError(errorMessage(e, "Could not ask everyone"));
       setBusy(false);
     }
   }
@@ -148,7 +148,7 @@ function PollForm({
               Cancel
             </Button>
             <Button disabled={busy} onClick={() => void ask()}>
-              {busy ? "Asking…" : "Ask the group"}
+              {busy ? "Asking…" : "Ask everyone"}
             </Button>
           </div>
         </div>

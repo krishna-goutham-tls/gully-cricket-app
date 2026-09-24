@@ -207,7 +207,7 @@ export default function HomePage() {
             className="mt-1 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl text-[13px] font-semibold text-muted active:bg-ink/[0.04]"
           >
             <Users className="h-4 w-4" strokeWidth={2.2} />
-            Who&apos;s in? Ask the group
+            Who&apos;s in? Ask everyone
           </button>
         ) : null}
 

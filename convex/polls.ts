@@ -122,7 +122,12 @@ export const current = query({
     const open = await ctx.db
       .query("polls")
       .withIndex("by_org_status_date", (q) =>
-        q.eq("orgId", args.orgId).eq("status", "open"),
+        q
+          .eq("orgId", args.orgId)
+          .eq("status", "open")
+          // Past-day polls stay "open" in the table; skip them at the index.
+          // Two days back covers any time zone.
+          .gte("date", new Date(now - 2 * 86_400_000).toISOString().slice(0, 10)),
       )
       .collect();
     const live = open
@@ -265,7 +270,7 @@ export const setStatus = mutation({
     if (!poll) throw new Error("Poll not found");
     const user = await requireUser(ctx, args.token);
     const membership = await getActiveMembership(ctx, poll.orgId, user._id);
-    if (!membership) throw new Error("Not an active member of this org");
+    if (!membership) throw new Error("You are not in this community");
     const may =
       membership.roles.includes("admin") ||
       String(poll.createdBy) === String(user._id);

@@ -104,6 +104,11 @@ values are NOT interchangeable. **Netlify does not push Convex.** A push to
    two orphan Convex projects got created.
 7. If the dashboard and these docs disagree, believe the dashboard and fix
    the docs. Do not invent a third project.
+8. **Leaders, Records and profiles read stat stamps**, not the ball log. After a
+   prod deploy that adds or changes stamps (new fields, fold rules, points), run
+   `stats:backfillStamps` per community (repeat with `cursor` until `isDone`), then
+   `stats:compareStats` — empty `mismatches` is a pass — before merging to `main`.
+   Until the backfill runs, boards on prod read empty.
 
 Netlify `NEXT_PUBLIC_CONVEX_URL` is set in `netlify.toml` to the prod deployment
 so the live bundle talks to `dusty-jellyfish-63`. Do not set
