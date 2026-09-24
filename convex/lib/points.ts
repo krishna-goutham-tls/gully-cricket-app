@@ -16,7 +16,10 @@
  * The three files above each fold the ball log into their own Agg shape, so
  * the assembly stays local to each — but every threshold and value must come
  * from here. If a number changes, it changes for history too: everything is
- * recomputed from the ball log at read time, so past POTMs can change hands.
+ * recomputed from the ball log, so past POTMs can change hands. One catch:
+ * the boards read per-match stat stamps (convex/lib/matchStats.ts), which bake
+ * in WICKET_POINTS and CATCH_POINTS for win credit and contribution — change
+ * either and rerun `stats:backfillStamps`. The bonuses are applied at read.
  */
 
 export const WICKET_POINTS = 20;

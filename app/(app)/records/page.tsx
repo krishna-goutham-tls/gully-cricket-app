@@ -109,54 +109,68 @@ function RecordRows({
           : "border-line bg-surface shadow-card",
       )}
     >
-      {items.map((it) => (
-        <Link
-          key={it.label}
-          href={`/players/${it.holderId}`}
-          className={cn(
-            "flex min-h-12 items-center gap-3 border-b px-3.5 py-3 last:border-b-0",
-            onInk
-              ? "border-white/10 active:bg-white/10"
-              : "border-line/60 active:bg-bg",
-          )}
-        >
-          <span
-            className={cn(
-              "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[13px] font-bold",
-              onInk ? "bg-white/10 text-bg" : "bg-accent-soft text-accent-deep",
-            )}
-          >
-            {initials(it.holder)}
-          </span>
-          <div className="min-w-0 flex-1">
+      {items.map((it) => {
+        const row = cn(
+          "flex min-h-12 items-center gap-3 border-b px-3.5 py-3 last:border-b-0",
+          onInk ? "border-white/10" : "border-line/60",
+        );
+        const body = (
+          <>
+            <span
+              className={cn(
+                "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[13px] font-bold",
+                onInk ? "bg-white/10 text-bg" : "bg-accent-soft text-accent-deep",
+              )}
+            >
+              {initials(it.holder)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p
+                className={cn(
+                  "text-[15px] font-semibold leading-tight",
+                  onInk ? "text-bg" : "text-ink",
+                )}
+              >
+                {it.label}
+              </p>
+              <p
+                className={cn(
+                  "truncate text-[13px] leading-tight",
+                  onInk ? "text-bg/70" : "text-muted",
+                )}
+                title={it.holder}
+              >
+                {it.holder}
+              </p>
+            </div>
             <p
               className={cn(
-                "text-[15px] font-semibold leading-tight",
+                "tabular shrink-0 text-2xl font-semibold leading-none",
                 onInk ? "text-bg" : "text-ink",
               )}
             >
-              {it.label}
+              {it.value}
             </p>
-            <p
-              className={cn(
-                "truncate text-[13px] leading-tight",
-                onInk ? "text-bg/70" : "text-muted",
-              )}
-              title={it.holder}
-            >
-              {it.holder}
-            </p>
-          </div>
-          <p
+          </>
+        );
+        // A team holds a record too, but has no profile to open.
+        return it.holderId ? (
+          <Link
+            key={it.label}
+            href={`/players/${it.holderId}`}
             className={cn(
-              "tabular shrink-0 text-2xl font-semibold leading-none",
-              onInk ? "text-bg" : "text-ink",
+              row,
+              onInk ? "active:bg-white/10" : "active:bg-bg",
             )}
           >
-            {it.value}
-          </p>
-        </Link>
-      ))}
+            {body}
+          </Link>
+        ) : (
+          <div key={it.label} className={row}>
+            {body}
+          </div>
+        );
+      })}
     </div>
   );
 }

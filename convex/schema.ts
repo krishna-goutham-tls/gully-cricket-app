@@ -137,6 +137,19 @@ export const matchClock = v.object({
   overtime: v.optional(v.boolean()),
 });
 
+/** One opponent in a stamped head-to-head. `seq` is the latest ball met. */
+const headToHead = v.object({
+  userId: v.id("users"),
+  outs: v.number(),
+  runs: v.number(),
+  balls: v.number(),
+  fours: v.number(),
+  sixes: v.number(),
+  dots: v.number(),
+  types: v.array(v.object({ type: v.string(), count: v.number() })),
+  seq: v.number(),
+});
+
 export default defineSchema({
   users: defineTable({
     // Guests have no PIN (and possibly no phone) until they claim the account.
@@ -385,6 +398,136 @@ export default defineSchema({
   })
     .index("by_innings", ["inningsId"])
     .index("by_innings_seq", ["inningsId", "sequence"])
+    .index("by_match", ["matchId"]),
+
+  /**
+   * Stat stamps: the ball log of one completed match, folded once per player.
+   * A read-model only — every row is rebuilt from `balls` by `restampMatch`
+   * (convex/lib/matchStats.ts) and can be thrown away and rebuilt at will.
+   * The Leaders, Records, Players and profile queries sum these instead of
+   * replaying every ball of every match on each read.
+   *
+   * `date` is the match's createdAt (the window every board filters on);
+   * `matchOrder` is its _creationTime, so folds run in the same match order
+   * the old ball replay did and tie orderings come out identical.
+   */
+  matchStats: defineTable({
+    orgId: v.id("orgs"),
+    matchId: v.id("matches"),
+    date: v.number(),
+    matchOrder: v.number(),
+    format: matchFormat,
+    winnerSide: v.optional(side),
+    sideAName: v.string(),
+    sideBName: v.string(),
+    /** Index 0 of each side — resolves "Team A" to "Team {captain}". */
+    sideACaptainId: v.optional(v.id("users")),
+    sideBCaptainId: v.optional(v.id("users")),
+  })
+    .index("by_org_date", ["orgId", "date"])
+    .index("by_match", ["matchId"]),
+
+  playerMatchStats: defineTable({
+    orgId: v.id("orgs"),
+    matchId: v.id("matches"),
+    userId: v.id("users"),
+    date: v.number(),
+    matchOrder: v.number(),
+    format: matchFormat,
+    winnerSide: v.optional(side),
+    /** Named in either XI — turnout. */
+    named: v.boolean(),
+    /** Batted, bowled or held a catch — the all-round "matches" column. */
+    contributed: v.boolean(),
+    /** Where the player first entered each tally in this match's replay. */
+    order: v.object({
+      turnout: v.optional(v.number()),
+      bat: v.optional(v.number()),
+      bowl: v.optional(v.number()),
+      catch: v.optional(v.number()),
+      drop: v.optional(v.number()),
+    }),
+    bat: v.optional(
+      v.object({
+        runs: v.number(),
+        balls: v.number(),
+        fours: v.number(),
+        sixes: v.number(),
+        dots: v.number(),
+        singles: v.number(),
+        dismissals: v.number(),
+        ducks: v.number(),
+        goldenDucks: v.number(),
+        facedDucks: v.number(),
+        innings: v.array(
+          v.object({
+            inningsId: v.id("innings"),
+            runs: v.number(),
+            balls: v.number(),
+            outs: v.number(),
+          }),
+        ),
+      }),
+    ),
+    bowl: v.optional(
+      v.object({
+        legalBalls: v.number(),
+        runs: v.number(),
+        wickets: v.number(),
+        dots: v.number(),
+        widesNoballs: v.number(),
+        sixesConceded: v.number(),
+        innings: v.array(
+          v.object({
+            inningsId: v.id("innings"),
+            wickets: v.number(),
+            runs: v.number(),
+            legalBalls: v.number(),
+          }),
+        ),
+      }),
+    ),
+    catches: v.number(),
+    drops: v.number(),
+    /** Named players only: the all-round points behind win credit and share. */
+    work: v.optional(
+      v.object({
+        onA: v.boolean(),
+        onB: v.boolean(),
+        pointsA: v.number(),
+        pointsB: v.number(),
+        teamA: v.number(),
+        teamB: v.number(),
+        sizeA: v.number(),
+        sizeB: v.number(),
+      }),
+    ),
+    /** Latest ball createdAt that moved each counter — the shelf tie-break. */
+    reached: v.array(v.object({ k: v.string(), at: v.number() })),
+  })
+    .index("by_org_date", ["orgId", "date"])
+    .index("by_org_user_date", ["orgId", "userId", "date"])
+    .index("by_match", ["matchId"]),
+
+  /**
+   * Profile-only detail for one player in one match: how they got out, how
+   * they took wickets, and every head-to-head. Kept off `playerMatchStats` so
+   * the boards, which read every row, never carry it.
+   */
+  playerMatchups: defineTable({
+    orgId: v.id("orgs"),
+    matchId: v.id("matches"),
+    userId: v.id("users"),
+    date: v.number(),
+    matchOrder: v.number(),
+    format: matchFormat,
+    dismissalTypes: v.array(v.object({ type: v.string(), count: v.number() })),
+    wicketTypes: v.array(v.object({ type: v.string(), count: v.number() })),
+    byBowler: v.array(headToHead),
+    byFielder: v.array(headToHead),
+    byBatter: v.array(headToHead),
+  })
+    .index("by_org_user_date", ["orgId", "userId", "date"])
     .index("by_match", ["matchId"]),
 
   matchLiveState: defineTable({
