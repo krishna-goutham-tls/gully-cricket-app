@@ -5,7 +5,6 @@ import { assertSeriesSides } from "./lib/tournamentLineup";
 import { buildRuleSnapshot } from "./lib/rules";
 import { legalBallToOverText } from "./lib/scoring";
 import { restampMatch } from "./lib/matchStats";
-import { looksLikeJunior, resolvePlayerTags, sortTags } from "./lib/playerLabel";
 
 const side = v.union(v.literal("A"), v.literal("B"));
 
@@ -375,7 +374,7 @@ export const swapOverBowlers = internalMutation({
   },
 });
 
-/** Ops: rename a player. If the new name ends in Jr, stamp the junior tag. */
+/** Ops: rename a player. Tags are untouched — Junior is an admin's call. */
 export const renamePlayer = internalMutation({
   args: {
     userId: v.id("users"),
@@ -390,29 +389,7 @@ export const renamePlayer = internalMutation({
     const previous = user.displayName;
     await ctx.db.patch(userId, { displayName: name, updatedAt: Date.now() });
 
-    let membershipsPatched = 0;
-    if (looksLikeJunior(name)) {
-      const memberships = await ctx.db
-        .query("orgMembers")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .collect();
-      for (const m of memberships) {
-        const tags = new Set(
-          resolvePlayerTags(m.playerTags, m.playerLabel, user.isGuest ?? false),
-        );
-        tags.add("junior");
-        const playerTags = sortTags(tags);
-        const same =
-          m.playerTags !== undefined &&
-          m.playerTags.length === playerTags.length &&
-          m.playerTags.every((t, i) => t === playerTags[i]);
-        if (same) continue;
-        await ctx.db.patch(m._id, { playerTags });
-        membershipsPatched += 1;
-      }
-    }
-
-    return { previous, displayName: name, membershipsPatched };
+    return { previous, displayName: name };
   },
 });
 

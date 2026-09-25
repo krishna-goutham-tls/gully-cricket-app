@@ -302,3 +302,49 @@ export const end = mutation({
     return active._id;
   },
 });
+
+/**
+ * One-shot after the no-points-off-juniors rebuild (LOG 2026-09-25): redo
+ * Player of the Series on every ended season from the restamped board. Only
+ * `pots` reads points, so every other saved award is left as it was — a
+ * season that ended before the trophy shelf keeps its six. `dryRun` returns
+ * what would change without writing. Run after `stats:backfillStamps`.
+ *   npx convex run seasons:recomputeSeriesAwards '{"orgId":"…","dryRun":true}'
+ */
+export const recomputeSeriesAwards = internalMutation({
+  args: { orgId: v.id("orgs"), dryRun: v.optional(v.boolean()) },
+  handler: async (ctx, { orgId, dryRun }) => {
+    const ended = await ctx.db
+      .query("seasons")
+      .withIndex("by_org_status", (q) =>
+        q.eq("orgId", orgId).eq("status", "complete"),
+      )
+      .collect();
+    const changes: Array<{
+      seasonId: Id<"seasons">;
+      before: SeasonAward | null;
+      after: SeasonAward | null;
+    }> = [];
+    for (const season of ended) {
+      if (season.endedAt === undefined) continue;
+      const board = await loadRegularsBoard(ctx, orgId, {
+        afterTs: season.startedAt,
+        beforeTs: season.endedAt,
+      });
+      const after = awardsFromBoard(board).find((a) => a.kind === "pots") ?? null;
+      const saved = season.awards ?? [];
+      const before = saved.find((a) => a.kind === "pots") ?? null;
+      const same =
+        String(before?.userId) === String(after?.userId) &&
+        before?.value === after?.value;
+      if (same) continue;
+      changes.push({ seasonId: season._id, before, after });
+      if (dryRun) continue;
+      const rest = saved.filter((a) => a.kind !== "pots");
+      await ctx.db.patch(season._id, {
+        awards: after ? [after, ...rest] : rest,
+      });
+    }
+    return { seasonsChecked: ended.length, changed: changes.length, changes };
+  },
+});

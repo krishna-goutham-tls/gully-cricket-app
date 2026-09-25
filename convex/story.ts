@@ -6,6 +6,7 @@ import {
   basePoints,
   battingMilestoneBonus,
   bowlingHaulBonus,
+  earnsPoints,
   POINTS_RECEIPT,
 } from "./lib/points";
 import { loadMatchAccess, sideLabel, sidePlayers } from "./scoring";
@@ -72,7 +73,9 @@ type PlayerAgg = {
   /** Wides + no-balls bowled (count of deliveries, not runs). */
   illegalBalls: number;
   catches: number;
-  /** Final score of each innings batted — milestone bonuses are per innings. */
+  /** What earns POTM points — nothing against a junior (`earnsPoints`). */
+  pts: { runs: number; wickets: number; catches: number };
+  /** Counted score of each innings batted — milestone bonuses are per innings. */
   inningsScores: number[];
 };
 
@@ -190,6 +193,7 @@ export const matchStory = query({
           ballsBowled: 0,
           illegalBalls: 0,
           catches: 0,
+          pts: { runs: 0, wickets: 0, catches: 0 },
           inningsScores: [],
         };
         agg.set(key, a);
@@ -205,11 +209,13 @@ export const matchStory = query({
     // and milestones.
     let totalSixes = 0;
     const overRuns = new Map<string, { runs: number; bowlerId: Id<"users"> }>();
+    const juniors = new Set((match.juniorIds ?? []).map(String));
 
     for (let idx = 0; idx < inningsList.length; idx++) {
       const inn = inningsList[idx];
       const innFaced = new Map<string, number>();
       const innRuns = new Map<string, number>();
+      const innPts = new Map<string, number>();
       for (const b of ballsByInnings[idx]) {
         if (b.isRetire) continue;
         const total = b.runsBat + b.extrasRuns;
@@ -238,6 +244,14 @@ export const matchStory = query({
         const before = innRuns.get(String(b.strikerId)) ?? 0;
         const after = before + b.runsBat;
         innRuns.set(String(b.strikerId), after);
+        const counted = earnsPoints(b.strikerId, b.bowlerId, juniors)
+          ? b.runsBat
+          : 0;
+        striker.pts.runs += counted;
+        innPts.set(
+          String(b.strikerId),
+          (innPts.get(String(b.strikerId)) ?? 0) + counted,
+        );
 
         bowler.runsConceded += total;
         if (b.isLegal) bowler.ballsBowled += 1;
@@ -253,11 +267,18 @@ export const matchStory = query({
         let fielderName: string | undefined;
         if (b.isWicket && b.playerOutId) {
           outName = await nameOf(b.playerOutId);
-          if (b.wicketType !== "runout") bowler.wickets += 1;
+          if (b.wicketType !== "runout") {
+            bowler.wickets += 1;
+            if (earnsPoints(b.bowlerId, b.playerOutId, juniors))
+              bowler.pts.wickets += 1;
+          }
           if (b.fielderId) {
             fielderName = await nameOf(b.fielderId);
             if (b.wicketType === "caught") {
-              (await touch(b.fielderId)).catches += 1;
+              const fielder = await touch(b.fielderId);
+              fielder.catches += 1;
+              if (earnsPoints(b.fielderId, b.playerOutId, juniors))
+                fielder.pts.catches += 1;
             }
           }
           // Golden duck: dismissed facing their first delivery, no runs.
@@ -301,7 +322,7 @@ export const matchStory = query({
       }
       // Bank each batter's final score this innings — milestone bonuses are
       // per innings, so a Test's 30 & 80 earns two, never one 110.
-      for (const [key, score] of Array.from(innRuns.entries())) {
+      for (const [key, score] of Array.from(innPts.entries())) {
         const a = agg.get(key);
         if (a) a.inningsScores.push(score);
       }
@@ -316,10 +337,10 @@ export const matchStory = query({
       [...xs].sort((a, b) => score(b) - score(a));
 
     const potmPoints = (a: PlayerAgg) =>
-      basePoints(a.runs, a.wickets, a.catches) +
+      basePoints(a.pts.runs, a.pts.wickets, a.pts.catches) +
       a.inningsScores.reduce((sum, s) => sum + battingMilestoneBonus(s), 0) +
-      // One match here by construction, so match wickets = a.wickets.
-      bowlingHaulBonus(a.wickets);
+      // One match here by construction, so match wickets = a.pts.wickets.
+      bowlingHaulBonus(a.pts.wickets);
     const potm = byDesc(players, potmPoints)[0];
 
     // The successful chase's top scorer — only when the match was won

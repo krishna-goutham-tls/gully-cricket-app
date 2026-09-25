@@ -17,8 +17,6 @@ import {
   basePoints,
   battingMilestoneBonus,
   bowlingHaulBonus,
-  CATCH_POINTS,
-  WICKET_POINTS,
 } from "./lib/points";
 import {
   asPct,
@@ -43,11 +41,6 @@ import {
 } from "./lib/awards";
 
 type Format = "limited" | "test";
-
-/** Absent `ruleSnapshot.format` is a pre-format match — those were limited. */
-function snapshotFormat(match: Doc<"matches">): Format {
-  return match.ruleSnapshot.format === "test" ? "test" : "limited";
-}
 
 type BatAgg = {
   userId: Id<"users">;
@@ -153,533 +146,19 @@ type Focus = {
 };
 
 /**
- * LEGACY — the old read path, kept only so `compareStats` can diff it against
- * the stamps on real data. Nothing user-facing calls it. Delete it (and the
- * legacy* queries) once the comparison has passed on prod.
- *
- * Folds every ball of the org's completed matches into per-player batting
- * and bowling aggregates. Attribution rules mirror the per-match scorecard:
- * bat runs/balls to the striker (legal + noball), wickets to the bowler
- * except run-outs, dismissals via playerOutId.
- *
- * `focusPlayerId` additionally keeps that one player's match-by-match detail.
- * It rides along inside this loop on purpose: a profile needs both the
- * player's own log and the org table it is ranked against, and doing it here
- * means one pass over the ball log and one copy of the attribution rules.
+ * What earns all-round points: runs, wickets and catches not against a
+ * junior (convex/lib/points.ts `earnsPoints`), plus the milestone bonuses
+ * those counted numbers reach. The real totals stay on BatAgg/BowlAgg.
  */
-async function legacyAggregateOrg(
-  ctx: QueryCtx | MutationCtx,
-  orgId: Id<"orgs">,
-  opts: {
-    focusPlayerId?: Id<"users">;
-    /** Exclusive end. Weekly arrows and completed seasons use this. */
-    beforeTs?: number;
-    /** Inclusive start. Season boards use season.startedAt. */
-    afterTs?: number;
-    /** Leaders format slice. Absent = Tests and limited together. */
-    format?: Format;
-  } = {},
-) {
-  const { focusPlayerId, beforeTs, afterTs, format } = opts;
-  const completedAll = await ctx.db
-    .query("matches")
-    .withIndex("by_org_status", (q) =>
-      q.eq("orgId", orgId).eq("status", "completed"),
-    )
-    .collect();
-  // Gully matches are created and finished the same day, so createdAt is
-  // when they landed on the board. afterTs inclusive, beforeTs exclusive.
-  const completed = completedAll.filter((m) => {
-    if (afterTs !== undefined && m.createdAt < afterTs) return false;
-    if (beforeTs !== undefined && m.createdAt >= beforeTs) return false;
-    if (format !== undefined && snapshotFormat(m) !== format) return false;
-    return true;
-  });
-
-  const batting = new Map<string, BatAgg>();
-  const bowling = new Map<string, BowlAgg>();
-  // All-rounder support: catches per player, and every match a player had a
-  // hand in (bat, bowl or a catch) — the "matches" column on the Players tab.
-  // Rides the same single pass as batting/bowling; no second loop over balls.
-  const catches = new Map<string, number>();
-  // Dropped catches, keyed by droppedById — a retroactive tag on the ball
-  // (see convex/scoring.ts tagDrop), not a dismissal, so this never touches
-  // the catches map above or the all-round points formula.
-  const drops = new Map<string, number>();
-  const allRoundMatches = new Map<string, Set<string>>();
-  /**
-   * Turnout: matches a player was *named in*, contribution or not.
-   *
-   * Deliberately not `allRoundMatches`, which only counts a match once someone
-   * bats, bowls or takes a catch in it. Turnout is what "matches played" means
-   * to a team arguing about who shows up — and the player who was picked and
-   * did nothing all day is exactly the one that question is about, so counting
-   * from the squad is the only source that can see them.
-   */
-  const turnout = new Map<string, number>();
-  /**
-   * Per player, per counter, the createdAt of the ball that last moved it.
-   * Every counter here only ever goes up, so its last increment is the moment
-   * the player reached the total they finish the window on — which is what the
-   * shelf's "who got there first" tie-break needs, without a second pass.
-   * Matches are not read in date order, hence the max rather than last-write.
-   */
-  const reachedAt = new Map<string, Map<string, number>>();
-  const markAt = (userId: Id<"users">, counter: string, at: number) => {
-    const key = String(userId);
-    let row = reachedAt.get(key);
-    if (!row) {
-      row = new Map();
-      reachedAt.set(key, row);
-    }
-    const seen = row.get(counter);
-    if (seen === undefined || at > seen) row.set(counter, at);
-  };
-  /**
-   * Win credit and contribution, keyed by player. Folded in the same match
-   * pass as turnout so a named player with zero points still has a record.
-   */
-  const records = new Map<string, RecordAgg>();
-  const getRecord = (userId: Id<"users">): RecordAgg => {
-    const key = String(userId);
-    let row = records.get(key);
-    if (!row) {
-      row = {
-        userId,
-        wins: 0,
-        decided: 0,
-        playerPoints: 0,
-        teamPoints: 0,
-      };
-      records.set(key, row);
-    }
-    return row;
-  };
-  const bumpCatch = (userId: Id<"users">) => {
-    const key = String(userId);
-    catches.set(key, (catches.get(key) ?? 0) + 1);
-  };
-  const bumpDrop = (userId: Id<"users">) => {
-    const key = String(userId);
-    drops.set(key, (drops.get(key) ?? 0) + 1);
-  };
-  const trackMatch = (userId: Id<"users">, matchId: string) => {
-    const key = String(userId);
-    let set = allRoundMatches.get(key);
-    if (!set) {
-      set = new Set();
-      allRoundMatches.set(key, set);
-    }
-    set.add(matchId);
-  };
-
-  const getBat = (userId: Id<"users">): BatAgg => {
-    const key = String(userId);
-    let agg = batting.get(key);
-    if (!agg) {
-      agg = {
-        userId,
-        runs: 0,
-        balls: 0,
-        fours: 0,
-        sixes: 0,
-        dots: 0,
-        singles: 0,
-        innings: new Set(),
-        dismissals: 0,
-        ducks: 0,
-        goldenDucks: 0,
-        facedDucks: 0,
-        bestScore: 0,
-        scoreThisInnings: new Map(),
-        ballsThisInnings: new Map(),
-      };
-      batting.set(key, agg);
-    }
-    return agg;
-  };
-
-  const getBowl = (userId: Id<"users">): BowlAgg => {
-    const key = String(userId);
-    let agg = bowling.get(key);
-    if (!agg) {
-      agg = {
-        userId,
-        legalBalls: 0,
-        runs: 0,
-        wickets: 0,
-        dots: 0,
-        widesNoballs: 0,
-        sixesConceded: 0,
-        innings: new Set(),
-        perInnings: new Map(),
-        wicketsByMatch: new Map(),
-      };
-      bowling.set(key, agg);
-    }
-    return agg;
-  };
-
-  const isFocus = (id: Id<"users">) =>
-    focusPlayerId !== undefined && String(id) === String(focusPlayerId);
-
-  const focus: Focus = {
-    perMatch: new Map(),
-    dismissalTypes: new Map(),
-    wicketTypes: new Map(),
-    byBowler: new Map(),
-    byFielder: new Map(),
-    byBatter: new Map(),
-  };
-  /**
-   * Returns null for the focus player themselves. The engine already stops
-   * anyone bowling and batting at once, so this only ever fires on odd data —
-   * but "your nemesis is you" is not a thing worth shipping.
-   */
-  const h2h = (
-    m: Map<string, Head2Head>,
-    userId: Id<"users">,
-  ): Head2Head | null => {
-    if (isFocus(userId)) return null;
-    const key = String(userId);
-    let e = m.get(key);
-    if (!e) {
-      e = {
-        userId,
-        outs: 0,
-        runs: 0,
-        balls: 0,
-        fours: 0,
-        sixes: 0,
-        dots: 0,
-        types: new Map(),
-        at: 0,
-        seq: 0,
-      };
-      m.set(key, e);
-    }
-    return e;
-  };
-  /** Keep the latest meeting — matches are not iterated in date order. */
-  const touch = (e: Head2Head, at: number, seq: number) => {
-    if (at > e.at || (at === e.at && seq > e.seq)) {
-      e.at = at;
-      e.seq = seq;
-    }
-  };
-  const focusMatch = (match: Doc<"matches">): FocusMatch => {
-    const key = String(match._id);
-    let entry = focus.perMatch.get(key);
-    if (!entry) {
-      entry = { match, bat: new Map(), bowl: new Map() };
-      focus.perMatch.set(key, entry);
-    }
-    return entry;
-  };
-  const bump = (m: Map<string, number>, k: string) =>
-    m.set(k, (m.get(k) ?? 0) + 1);
-
-  for (const match of completed) {
-    // Squad membership, before a single ball is read — turnout must not depend
-    // on doing anything with bat or ball. A common player named on both sides
-    // still turned out once, hence the dedupe.
-    for (const id of Array.from(
-      new Set([...match.sideAPlayerIds, ...match.sideBPlayerIds].map(String)),
-    )) {
-      turnout.set(id, (turnout.get(id) ?? 0) + 1);
-    }
-
-    // Seed every match they were named in, so a game where they fielded all
-    // day still shows up in their log instead of silently vanishing.
-    if (
-      focusPlayerId !== undefined &&
-      [...match.sideAPlayerIds, ...match.sideBPlayerIds].some((id) =>
-        isFocus(id),
-      )
-    ) {
-      focusMatch(match);
-    }
-
-    const inningsRows = await ctx.db
-      .query("innings")
-      .withIndex("by_match", (q) => q.eq("matchId", match._id))
-      .collect();
-    const battingSideOf = new Map<string, Side>();
-    for (const inn of inningsRows) battingSideOf.set(String(inn._id), inn.battingSide);
-
-    const ptsA = new Map<string, number>();
-    const ptsB = new Map<string, number>();
-    const addPts = (side: Side, userId: Id<"users">, n: number) => {
-      if (n === 0) return;
-      const m = side === "A" ? ptsA : ptsB;
-      const k = String(userId);
-      m.set(k, (m.get(k) ?? 0) + n);
-    };
-    const sumPts = (m: Map<string, number>) => {
-      let s = 0;
-      for (const v of Array.from(m.values())) s += v;
-      return s;
-    };
-
-    const balls = await ctx.db
-      .query("balls")
-      .withIndex("by_match", (q) => q.eq("matchId", match._id))
-      .collect();
-    balls.sort((a, b) => a.sequence - b.sequence);
-
-    for (const b of balls) {
-      // Drop tags ride every row (rare on a retirement marker, but the tag is
-      // just a patched field, not a delivery) — count before the retire skip.
-      if (b.droppedById) {
-        bumpDrop(b.droppedById);
-        markAt(b.droppedById, "field.drops", b.createdAt);
-      }
-      // Retirement markers are not deliveries
-      if (b.isRetire) continue;
-      const innKey = String(b.inningsId);
-      const batSide = battingSideOf.get(innKey);
-      const bowlSide: Side | undefined =
-        batSide === "A" ? "B" : batSide === "B" ? "A" : undefined;
-      if (batSide) addPts(batSide, b.strikerId, b.runsBat);
-
-      const bat = getBat(b.strikerId);
-      bat.innings.add(innKey);
-      bat.runs += b.runsBat;
-      trackMatch(b.strikerId, String(match._id));
-      if (b.runsBat > 0) markAt(b.strikerId, "bat.runs", b.createdAt);
-      const faced = b.isLegal || b.extrasType === "noball";
-      if (faced) {
-        bat.balls += 1;
-        markAt(b.strikerId, "bat.balls", b.createdAt);
-      }
-      // A dot is a legal ball the bat got nothing off. Byes and leg-byes still
-      // count as dots for the batter — the runs weren't theirs.
-      if (b.isLegal && b.runsBat === 0) {
-        bat.dots += 1;
-        markAt(b.strikerId, "bat.dots", b.createdAt);
-      }
-      if (b.runsBat === 1) {
-        bat.singles += 1;
-        markAt(b.strikerId, "bat.singles", b.createdAt);
-      }
-      if (b.runsBat === 4) {
-        bat.fours += 1;
-        markAt(b.strikerId, "bat.fours", b.createdAt);
-      }
-      if (b.runsBat === 6) {
-        bat.sixes += 1;
-        markAt(b.strikerId, "bat.sixes", b.createdAt);
-      }
-      const prev = bat.scoreThisInnings.get(innKey) ?? 0;
-      const next = prev + b.runsBat;
-      bat.scoreThisInnings.set(innKey, next);
-      if (next > bat.bestScore) bat.bestScore = next;
-      if (faced)
-        bat.ballsThisInnings.set(innKey, (bat.ballsThisInnings.get(innKey) ?? 0) + 1);
-
-      if (isFocus(b.strikerId)) {
-        const fm = focusMatch(match);
-        const row = fm.bat.get(innKey) ?? { runs: 0, balls: 0, out: false };
-        row.runs += b.runsBat;
-        if (faced) row.balls += 1;
-        fm.bat.set(innKey, row);
-
-        // Every ball faced, by bowler — not just the ones that got them out.
-        // A bowler who has never taken the wicket but keeps them to a crawl is
-        // still a nemesis, and this is what makes that measurable.
-        const e = h2h(focus.byBowler, b.bowlerId);
-        if (e) {
-          e.runs += b.runsBat;
-          if (faced) e.balls += 1;
-          if (b.isLegal && b.runsBat === 0) e.dots += 1;
-          if (b.runsBat === 4) e.fours += 1;
-          if (b.runsBat === 6) e.sixes += 1;
-          touch(e, match.createdAt, b.sequence);
-        }
-      }
-
-      if (b.isWicket && b.playerOutId) {
-        const outBat = getBat(b.playerOutId);
-        outBat.innings.add(innKey);
-        outBat.dismissals += 1;
-        // A duck is out for 0 off the bat; golden if it was the first ball
-        // faced (a no-ball dismissal can't happen, so faced-balls == 1 is safe).
-        if ((outBat.scoreThisInnings.get(innKey) ?? 0) === 0) {
-          outBat.ducks += 1;
-          const ballsFaced = outBat.ballsThisInnings.get(innKey) ?? 0;
-          if (ballsFaced === 1) outBat.goldenDucks += 1;
-          if (ballsFaced >= 1) {
-            outBat.facedDucks += 1;
-            markAt(b.playerOutId, "bat.ducks", b.createdAt);
-          }
-        }
-        // Catches, mirroring story.ts's Player-of-the-Match credit: a caught
-        // dismissal only, credited to the fielder on the ball.
-        if (b.wicketType === "caught" && b.fielderId) {
-          bumpCatch(b.fielderId);
-          markAt(b.fielderId, "field.catches", b.createdAt);
-          trackMatch(b.fielderId, String(match._id));
-          if (bowlSide) addPts(bowlSide, b.fielderId, CATCH_POINTS);
-        }
-        if (isFocus(b.playerOutId)) {
-          const fm = focusMatch(match);
-          const row = fm.bat.get(innKey) ?? { runs: 0, balls: 0, out: false };
-          row.out = true;
-          fm.bat.set(innKey, row);
-          if (b.wicketType) bump(focus.dismissalTypes, b.wicketType);
-
-          // A run-out is nobody's bowling, so it never counts towards the
-          // bowler who happened to be at the top of their mark.
-          if (b.wicketType && b.wicketType !== "runout") {
-            const e = h2h(focus.byBowler, b.bowlerId);
-            if (e) {
-              e.outs += 1;
-              bump(e.types, b.wicketType);
-              touch(e, match.createdAt, b.sequence);
-            }
-          }
-          if (b.fielderId) {
-            const e = h2h(focus.byFielder, b.fielderId);
-            if (e) {
-              e.outs += 1;
-              if (b.wicketType) bump(e.types, b.wicketType);
-              touch(e, match.createdAt, b.sequence);
-            }
-          }
-        }
-      }
-
-      const bowl = getBowl(b.bowlerId);
-      bowl.innings.add(innKey);
-      trackMatch(b.bowlerId, String(match._id));
-      bowl.runs += b.runsBat + b.extrasRuns;
-      if (b.runsBat + b.extrasRuns > 0)
-        markAt(b.bowlerId, "bowl.runs", b.createdAt);
-      if (b.isLegal) {
-        bowl.legalBalls += 1;
-        markAt(b.bowlerId, "bowl.legalBalls", b.createdAt);
-      }
-      if (b.isLegal && b.runsBat + b.extrasRuns === 0) {
-        bowl.dots += 1;
-        markAt(b.bowlerId, "bowl.dots", b.createdAt);
-      }
-      if (b.extrasType === "wide" || b.extrasType === "noball")
-        bowl.widesNoballs += 1;
-      if (b.runsBat === 6) bowl.sixesConceded += 1;
-      const per = bowl.perInnings.get(innKey) ?? { wickets: 0, runs: 0 };
-      per.runs += b.runsBat + b.extrasRuns;
-      const credited = b.isWicket && b.wicketType !== "runout";
-      if (credited) {
-        bowl.wickets += 1;
-        markAt(b.bowlerId, "bowl.wickets", b.createdAt);
-        per.wickets += 1;
-        const mKey = String(match._id);
-        bowl.wicketsByMatch.set(mKey, (bowl.wicketsByMatch.get(mKey) ?? 0) + 1);
-        if (bowlSide) addPts(bowlSide, b.bowlerId, WICKET_POINTS);
-      }
-      bowl.perInnings.set(innKey, per);
-
-      if (isFocus(b.bowlerId)) {
-        const fm = focusMatch(match);
-        const row =
-          fm.bowl.get(innKey) ?? { wickets: 0, runs: 0, legalBalls: 0 };
-        row.runs += b.runsBat + b.extrasRuns;
-        if (b.isLegal) row.legalBalls += 1;
-        if (credited) {
-          row.wickets += 1;
-          if (b.wicketType) bump(focus.wicketTypes, b.wicketType);
-        }
-        fm.bowl.set(innKey, row);
-
-        // What each batter has done to this bowler. Runs off the bat only —
-        // a wide is the bowler's own doing, not the batter's work.
-        const e = h2h(focus.byBatter, b.strikerId);
-        if (e) {
-          e.runs += b.runsBat;
-          if (faced) e.balls += 1;
-          if (b.isLegal && b.runsBat === 0) e.dots += 1;
-          if (b.runsBat === 4) e.fours += 1;
-          if (b.runsBat === 6) e.sixes += 1;
-          if (
-            credited &&
-            b.playerOutId &&
-            String(b.playerOutId) === String(b.strikerId)
-          ) {
-            e.outs += 1;
-          }
-          touch(e, match.createdAt, b.sequence);
-        }
-      }
-    }
-
-    const teamA = sumPts(ptsA);
-    const teamB = sumPts(ptsB);
-    const sizeA = match.sideAPlayerIds.length;
-    const sizeB = match.sideBPlayerIds.length;
-    const named = new Set<Id<"users">>([
-      ...match.sideAPlayerIds,
-      ...match.sideBPlayerIds,
-    ]);
-    for (const id of Array.from(named)) {
-      const k = String(id);
-      const onA = match.sideAPlayerIds.some((x) => String(x) === k);
-      const onB = match.sideBPlayerIds.some((x) => String(x) === k);
-      const work = {
-        onA,
-        onB,
-        winnerSide: match.winnerSide,
-        pointsA: ptsA.get(k) ?? 0,
-        pointsB: ptsB.get(k) ?? 0,
-        teamA,
-        teamB,
-        sizeA,
-        sizeB,
-      };
-      const rec = getRecord(id);
-      if (match.winnerSide) {
-        rec.decided += 1;
-        if (matchResult(work) === "won") rec.wins += 1;
-      }
-      if (onA && onB) {
-        rec.playerPoints += work.pointsA + work.pointsB;
-        rec.teamPoints += teamA + teamB;
-      } else if (onA) {
-        rec.playerPoints += work.pointsA;
-        rec.teamPoints += teamA;
-      } else if (onB) {
-        rec.playerPoints += work.pointsB;
-        rec.teamPoints += teamB;
-      }
-      if (isFocus(id)) {
-        const fm = focusMatch(match);
-        fm.work = {
-          pointsA: work.pointsA,
-          pointsB: work.pointsB,
-          teamA,
-          teamB,
-          sizeA,
-          sizeB,
-        };
-      }
-    }
-  }
-
-  return {
-    batting,
-    bowling,
-    catches,
-    drops,
-    allRoundMatches,
-    turnout,
-    records,
-    reachedAt,
-    focus,
-    matchCount: completed.length,
-    teamResults: completed.map(teamResultOf),
-  };
-}
+type PointsAgg = {
+  runs: number;
+  wickets: number;
+  catches: number;
+  bonus: number;
+};
 
 type OrgSnapshot = {
+  points: Map<string, PointsAgg>;
   batting: Map<string, BatAgg>;
   bowling: Map<string, BowlAgg>;
   catches: Map<string, number>;
@@ -702,16 +181,6 @@ type TeamResult = {
   sideBCaptainId?: Id<"users">;
   winnerSide?: Side;
 };
-
-function teamResultOf(m: Doc<"matches">): TeamResult {
-  return {
-    sideAName: m.sideAName,
-    sideBName: m.sideBName,
-    sideACaptainId: m.sideAPlayerIds[0],
-    sideBCaptainId: m.sideBPlayerIds[0],
-    winnerSide: m.winnerSide,
-  };
-}
 
 function emptyFocus(): Focus {
   return {
@@ -797,17 +266,17 @@ function dateBounds({ afterTs, beforeTs }: Window): [number, number] {
 }
 
 /**
- * The stamps summed back into exactly the aggregates `legacyAggregateOrg`
- * builds from the ball log. Matches are folded in the replay's order, and
- * inside a match each tally takes players in the order the replay first met
- * them, so every Map comes out in the same insertion order and boards that
- * sort without a final tie-break still list ties the same way.
+ * The stamps summed back into per-player aggregates. Matches are folded in
+ * match order, and inside a match each tally takes players in the order the
+ * fold first met them, so boards that sort without a final tie-break list
+ * ties the same way every time.
  */
 function aggregateStamps(
   set: StampSet,
   opts: Window & { format?: Format; ground?: GroundFilter },
 ): OrgSnapshot {
   const snap: OrgSnapshot = {
+    points: new Map(),
     batting: new Map(),
     bowling: new Map(),
     catches: new Map(),
@@ -965,6 +434,7 @@ function aggregateStamps(
 
     for (const r of rows) {
       const key = String(r.userId);
+      addPoints(snap.points, r);
       if (r.contributed) {
         let set = snap.allRoundMatches.get(key);
         if (!set) {
@@ -987,6 +457,31 @@ function aggregateStamps(
   }
 
   return snap;
+}
+
+/**
+ * One stamp's counted points into the running total. A row stamped before
+ * the junior rule has no `pts`; it counts its real numbers, as it did then.
+ * Batting bonuses per innings, the haul bonus per match.
+ */
+function addPoints(
+  points: Map<string, PointsAgg>,
+  r: Doc<"playerMatchStats">,
+) {
+  const runs = r.pts?.runs ?? r.bat?.runs ?? 0;
+  const wickets = r.pts?.wickets ?? r.bowl?.wickets ?? 0;
+  const catches = r.pts?.catches ?? r.catches;
+  const innings = r.pts?.innings ?? r.bat?.innings ?? [];
+  let bonus = bowlingHaulBonus(wickets);
+  for (const inn of innings) bonus += battingMilestoneBonus(inn.runs);
+  if (runs === 0 && wickets === 0 && catches === 0 && bonus === 0) return;
+  const key = String(r.userId);
+  const agg = points.get(key) ?? { runs: 0, wickets: 0, catches: 0, bonus: 0 };
+  agg.runs += runs;
+  agg.wickets += wickets;
+  agg.catches += catches;
+  agg.bonus += bonus;
+  points.set(key, agg);
 }
 
 /**
@@ -1311,11 +806,13 @@ function buildDropsRows(drops: Map<string, number>, names: Map<string, string>) 
 
 /**
  * All-round points: base (runs + 20/wicket + 8/catch) plus the milestone
- * bonuses from convex/lib/points.ts — batting bonuses per innings, the
- * wicket-haul bonus per match. Must stay identical to `potmPoints` in
+ * bonuses from convex/lib/points.ts, all on the counted numbers — nothing
+ * against a junior (`PointsAgg`). Must stay identical to `potmPoints` in
  * convex/story.ts (Player-of-the-Match) — the two are not allowed to drift.
+ * `runs`, `wickets` and `catches` on the row stay the real totals.
  */
 function buildAllRoundRows(
+  points: Map<string, PointsAgg>,
   batting: Map<string, BatAgg>,
   bowling: Map<string, BowlAgg>,
   catches: Map<string, number>,
@@ -1332,15 +829,7 @@ function buildAllRoundRows(
       const runs = batting.get(key)?.runs ?? 0;
       const wickets = bowling.get(key)?.wickets ?? 0;
       const catchCount = catches.get(key) ?? 0;
-      let bonus = 0;
-      const inningsScores = batting.get(key)?.scoreThisInnings;
-      if (inningsScores)
-        for (const score of Array.from(inningsScores.values()))
-          bonus += battingMilestoneBonus(score);
-      const haulWickets = bowling.get(key)?.wicketsByMatch;
-      if (haulWickets)
-        for (const w of Array.from(haulWickets.values()))
-          bonus += bowlingHaulBonus(w);
+      const pts = points.get(key);
       return {
         // A fielding-only all-rounder (a catch, nothing else) has no batting
         // or bowling agg to pull userId from, so fall back to the map key —
@@ -1349,7 +838,9 @@ function buildAllRoundRows(
           bowling.get(key)?.userId ??
           (key as Id<"users">)) as Id<"users">,
         displayName: names.get(key) ?? "Player",
-        points: basePoints(runs, wickets, catchCount) + bonus,
+        points: pts
+          ? basePoints(pts.runs, pts.wickets, pts.catches) + pts.bonus
+          : 0,
         runs,
         wickets,
         catches: catchCount,
@@ -1470,12 +961,8 @@ export async function loadRegularsBoard(
   ctx: QueryCtx | MutationCtx,
   orgId: Id<"orgs">,
   window: Window = {},
-  /** Old ball replay — `compareStats` only. */
-  legacy = false,
 ) {
-  const snap: OrgSnapshot = legacy
-    ? await legacyAggregateOrg(ctx, orgId, window)
-    : aggregateStamps(await loadStampSet(ctx, orgId, window), window);
+  const snap = aggregateStamps(await loadStampSet(ctx, orgId, window), window);
   // Drops and turnout reach players who never batted, bowled or held a catch —
   // the Butterfingers roast and the roast floor both need those names.
   const keys = [
@@ -1523,6 +1010,7 @@ export async function loadRegularsBoard(
       boardFilter(
         stampTags(
           buildAllRoundRows(
+            snap.points,
             snap.batting,
             snap.bowling,
             snap.catches,
@@ -1555,7 +1043,7 @@ type LeaderboardArgs = {
   includeVisitorsAndJuniors?: boolean;
   seasonId?: Id<"seasons">;
   format?: Format;
-  /** One ground only. Stamps path only — the legacy replay has no ground. */
+  /** One ground only. */
   groundId?: Id<"grounds">;
 };
 
@@ -1563,8 +1051,6 @@ async function leaderboardFor(
   ctx: QueryCtx,
   args: LeaderboardArgs,
   now: number,
-  /** Old ball replay — `compareStats` only. */
-  legacy = false,
 ) {
   const includeExtras = args.includeVisitorsAndJuniors === true;
   let afterTs: number | undefined;
@@ -1585,9 +1071,6 @@ async function leaderboardFor(
     prevBeforeTs = windowEnd - WEEK_MS;
   }
 
-  if (legacy && args.groundId) {
-    throw new Error("The legacy replay cannot filter by ground");
-  }
   const ground = await groundFilterFor(ctx, args.orgId, args.groundId);
   if (ground === null) return null;
 
@@ -1598,24 +1081,14 @@ async function leaderboardFor(
     format: args.format,
     ground,
   };
-  let current: OrgSnapshot;
-  let previous: OrgSnapshot;
-  let teamResults: TeamResult[];
-  if (legacy) {
-    const cur = await legacyAggregateOrg(ctx, args.orgId, currentWindow);
-    current = cur;
-    previous = await legacyAggregateOrg(ctx, args.orgId, previousWindow);
-    teamResults = cur.teamResults;
-  } else {
-    // One read for both snapshots: last week's window always sits inside
-    // this one (same start, earlier end), so it is a filter, not a rescan.
-    const set = await loadStampSet(ctx, args.orgId, { afterTs, beforeTs });
-    current = aggregateStamps(set, currentWindow);
-    previous = aggregateStamps(set, previousWindow);
-    teamResults = set.matches
-      .filter((m) => inWindow(m, currentWindow))
-      .sort((a, b) => a.matchOrder - b.matchOrder);
-  }
+  // One read for both snapshots: last week's window always sits inside
+  // this one (same start, earlier end), so it is a filter, not a rescan.
+  const set = await loadStampSet(ctx, args.orgId, { afterTs, beforeTs });
+  const current = aggregateStamps(set, currentWindow);
+  const previous = aggregateStamps(set, previousWindow);
+  const teamResults = set.matches
+    .filter((m) => inWindow(m, currentWindow))
+    .sort((a, b) => a.matchOrder - b.matchOrder);
 
   // One name map for both snapshots — a week-ago player is always a subset of
   // today's, so today's keys cover everyone either snapshot can name.
@@ -1638,6 +1111,7 @@ async function leaderboardFor(
     allRound: boardFilter(
       stampTags(
         buildAllRoundRows(
+          snap.points,
           snap.batting,
           snap.bowling,
           snap.catches,
@@ -1701,7 +1175,6 @@ async function leaderboardFor(
   };
 }
 
-/** The board args the legacy replay understands — everything but ground. */
 const boardArgs = {
   orgId: v.id("orgs"),
   /**
@@ -1844,8 +1317,6 @@ async function playerStatsFor(
     userId: Id<"users">;
     seasonId?: Id<"seasons">;
   },
-  /** Old ball replay — `compareStats` only. */
-  legacy = false,
 ) {
   const player = await ctx.db.get(args.userId);
   if (!player) return null;
@@ -1857,19 +1328,11 @@ async function playerStatsFor(
     window = w;
   }
 
-  let snap: OrgSnapshot;
-  if (legacy) {
-    snap = await legacyAggregateOrg(ctx, args.orgId, {
-      ...window,
-      focusPlayerId: args.userId,
-    });
-  } else {
-    // The profile ranks against the whole board, so it still sums every
-    // player's rows in the window — but its own log comes off its own rows.
-    const set = await loadStampSet(ctx, args.orgId, window);
-    snap = aggregateStamps(set, window);
-    snap.focus = await stampFocus(ctx, set, args.orgId, args.userId, window);
-  }
+  // The profile ranks against the whole board, so it still sums every
+  // player's rows in the window — but its own log comes off its own rows.
+  const set = await loadStampSet(ctx, args.orgId, window);
+  const snap = aggregateStamps(set, window);
+  snap.focus = await stampFocus(ctx, set, args.orgId, args.userId, window);
   const { batting, bowling, focus } = snap;
   const names = await resolveNames(ctx, [
     ...Array.from(batting.keys()),
@@ -2264,139 +1727,35 @@ export const backfillStamps = internalMutation({
   },
 });
 
-/** The old leaderboard, replayed from every ball. Verification only. */
-export const legacyLeaderboard = internalQuery({
-  args: { ...boardArgs, now: v.optional(v.number()) },
-  handler: async (ctx, { now, ...args }) =>
-    leaderboardFor(ctx, args, now ?? Date.now(), true),
-});
-
-/** The old profile, replayed from every ball. Verification only. */
-export const legacyPlayerStats = internalQuery({
-  args: playerStatsArgs,
-  handler: async (ctx, args) => playerStatsFor(ctx, args, true),
-});
-
-/** Maps and Sets to plain values, so two outputs can be walked side by side. */
-function plain(x: unknown): unknown {
-  if (x instanceof Map)
-    return Object.fromEntries(
-      Array.from(x.entries()).map(([k, val]) => [String(k), plain(val)]),
-    );
-  if (x instanceof Set) return Array.from(x).map(plain);
-  if (Array.isArray(x)) return x.map(plain);
-  if (x && typeof x === "object")
-    return Object.fromEntries(
-      Object.entries(x).map(([k, val]) => [k, plain(val)]),
-    );
-  return x;
-}
-
-function diffInto(
-  a: unknown,
-  b: unknown,
-  path: string,
-  out: string[],
-  limit = 50,
-) {
-  if (out.length >= limit) return;
-  if (typeof a === "number" && typeof b === "number") {
-    if (Math.abs(a - b) > 1e-9 * Math.max(1, Math.abs(a), Math.abs(b)))
-      out.push(`${path}: legacy ${a} ≠ stamps ${b}`);
-    return;
-  }
-  if (Array.isArray(a) && Array.isArray(b)) {
-    if (a.length !== b.length)
-      out.push(`${path}: legacy length ${a.length} ≠ stamps ${b.length}`);
-    for (let i = 0; i < Math.min(a.length, b.length); i++)
-      diffInto(a[i], b[i], `${path}[${i}]`, out, limit);
-    return;
-  }
-  if (a && b && typeof a === "object" && typeof b === "object") {
-    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-    for (const k of Array.from(keys))
-      diffInto(
-        (a as Record<string, unknown>)[k],
-        (b as Record<string, unknown>)[k],
-        `${path}.${k}`,
-        out,
-        limit,
-      );
-    return;
-  }
-  if (a !== b)
-    out.push(
-      `${path}: legacy ${JSON.stringify(a)} ≠ stamps ${JSON.stringify(b)}`,
-    );
-}
-
 /**
- * Old ball replay vs stamps, on real data. Empty `mismatches` is a pass.
- *
- * Always compares the leaderboard for the given args, and checks every
- * completed match has a stamp and nothing else does. `userId` adds that
- * profile; `board` adds the regulars board behind the trophy shelf and season
- * awards. Each legacy call replays every ball in the org, so on a big org ask
- * for one thing per call.
+ * After a backfill: every completed match has a stamp and a frozen junior
+ * list, and nothing else is stamped. Empty `mismatches` is a pass.
  */
-export const compareStats = internalQuery({
-  args: {
-    // No ground: the legacy replay has none, so there is nothing to compare.
-    ...boardArgs,
-    userId: v.optional(v.id("users")),
-    board: v.optional(v.boolean()),
-  },
-  handler: async (ctx, { userId, board, ...args }) => {
+export const checkStamps = internalQuery({
+  args: { orgId: v.id("orgs") },
+  handler: async (ctx, { orgId }) => {
     const mismatches: string[] = [];
-
     const completed = await ctx.db
       .query("matches")
       .withIndex("by_org_status", (q) =>
-        q.eq("orgId", args.orgId).eq("status", "completed"),
+        q.eq("orgId", orgId).eq("status", "completed"),
       )
       .collect();
     const stamped = await ctx.db
       .query("matchStats")
-      .withIndex("by_org_date", (q) => q.eq("orgId", args.orgId))
+      .withIndex("by_org_date", (q) => q.eq("orgId", orgId))
       .collect();
     const stampedIds = new Set(stamped.map((m) => String(m.matchId)));
     const completedIds = new Set(completed.map((m) => String(m._id)));
-    for (const m of completed)
+    for (const m of completed) {
       if (!stampedIds.has(String(m._id)))
         mismatches.push(`match ${m._id}: completed but not stamped`);
+      if (!m.juniorIds)
+        mismatches.push(`match ${m._id}: completed with no junior list`);
+    }
     for (const m of stamped)
       if (!completedIds.has(String(m.matchId)))
         mismatches.push(`match ${m.matchId}: stamped but not completed`);
-
-    const now = Date.now();
-    diffInto(
-      plain(await leaderboardFor(ctx, args, now, true)),
-      plain(await leaderboardFor(ctx, args, now)),
-      "leaderboard",
-      mismatches,
-    );
-    if (userId) {
-      const p = { orgId: args.orgId, userId, seasonId: args.seasonId };
-      diffInto(
-        plain(await playerStatsFor(ctx, p, true)),
-        plain(await playerStatsFor(ctx, p)),
-        "playerStats",
-        mismatches,
-      );
-    }
-    if (board) {
-      const w = args.seasonId
-        ? await seasonWindow(ctx, args.orgId, args.seasonId)
-        : {};
-      if (w) {
-        diffInto(
-          plain(await loadRegularsBoard(ctx, args.orgId, w, true)),
-          plain(await loadRegularsBoard(ctx, args.orgId, w)),
-          "regularsBoard",
-          mismatches,
-        );
-      }
-    }
     return { matchesCompleted: completed.length, mismatches };
   },
 });

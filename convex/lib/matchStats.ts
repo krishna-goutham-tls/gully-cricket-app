@@ -1,28 +1,29 @@
 import { MutationCtx } from "../_generated/server";
 import { Doc, Id } from "../_generated/dataModel";
-import { CATCH_POINTS, WICKET_POINTS } from "./points";
+import { CATCH_POINTS, WICKET_POINTS, earnsPoints } from "./points";
 import type { Side } from "./contribution";
+import { tagsForUsers } from "./playerLabel";
 
 /**
  * Stat stamps: one completed match's ball log, folded per player, written to
  * `matchStats` / `playerMatchStats` / `playerMatchups`.
  *
  * `foldMatch` is the only copy of the per-match attribution rules the boards
- * read. It is the loop body of the old whole-org replay in convex/stats.ts
- * (`legacyAggregateOrg`), run over one match: bat runs/balls to the striker
- * (legal + noball), wickets to the bowler except run-outs, dismissals via
- * playerOutId, catches to the fielder on a caught dismissal, drops to
- * droppedById. convex/stats.ts sums the rows back into the exact aggregates
- * the replay used to build.
+ * read: bat runs/balls to the striker (legal + noball), wickets to the
+ * bowler except run-outs, dismissals via playerOutId, catches to the fielder
+ * on a caught dismissal, drops to droppedById. convex/stats.ts sums the rows
+ * back into per-player aggregates.
  *
  * Stamps are a cache of the ball log, never a source of truth. Anything that
  * changes a completed match calls `restampMatch`, which throws the match's
  * rows away and folds it again from `balls`. Change a rule in `foldMatch`
  * and every existing stamp is stale: rerun `stats:backfillStamps`, then
- * `stats:compareStats` should come back empty.
+ * `stats:checkStamps` should come back empty.
  *
  * Names and board tags are deliberately not stamped — they are read live, so
- * renaming or tagging a player never needs a restamp.
+ * renaming or tagging a player never needs a restamp. The one exception is
+ * junior status for points: it is frozen on the match (`juniorIds`) the
+ * first time it completes, and `pts` is folded against that list.
  *
  * The ground is stamped exactly as the match carries it. A match with no
  * groundId stamps none, and the boards read that as the community's Home
@@ -93,6 +94,13 @@ type BowlWork = {
 
 type H2HWork = Omit<StampH2H, "types"> & { types: Map<string, number> };
 
+type PtsWork = {
+  runs: number;
+  wickets: number;
+  catches: number;
+  innings: Map<string, { inningsId: Id<"innings">; runs: number }>;
+};
+
 type Player = {
   userId: Id<"users">;
   named: boolean;
@@ -102,6 +110,7 @@ type Player = {
   bowl?: BowlWork;
   catches: number;
   drops: number;
+  pts: PtsWork;
   reached: Map<string, number>;
   dismissalTypes: Map<string, number>;
   wicketTypes: Map<string, number>;
@@ -126,6 +135,7 @@ export function foldMatch(
   match: Doc<"matches">,
   inningsRows: Doc<"innings">[],
   ballsIn: Doc<"balls">[],
+  juniors: Set<string>,
 ): { match: MatchStamp; players: PlayerStamp[]; matchups: MatchupStamp[] } {
   const date = match.createdAt;
   const matchOrder = match._creationTime;
@@ -147,6 +157,7 @@ export function foldMatch(
         order: {},
         catches: 0,
         drops: 0,
+        pts: { runs: 0, wickets: 0, catches: 0, innings: new Map() },
         reached: new Map(),
         dismissalTypes: new Map(),
         wicketTypes: new Map(),
@@ -283,9 +294,21 @@ export function foldMatch(
     const batSide = battingSideOf.get(innKey);
     const bowlSide: Side | undefined =
       batSide === "A" ? "B" : batSide === "B" ? "A" : undefined;
-    if (batSide) addPts(batSide, b.strikerId, b.runsBat);
+    const runsCount = earnsPoints(b.strikerId, b.bowlerId, juniors);
+    if (batSide) addPts(batSide, b.strikerId, runsCount ? b.runsBat : 0);
 
     const striker = get(b.strikerId);
+    {
+      const row = striker.pts.innings.get(innKey) ?? {
+        inningsId: b.inningsId,
+        runs: 0,
+      };
+      if (runsCount) {
+        striker.pts.runs += b.runsBat;
+        row.runs += b.runsBat;
+      }
+      striker.pts.innings.set(innKey, row);
+    }
     const bat = getBat(b.strikerId);
     const inn = batInnings(bat, b.inningsId);
     bat.runs += b.runsBat;
@@ -354,7 +377,10 @@ export function foldMatch(
         f.catches += 1;
         f.contributed = true;
         markAt(b.fielderId, "field.catches", b.createdAt);
-        if (bowlSide) addPts(bowlSide, b.fielderId, CATCH_POINTS);
+        if (earnsPoints(b.fielderId, b.playerOutId, juniors)) {
+          f.pts.catches += 1;
+          if (bowlSide) addPts(bowlSide, b.fielderId, CATCH_POINTS);
+        }
       }
       if (b.wicketType) bump(outP.dismissalTypes, b.wicketType);
       // A run-out is nobody's bowling, so it never counts towards the
@@ -408,7 +434,10 @@ export function foldMatch(
       markAt(b.bowlerId, "bowl.wickets", b.createdAt);
       per.wickets += 1;
       if (b.wicketType) bump(bowler.wicketTypes, b.wicketType);
-      if (bowlSide) addPts(bowlSide, b.bowlerId, WICKET_POINTS);
+      if (earnsPoints(b.bowlerId, b.playerOutId, juniors)) {
+        bowler.pts.wickets += 1;
+        if (bowlSide) addPts(bowlSide, b.bowlerId, WICKET_POINTS);
+      }
     }
     bowl.innings.set(innKey, per);
 
@@ -462,6 +491,12 @@ export function foldMatch(
         : undefined,
       catches: p.catches,
       drops: p.drops,
+      pts: {
+        runs: p.pts.runs,
+        wickets: p.pts.wickets,
+        catches: p.pts.catches,
+        innings: Array.from(p.pts.innings.values()),
+      },
       work: p.named
         ? {
             onA,
@@ -548,9 +583,39 @@ export async function restampMatch(
     .query("balls")
     .withIndex("by_match", (q) => q.eq("matchId", matchId))
     .collect();
-  const folded = foldMatch(match, innings, balls);
+  const juniors = await juniorsOf(ctx, match, balls);
+  const folded = foldMatch(match, innings, balls, juniors);
   await ctx.db.insert("matchStats", folded.match);
   for (const row of folded.players) await ctx.db.insert("playerMatchStats", row);
   for (const row of folded.matchups) await ctx.db.insert("playerMatchups", row);
   return true;
+}
+
+/**
+ * The juniors a completed match's points are folded against. The first call
+ * freezes them from today's tags onto `matches.juniorIds`; every later
+ * restamp (undo, edits, backfill) reads that list, so retagging a player
+ * never moves an old match. Everyone named or on a ball is checked.
+ */
+export async function juniorsOf(
+  ctx: MutationCtx,
+  match: Doc<"matches">,
+  balls: Doc<"balls">[],
+): Promise<Set<string>> {
+  if (match.juniorIds) return new Set(match.juniorIds.map(String));
+  const ids = new Set<string>(
+    [...match.sideAPlayerIds, ...match.sideBPlayerIds].map(String),
+  );
+  for (const b of balls) {
+    ids.add(String(b.strikerId));
+    ids.add(String(b.bowlerId));
+    if (b.fielderId) ids.add(String(b.fielderId));
+    if (b.playerOutId) ids.add(String(b.playerOutId));
+  }
+  const tags = await tagsForUsers(ctx, match.orgId, ids);
+  const juniorIds = Array.from(ids)
+    .filter((id) => (tags.get(id) ?? []).includes("junior"))
+    .map((id) => id as Id<"users">);
+  await ctx.db.patch(match._id, { juniorIds });
+  return new Set(juniorIds.map(String));
 }

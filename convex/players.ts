@@ -8,7 +8,6 @@ import {
 import { normalizePhone } from "./lib/phone";
 import { playerTag } from "./schema";
 import {
-  looksLikeJunior,
   resolvePlayerTags,
   sortTags,
   type PlayerTag,
@@ -17,7 +16,8 @@ import {
 /**
  * Quick-add a guest player to the org pool. Guests have no PIN; if a phone
  * is given, signing up with that phone later claims this player and all
- * their match history. Walk-ons start as Visitor; a "Jr." name also gets Junior.
+ * their match history. Walk-ons start as Visitor. Junior is an admin's call,
+ * never read off the name.
  */
 export const addGuest = mutation({
   args: {
@@ -89,7 +89,6 @@ export const addGuest = mutation({
     });
 
     const tags: PlayerTag[] = ["visitor"];
-    if (looksLikeJunior(displayName)) tags.push("junior");
 
     await ctx.db.insert("orgMembers", {
       orgId: args.orgId,
@@ -243,8 +242,8 @@ export const togglePlayerTag = mutation({
 });
 
 /**
- * One-shot: write playerTags from the old exclusive label, stamp Visitor on
- * unclaimed walk-ons, and Junior on names that end in Jr.
+ * One-shot: write playerTags from the old exclusive label, and stamp Visitor
+ * on unclaimed walk-ons.
  *   npx convex run players:backfillPlayerTags '{}'
  */
 export const backfillPlayerTags = internalMutation({
@@ -257,7 +256,6 @@ export const backfillPlayerTags = internalMutation({
       const tags = new Set(
         resolvePlayerTags(m.playerTags, m.playerLabel, u?.isGuest ?? false),
       );
-      if (u && looksLikeJunior(u.displayName)) tags.add("junior");
       if (u?.isGuest) tags.add("visitor");
       const playerTags = sortTags(tags);
       const same =

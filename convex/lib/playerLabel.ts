@@ -11,10 +11,6 @@ export function sortTags(tags: Iterable<PlayerTag>): PlayerTag[] {
   return TAG_ORDER.filter((t) => set.has(t));
 }
 
-export function looksLikeJunior(name: string): boolean {
-  return /\bjr\.?\s*$/i.test(name.trim());
-}
-
 /**
  * `playerTags` wins once written (including `[]` = regular). Until then,
  * fall back to the old exclusive `playerLabel`, then to isGuest → visitor.
