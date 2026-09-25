@@ -148,7 +148,7 @@ export const COUNTING: Rule[] = [
   {
     emoji: "🧮",
     title: "All-round points",
-    body: "1 point per run. 20 per wicket. 8 per catch. That number ranks Players, crowns Player of the Match, and seeds auto-formed teams.",
+    body: "1 point per run. 20 per wicket. 8 per catch. Nothing for runs off a junior, or for getting a junior out. Juniors score points off anyone. That number ranks Players, crowns Player of the Match, and seeds auto-formed teams.",
     knob: "1 · 20 · 8",
     tilt: "l",
   },

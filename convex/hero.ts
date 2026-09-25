@@ -7,6 +7,7 @@ import {
   basePoints,
   battingMilestoneBonus,
   bowlingHaulBonus,
+  earnsPoints,
 } from "./lib/points";
 import { sideLabel } from "./scoring";
 
@@ -204,7 +205,9 @@ export const heroDay = query({
 
       // Every player's contribution this match, for the POTM check. Runs are
       // bucketed per innings (key `${inningsId}:${playerId}`) because the
-      // batting milestone bonus is per innings, not per match.
+      // batting milestone bonus is per innings, not per match. Nothing
+      // against a junior counts (`earnsPoints`).
+      const juniors = new Set((match.juniorIds ?? []).map(String));
       const pInnRuns = new Map<string, number>();
       const pWkts = new Map<string, number>();
       const pCatch = new Map<string, number>();
@@ -218,7 +221,8 @@ export const heroDay = query({
       for (const b of balls) {
         if (b.isRetire) continue;
         const total = b.runsBat + b.extrasRuns;
-        bump(pInnRuns, `${b.inningsId}:${b.strikerId}`, b.runsBat);
+        if (earnsPoints(b.strikerId, b.bowlerId, juniors))
+          bump(pInnRuns, `${b.inningsId}:${b.strikerId}`, b.runsBat);
 
         if (String(b.strikerId) === playerKey) {
           mRuns += b.runsBat;
@@ -233,10 +237,12 @@ export const heroDay = query({
 
         if (b.isWicket && b.playerOutId) {
           const credited = b.wicketType !== "runout";
-          if (credited) bump(pWkts, String(b.bowlerId));
+          if (credited && earnsPoints(b.bowlerId, b.playerOutId, juniors))
+            bump(pWkts, String(b.bowlerId));
           if (String(b.playerOutId) === playerKey) mOut = true;
           if (b.wicketType === "caught" && b.fielderId) {
-            bump(pCatch, String(b.fielderId));
+            if (earnsPoints(b.fielderId, b.playerOutId, juniors))
+              bump(pCatch, String(b.fielderId));
             if (String(b.fielderId) === playerKey) mCatches += 1;
           }
           if (credited && String(b.bowlerId) === playerKey) {
@@ -749,13 +755,21 @@ export const dayShares = query({
       const catches = new Map<string, number>();
       const bump = (m: Map<string, number>, k: string, by = 1) =>
         m.set(k, (m.get(k) ?? 0) + by);
+      const juniors = new Set((match.juniorIds ?? []).map(String));
 
       for (const b of balls) {
         if (b.isRetire) continue;
-        bump(innRuns, `${b.inningsId}:${b.strikerId}`, b.runsBat);
+        if (earnsPoints(b.strikerId, b.bowlerId, juniors))
+          bump(innRuns, `${b.inningsId}:${b.strikerId}`, b.runsBat);
         if (b.isWicket && b.playerOutId) {
-          if (b.wicketType !== "runout") bump(wkts, String(b.bowlerId));
-          if (b.wicketType === "caught" && b.fielderId) {
+          const out = b.playerOutId;
+          if (b.wicketType !== "runout" && earnsPoints(b.bowlerId, out, juniors))
+            bump(wkts, String(b.bowlerId));
+          if (
+            b.wicketType === "caught" &&
+            b.fielderId &&
+            earnsPoints(b.fielderId, out, juniors)
+          ) {
             bump(catches, String(b.fielderId));
           }
         }

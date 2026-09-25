@@ -1,3 +1,5 @@
+import type { Id } from "../_generated/dataModel";
+
 /**
  * The all-round points formula — the one number that ranks the Players
  * board, crowns Player of the Match (convex/story.ts), counts POTM days on
@@ -45,6 +47,26 @@ export function basePoints(runs: number, wickets: number, catches: number) {
   return runs + wickets * WICKET_POINTS + catches * CATCH_POINTS;
 }
 
+/**
+ * No points off juniors (Krishna, 2026-09-25): a non-junior earns nothing for
+ * runs off a junior bowler, or for bowling out or catching a junior batter.
+ * The scorecard keeps every run and wicket; only points drop them. A junior
+ * earns points against anyone. Milestone bonuses read the counted runs, so a
+ * 50 with 15 off juniors earns the 25 bonus.
+ *
+ * `juniors` is the match's own `juniorIds`, frozen when it completed
+ * (convex/lib/matchStats.ts `juniorsOf`), so retagging a player later never
+ * moves an old match's points.
+ */
+export function earnsPoints(
+  actorId: Id<"users">,
+  againstId: Id<"users"> | undefined,
+  juniors: Set<string>,
+): boolean {
+  if (!againstId || juniors.has(String(actorId))) return true;
+  return !juniors.has(String(againstId));
+}
+
 /** Receipt line shown wherever the working is printed (POTM badge). */
 export const POINTS_RECEIPT =
-  "runs + 20 per wicket + 8 per catch, plus milestone bonuses";
+  "runs + 20 per wicket + 8 per catch, plus milestone bonuses; nothing off juniors";

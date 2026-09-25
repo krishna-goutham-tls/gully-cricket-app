@@ -351,6 +351,12 @@ export default defineSchema({
     clock: v.optional(matchClock),
     resultText: v.optional(v.string()),
     winnerSide: v.optional(side),
+    /**
+     * Juniors in this match, frozen when it first completes. Points read
+     * this, not live tags, so retagging never moves an old match
+     * (convex/lib/points.ts `earnsPoints`). Absent = not completed yet.
+     */
+    juniorIds: v.optional(v.array(v.id("users"))),
     createdBy: v.id("users"),
     createdAt: v.number(),
   })
@@ -554,6 +560,22 @@ export default defineSchema({
     ),
     catches: v.number(),
     drops: v.number(),
+    /**
+     * What earns points: runs, wickets and catches minus those against
+     * juniors (convex/lib/points.ts `earnsPoints`). `innings` is counted
+     * runs per innings, for the milestone bonus. Absent on rows stamped
+     * before the rule; readers fall back to the real numbers.
+     */
+    pts: v.optional(
+      v.object({
+        runs: v.number(),
+        wickets: v.number(),
+        catches: v.number(),
+        innings: v.array(
+          v.object({ inningsId: v.id("innings"), runs: v.number() }),
+        ),
+      }),
+    ),
     /** Named players only: the all-round points behind win credit and share. */
     work: v.optional(
       v.object({
