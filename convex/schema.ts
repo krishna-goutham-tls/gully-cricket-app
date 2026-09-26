@@ -530,6 +530,10 @@ export default defineSchema({
         ducks: v.number(),
         goldenDucks: v.number(),
         facedDucks: v.number(),
+        /** Absent on rows stamped before these feats; read as 0. */
+        bestOver: v.optional(v.number()),
+        dotRun: v.optional(v.number()),
+        quotaHits: v.optional(v.number()),
         innings: v.array(
           v.object({
             inningsId: v.id("innings"),
@@ -548,6 +552,20 @@ export default defineSchema({
         dots: v.number(),
         widesNoballs: v.number(),
         sixesConceded: v.number(),
+        /** Absent on rows stamped before these feats; read as 0 / empty. */
+        bowled: v.optional(v.number()),
+        caughtBowled: v.optional(v.number()),
+        worstOver: v.optional(v.number()),
+        wicketRun: v.optional(v.number()),
+        vs: v.optional(
+          v.array(
+            v.object({
+              userId: v.id("users"),
+              outs: v.number(),
+              sixes: v.number(),
+            }),
+          ),
+        ),
         innings: v.array(
           v.object({
             inningsId: v.id("innings"),

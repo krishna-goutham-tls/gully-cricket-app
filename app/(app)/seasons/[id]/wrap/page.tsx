@@ -201,7 +201,7 @@ export default function SeasonWrapPage() {
                 href="/records"
                 className="mt-2 flex min-h-11 items-center justify-center rounded-xl text-[13px] font-semibold text-bg/70 active:bg-white/10"
               >
-                See all the trophies ›
+                See all the records ›
               </Link>
             ) : null}
             <p className="mt-2 text-center text-[13px] text-bg/70">

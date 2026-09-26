@@ -23,7 +23,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
-/** The six caps this page names. Shelf trophies get their own page. */
+/** The six caps this page names. Honours and roasts live on Records. */
 const AWARD_LABEL: Partial<Record<StampedAwardKind, string>> = {
   pots: "Player of the season",
   orange_cap: "Orange Cap",
