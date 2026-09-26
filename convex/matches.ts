@@ -5,6 +5,7 @@ import { requireActiveMembership, requireOrgViewer } from "./lib/session";
 import { captainTeamLabel } from "./lib/teams";
 import { buildRuleSnapshot } from "./lib/rules";
 import { clearMatchStamps } from "./lib/matchStats";
+import { matchPoints } from "./lib/points";
 import { resolvePlayableGround } from "./lib/grounds";
 import {
   buildMatchClock,
@@ -178,9 +179,47 @@ export const list = query({
           scoreB = lineFor("B");
         }
 
+        // Player of the Match off the stat stamps — the same points and the
+        // same tie rule the Records count uses. Ties share it. Nothing until
+        // the match is stamped, and nobody for a scoreless day.
+        let potm: Array<{
+          userId: Id<"users">;
+          name: string;
+          runs: number;
+          wickets: number;
+          catches: number;
+        }> = [];
+        if (m.status === "completed") {
+          const stamps = await ctx.db
+            .query("playerMatchStats")
+            .withIndex("by_match", (q) => q.eq("matchId", m._id))
+            .collect();
+          let best = 0;
+          let top: typeof stamps = [];
+          for (const r of stamps) {
+            const p = matchPoints(r);
+            if (p > best) {
+              best = p;
+              top = [r];
+            } else if (p === best && p > 0) {
+              top.push(r);
+            }
+          }
+          potm = await Promise.all(
+            top.map(async (r) => ({
+              userId: r.userId,
+              name: (await captainName(r.userId)) ?? "Player",
+              runs: r.bat?.runs ?? 0,
+              wickets: r.bowl?.wickets ?? 0,
+              catches: r.catches,
+            })),
+          );
+        }
+
         return {
           scoreA,
           scoreB,
+          potm,
           _id: m._id,
           status: m.status,
           sideAName: captainTeamLabel(

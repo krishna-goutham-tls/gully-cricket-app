@@ -17,6 +17,7 @@ import {
   basePoints,
   battingMilestoneBonus,
   bowlingHaulBonus,
+  matchPoints,
 } from "./lib/points";
 import {
   asPct,
@@ -535,20 +536,6 @@ function aggregateStamps(
   }
 
   return snap;
-}
-
-/**
- * One stamp's points for its match alone — base plus bonuses, exactly as
- * `addPoints` sums them and `potmPoints` in convex/story.ts ranks them.
- */
-function matchPoints(r: Doc<"playerMatchStats">): number {
-  const runs = r.pts?.runs ?? r.bat?.runs ?? 0;
-  const wickets = r.pts?.wickets ?? r.bowl?.wickets ?? 0;
-  const catches = r.pts?.catches ?? r.catches;
-  const innings = r.pts?.innings ?? r.bat?.innings ?? [];
-  let bonus = bowlingHaulBonus(wickets);
-  for (const inn of innings) bonus += battingMilestoneBonus(inn.runs);
-  return basePoints(runs, wickets, catches) + bonus;
 }
 
 /**
