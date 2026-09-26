@@ -374,6 +374,57 @@ export const swapOverBowlers = internalMutation({
   },
 });
 
+/**
+ * Ops: some deliveries were logged under the wrong bowler (e.g. a common
+ * player whose overs someone else bowled). Sets bowlerId on those balls only.
+ * Scores do not change, so no recompute — only the stat stamps are refolded.
+ */
+export const reassignBallBowler = internalMutation({
+  args: {
+    matchId: v.id("matches"),
+    ballIds: v.array(v.id("balls")),
+    bowlerId: v.id("users"),
+  },
+  handler: async (ctx, { matchId, ballIds, bowlerId }) => {
+    const match = await ctx.db.get(matchId);
+    if (!match) throw new Error("Match not found");
+    if (ballIds.length === 0) throw new Error("No balls given");
+
+    const inningsSide = new Map<string, "A" | "B">();
+    const patched: { ballId: Id<"balls">; from: Id<"users"> }[] = [];
+    for (const ballId of ballIds) {
+      const b = await ctx.db.get(ballId);
+      if (!b || String(b.matchId) !== String(matchId))
+        throw new Error(`Ball ${ballId} is not in this match`);
+      if (b.isRetire) throw new Error(`Ball ${ballId} is a retirement marker`);
+      let batting = inningsSide.get(String(b.inningsId));
+      if (!batting) {
+        const inn = await ctx.db.get(b.inningsId);
+        if (!inn) throw new Error("Innings not found");
+        batting = inn.battingSide;
+        inningsSide.set(String(b.inningsId), batting);
+      }
+      const fielding =
+        batting === "A" ? match.sideBPlayerIds : match.sideAPlayerIds;
+      if (!fielding.some((id) => String(id) === String(bowlerId)))
+        throw new Error("That bowler is not on the fielding side");
+      patched.push({ ballId, from: b.bowlerId });
+    }
+
+    for (const p of patched) await ctx.db.patch(p.ballId, { bowlerId });
+
+    const live = await ctx.db
+      .query("matchLiveState")
+      .withIndex("by_match", (q) => q.eq("matchId", matchId))
+      .unique();
+    if (live?.lastBallId && ballIds.some((id) => String(id) === String(live.lastBallId)))
+      await ctx.db.patch(live._id, { bowlerId });
+
+    await restampMatch(ctx, matchId);
+    return { ballsPatched: patched.length };
+  },
+});
+
 /** Ops: rename a player. Tags are untouched — Junior is an admin's call. */
 export const renamePlayer = internalMutation({
   args: {
