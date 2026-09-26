@@ -1,4 +1,4 @@
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 
 /**
  * The all-round points formula — the one number that ranks the Players
@@ -70,3 +70,19 @@ export function earnsPoints(
 /** Receipt line shown wherever the working is printed (POTM badge). */
 export const POINTS_RECEIPT =
   "runs + 20 per wicket + 8 per catch, plus milestone bonuses; nothing off juniors";
+
+/**
+ * One stamp's points for its match alone — base plus bonuses, exactly as
+ * `addPoints` (convex/stats.ts) sums them and `potmPoints` in convex/story.ts
+ * ranks them. A row stamped before the junior rule has no `pts`; it counts
+ * its real numbers.
+ */
+export function matchPoints(r: Doc<"playerMatchStats">): number {
+  const runs = r.pts?.runs ?? r.bat?.runs ?? 0;
+  const wickets = r.pts?.wickets ?? r.bowl?.wickets ?? 0;
+  const catches = r.pts?.catches ?? r.catches;
+  const innings = r.pts?.innings ?? r.bat?.innings ?? [];
+  let bonus = bowlingHaulBonus(wickets);
+  for (const inn of innings) bonus += battingMilestoneBonus(inn.runs);
+  return basePoints(runs, wickets, catches) + bonus;
+}
