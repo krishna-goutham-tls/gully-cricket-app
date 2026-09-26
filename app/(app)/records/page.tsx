@@ -5,7 +5,10 @@ import {
   type FeatRecord,
   type RecordGroup,
 } from "@/components/leaderboard/records";
-import { GroundChips, usePlayableGrounds } from "@/components/ground/GroundChips";
+import {
+  GroundChips,
+  usePlayableGrounds,
+} from "@/components/ground/GroundChips";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
   SeasonScopeMenu,
@@ -88,7 +91,9 @@ function RecordRows({
             <span
               className={cn(
                 "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[13px] font-bold",
-                onInk ? "bg-white/10 text-bg" : "bg-accent-soft text-accent-deep",
+                onInk
+                  ? "bg-white/10 text-bg"
+                  : "bg-accent-soft text-accent-deep",
               )}
             >
               {initials(it.holder)}
@@ -127,10 +132,7 @@ function RecordRows({
           <Link
             key={it.label}
             href={`/players/${it.holderId}`}
-            className={cn(
-              row,
-              onInk ? "active:bg-white/10" : "active:bg-bg",
-            )}
+            className={cn(row, onInk ? "active:bg-white/10" : "active:bg-bg")}
           >
             {body}
           </Link>
@@ -220,8 +222,13 @@ export default function RecordsPage() {
   return (
     <div>
       {/* The Roast is an ink room. A fixed backdrop fills the screen without
-          stretching the page, so a short tab never scrolls. */}
-      {onInk ? <div aria-hidden className="fixed inset-0 -z-10 bg-ink" /> : null}
+          stretching the page, so a short tab never scrolls. It is a positioned
+          layer, not a negative z-index: body paints its own paper background,
+          which would cover anything below it. The content wrapper below is
+          positioned too, so it paints above the backdrop. */}
+      {onInk ? (
+        <div aria-hidden className="pointer-events-none fixed inset-0 bg-ink" />
+      ) : null}
       <AppHeader
         title="Records"
         subtitle={
@@ -234,48 +241,51 @@ export default function RecordsPage() {
           ) : undefined
         }
         below={tabs}
+        solid={onInk}
       />
 
-      {board === undefined ? (
-        <main className="mx-auto max-w-md space-y-3 px-5 py-4">
-          {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className={cn(
-                "h-40 animate-pulse rounded-2xl",
-                onInk ? "bg-white/10" : "bg-line",
-              )}
-            />
-          ))}
-        </main>
-      ) : board === null ? (
-        <main className="mx-auto max-w-md px-5 py-4">
-          <EmptyState
-            title="Records unavailable"
-            body="Sign in to this community to see its records."
-          />
-        </main>
-      ) : (
-        <main className="mx-auto max-w-md space-y-6 px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-4">
-          {grounds.length >= 2 ? (
-            <GroundChips
-              grounds={grounds}
-              value={ground?._id ?? null}
-              onChange={setGroundPick}
-            />
-          ) : null}
-          {shown.length > 0 ? (
-            shown.map((g) => (
-              <RecordSection key={g.title} group={g} onInk={onInk} />
-            ))
-          ) : (
+      <div className="relative">
+        {board === undefined ? (
+          <main className="mx-auto max-w-md space-y-3 px-5 py-4">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className={cn(
+                  "h-40 animate-pulse rounded-2xl",
+                  onInk ? "bg-white/10" : "bg-line",
+                )}
+              />
+            ))}
+          </main>
+        ) : board === null ? (
+          <main className="mx-auto max-w-md px-5 py-4">
             <EmptyState
-              title={onInk ? "Nobody to roast yet" : "No records yet"}
-              body="Records build up as matches finish."
+              title="Records unavailable"
+              body="Sign in to this community to see its records."
             />
-          )}
-        </main>
-      )}
+          </main>
+        ) : (
+          <main className="mx-auto max-w-md space-y-6 px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-4">
+            {grounds.length >= 2 ? (
+              <GroundChips
+                grounds={grounds}
+                value={ground?._id ?? null}
+                onChange={setGroundPick}
+              />
+            ) : null}
+            {shown.length > 0 ? (
+              shown.map((g) => (
+                <RecordSection key={g.title} group={g} onInk={onInk} />
+              ))
+            ) : (
+              <EmptyState
+                title={onInk ? "Nobody to roast yet" : "No records yet"}
+                body="Records build up as matches finish."
+              />
+            )}
+          </main>
+        )}
+      </div>
     </div>
   );
 }

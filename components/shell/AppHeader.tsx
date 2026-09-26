@@ -11,6 +11,7 @@ export function AppHeader({
   subtitle,
   trailing,
   below,
+  solid,
 }: {
   title?: string;
   /** Replaces the org-name subtitle. Pass a node for a control (Leaders scope). */
@@ -18,6 +19,8 @@ export function AppHeader({
   trailing?: ReactNode;
   /** Sits in the sticky header under the title row (discipline tabs). */
   below?: ReactNode;
+  /** Opaque paper, for a page whose own background is not paper (Roast). */
+  solid?: boolean;
 }) {
   const { activeOrg, activeMemberships, selectOrg } = useAuth();
   const [open, setOpen] = useState(false);
@@ -48,7 +51,12 @@ export function AppHeader({
   }, [open]);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-line bg-bg/90 px-5 pt-[calc(var(--safe-top)+1rem)] backdrop-blur-md">
+    <header
+      className={cn(
+        "sticky top-0 z-30 border-b border-line px-5 pt-[calc(var(--safe-top)+1rem)]",
+        solid ? "bg-bg" : "bg-bg/90 backdrop-blur-md",
+      )}
+    >
       <div className={cn("mx-auto max-w-md", below ? "pb-3" : "pb-4")}>
         <div className="flex items-center justify-between gap-3">
           <div className="flex h-11 min-w-0 flex-1 items-center gap-2.5">
