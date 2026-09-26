@@ -27,7 +27,7 @@ import { useEffect, useRef, useState } from "react";
 
 type Sheet =
   | null
-  | { kind: "extra"; type: "bye" | "legbye" | "noball" }
+  | { kind: "extra"; type: "bye" | "legbye" | "noball" | "wide" }
   | { kind: "wicket" }
   | { kind: "bowler" }
   | { kind: "batsman" }
@@ -67,7 +67,8 @@ function ballLabel(b: {
 }) {
   if (b.isRetire) return "R";
   if (b.isWicket) return "W";
-  if (b.extrasType === "wide") return "Wd";
+  if (b.extrasType === "wide")
+    return b.extrasRuns > 1 ? `Wd${b.extrasRuns - 1}` : "Wd";
   if (b.extrasType === "noball")
     return b.runsBat > 0 ? `Nb${b.runsBat}` : "Nb";
   if (b.extrasType === "bye") return `B${b.extrasRuns}`;
@@ -327,30 +328,32 @@ export default function ScorePage() {
     );
   }
 
-  async function sendExtra(type: "wide") {
+  // Sheets close on the tap, not on the server's answer, so the pending chip
+  // is in view on a slow signal.
+  // A wide is +1; runs they ran on it are extras too, charged to the bowler.
+  async function sendWide(ran: number) {
     if (!token) return;
+    setSheet(null);
     await tap(
-      type,
+      "wide",
       () =>
         recordBall({
           token,
           matchId,
           runsBat: 0,
-          extrasType: type,
-          extrasRuns: 1,
+          extrasType: "wide",
+          extrasRuns: 1 + ran,
         }),
       {
         runsBat: 0,
-        extrasType: type,
-        extrasRuns: 1,
+        extrasType: "wide",
+        extrasRuns: 1 + ran,
         isWicket: false,
         isLegal: false,
       },
     );
   }
 
-  // Sheets close on the tap, not on the server's answer, so the pending chip
-  // is in view on a slow signal.
   async function sendNoBall(runsBat: number) {
     if (!token) return;
     setSheet(null);
@@ -1178,7 +1181,7 @@ export default function ScorePage() {
             small
             disabled={locked}
             active={pulse === "wide"}
-            onClick={() => sendExtra("wide")}
+            onClick={() => setSheet({ kind: "extra", type: "wide" })}
           />
           <PadKey
             label="NB"
@@ -1251,7 +1254,9 @@ export default function ScorePage() {
                 <p className="text-[15px] font-semibold text-ink">
                   {activeSheet.type === "noball"
                     ? "No-ball"
-                    : activeSheet.type === "bye"
+                    : activeSheet.type === "wide"
+                      ? "Wide"
+                      : activeSheet.type === "bye"
                       ? "Byes"
                       : "Leg byes"}
                 </p>
@@ -1259,16 +1264,20 @@ export default function ScorePage() {
                   <p className="mt-1 text-[13px] text-muted">
                     The no-ball is +1. This is what they hit.
                   </p>
+                ) : activeSheet.type === "wide" ? (
+                  <p className="mt-1 text-[13px] text-muted">
+                    The wide is +1. These are the runs they ran.
+                  </p>
                 ) : null}
                 <div
                   className={cn(
                     "mt-4 grid gap-2",
-                    activeSheet.type === "noball"
+                    activeSheet.type === "noball" || activeSheet.type === "wide"
                       ? "grid-cols-3"
                       : "grid-cols-4",
                   )}
                 >
-                  {(activeSheet.type === "noball"
+                  {(activeSheet.type === "noball" || activeSheet.type === "wide"
                     ? [0, 1, 2, 3, 4, 6]
                     : [1, 2, 3, 4]
                   ).map((n) => (
@@ -1276,12 +1285,16 @@ export default function ScorePage() {
                       key={n}
                       label={String(n)}
                       emphasis={
-                        activeSheet.type === "noball" && (n === 4 || n === 6)
+                        (activeSheet.type === "noball" ||
+                          activeSheet.type === "wide") &&
+                        (n === 4 || n === 6)
                       }
                       onClick={() =>
                         activeSheet.type === "noball"
                           ? sendNoBall(n)
-                          : sendByeLb(activeSheet.type, n)
+                          : activeSheet.type === "wide"
+                            ? sendWide(n)
+                            : sendByeLb(activeSheet.type, n)
                       }
                     />
                   ))}

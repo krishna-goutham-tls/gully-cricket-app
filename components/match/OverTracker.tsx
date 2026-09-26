@@ -23,7 +23,8 @@ export type BallChip = {
 function ballLabel(b: BallChip) {
   if (b.isRetire) return "R";
   if (b.isWicket) return "W";
-  if (b.extrasType === "wide") return "Wd";
+  if (b.extrasType === "wide")
+    return b.extrasRuns > 1 ? `Wd${b.extrasRuns - 1}` : "Wd";
   if (b.extrasType === "noball")
     return b.runsBat > 0 ? `Nb${b.runsBat}` : "Nb";
   if (b.extrasType === "bye") return `B${b.extrasRuns}`;
