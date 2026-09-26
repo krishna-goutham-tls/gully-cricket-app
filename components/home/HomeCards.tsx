@@ -43,6 +43,26 @@ function marginText(resultText: string | undefined, winnerName?: string) {
   return resultText;
 }
 
+/** "won by 15 runs" → "Won by 15 runs" once the winner's name is stripped. */
+function sentenceCase(text: string) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/**
+ * The POTM's day in the words people use: "42 runs · 2 wkts". Real scorecard
+ * numbers, not points. At most the three things that earn points, and only
+ * the ones that happened.
+ */
+function potmFigures(p: MatchRow["potm"][number]) {
+  return [
+    p.runs > 0 ? `${p.runs} run${p.runs === 1 ? "" : "s"}` : null,
+    p.wickets > 0 ? `${p.wickets} wkt${p.wickets === 1 ? "" : "s"}` : null,
+    p.catches > 0 ? `${p.catches} catch${p.catches === 1 ? "" : "es"}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 /**
  * A close finish, read straight off the result sentence. With two regular
  * sides, every card carries the same two names — the margin is what makes one
@@ -359,6 +379,8 @@ export function MatchCard({
               ? (match.resultText ?? "No result")
               : (marginText(match.resultText, winnerName) ?? "Result pending");
 
+  const potm = match.potm ?? [];
+
   return (
     <div
       className={cn(
@@ -366,64 +388,97 @@ export function MatchCard({
         isLive ? "border-accent/50 shadow-card" : "border-line",
       )}
     >
-      {/* One left edge per card, and the same one on every card: the trophy
-          gets a reserved gutter rather than indenting the winner's name past
-          everybody else's. */}
-      <Link href={href} className="block min-h-12 px-4 py-3 pr-11 active:opacity-70">
-        {match.tournamentName ? (
-          <div className="mb-1.5">
-            <TournamentChip name={match.tournamentName} />
-          </div>
-        ) : null}
-        <div className="flex gap-1.5">
-          {/* The trophy has to sit against the winner's name, so the gutter
-              starts here rather than above the tournament tag. */}
-          <span className="w-4 shrink-0">
-            {decided ? (
-              <Trophy className="mt-1 h-3.5 w-3.5 text-accent-deep" />
-            ) : null}
-          </span>
-          <div className="min-w-0 flex-1">
-            {/* Each side gets its line: name left, scoreline right. The score
-                is what makes game N different from game N+1 between the same
-                two teams — it reads in the same tabular ink as a scorecard. */}
-            <div className="flex items-baseline gap-2">
-              <TruncText
-                lines={2}
-                className="flex-1 text-[15px] font-semibold text-ink"
-              >
-                {first.name}
-              </TruncText>
-              {isLive ? <LivePill /> : null}
-              {decided && isThriller(match.resultText) ? <ThrillerChip /> : null}
-              {first.score ? (
-                <span className="tabular shrink-0 text-[15px] font-semibold text-ink">
-                  {first.score}
-                </span>
-              ) : null}
+      {/* Three groups, top to bottom: who played and what they made, how it
+          ended, who owned the day. The scoreline pair is one block; the result
+          sits under it with the format pinned to the score column; POTM gets
+          its own footer behind a hairline so it never reads as a third team. */}
+      <Link href={href} className="block min-h-12 active:opacity-70">
+        <div className="px-4 pb-3 pr-11 pt-3.5">
+          {match.tournamentName ? (
+            <div className="mb-2">
+              <TournamentChip name={match.tournamentName} />
             </div>
-            <div className="flex items-baseline gap-2">
-              <TruncText lines={2} className="flex-1 text-[15px] text-muted">
-                {second.name}
-              </TruncText>
-              {second.score ? (
-                <span className="tabular shrink-0 text-[15px] font-medium text-muted">
-                  {second.score}
-                </span>
+          ) : null}
+          {/* One left edge per card, and the same one on every card: the
+              trophy gets a reserved gutter rather than indenting the winner's
+              name past everybody else's. */}
+          <div className="flex gap-1.5">
+            <span className="w-4 shrink-0">
+              {decided ? (
+                <Trophy className="mt-1 h-3.5 w-3.5 text-accent-deep" />
               ) : null}
-            </div>
+            </span>
+            <div className="min-w-0 flex-1">
+              {/* Each side gets its line: name left, scoreline right. The
+                  score is what makes game N different from game N+1 between
+                  the same two teams — it reads in tabular ink. */}
+              <div className="flex items-baseline gap-2">
+                <TruncText
+                  lines={2}
+                  className="flex-1 text-[15px] font-semibold text-ink"
+                >
+                  {first.name}
+                </TruncText>
+                {isLive ? <LivePill /> : null}
+                {first.score ? (
+                  <span className="tabular shrink-0 text-[15px] font-semibold text-ink">
+                    {first.score}
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex items-baseline gap-2">
+                <TruncText lines={2} className="flex-1 text-[15px] text-muted">
+                  {second.name}
+                </TruncText>
+                {second.score ? (
+                  <span className="tabular shrink-0 text-[15px] font-medium text-muted">
+                    {second.score}
+                  </span>
+                ) : null}
+              </div>
 
-            {/* The margin is what tells this game apart from every other
-                between the same two sides — it reads in ink, not faint. */}
-            <p className="tabular mt-1.5 text-[13px] text-muted">
-              <span className="font-medium text-muted">{matchType(match)}</span>
-              {" · "}
-              <span className={decided ? "font-medium text-ink" : undefined}>
-                {meta}
-              </span>
-            </p>
+              {/* How it ended, left; what kind of match, right under the
+                  scores it qualifies. The margin reads in ink — it is what
+                  tells this game apart from the last one. */}
+              <div className="mt-2 flex items-center gap-2">
+                <span
+                  className={cn(
+                    "tabular min-w-0 flex-1 text-[13px]",
+                    decided ? "font-medium text-ink" : "text-muted",
+                  )}
+                >
+                  {sentenceCase(meta)}
+                </span>
+                {decided && isThriller(match.resultText) ? (
+                  <ThrillerChip />
+                ) : null}
+                <span className="tabular shrink-0 text-[13px] text-muted">
+                  {matchType(match)}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
+
+        {potm.length > 0 ? (
+          <div className="mx-4 flex items-baseline gap-2 border-t border-line py-2.5 pl-[22px] pr-7">
+            <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-accent-deep">
+              POTM
+            </span>
+            {/* Name and figures share the line when they fit; a long name
+                pushes the figures under it rather than squeezing either. */}
+            <div className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-2">
+              <span className="max-w-full text-[13px] font-semibold text-ink [overflow-wrap:anywhere]">
+                {potm.map((p) => p.name).join(" & ")}
+              </span>
+              {potm.length === 1 ? (
+                <span className="tabular text-[13px] text-muted">
+                  {potmFigures(potm[0])}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
       </Link>
 
       <MatchMenu
