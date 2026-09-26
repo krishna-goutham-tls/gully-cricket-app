@@ -19,10 +19,9 @@ export type SeasonAwardKind =
   | "best_economy";
 
 /**
- * Everything a season can stamp: the six caps above plus the twelve
- * photographed trophies.
- * The shelf kinds have no copy in this file — they are the trophy page's, and
- * anything reading a stamped award has to cope with a kind it can't name.
+ * Everything a season can stamp: the six caps above plus the twelve shelf
+ * awards (convex/lib/awards.ts). The shelf kinds have no copy in this file,
+ * so anything reading a stamped award has to cope with a kind it can't name.
  */
 export type StampedAwardKind =
   | SeasonAwardKind

@@ -68,6 +68,13 @@ type BatAgg = {
   scoreThisInnings: Map<string, number>;
   /** Balls faced per innings — lets a dismissal tell a golden duck apart. */
   ballsThisInnings: Map<string, number>;
+  /** Feats: one over, one match, in a row. */
+  bestOver: number;
+  maxSixesMatch: number;
+  dotRun: number;
+  quotaHits: number;
+  /** Every innings in match order — duck streaks and the slowest knock. */
+  inningsSeq: Array<{ runs: number; balls: number; outs: number }>;
 };
 
 type BowlAgg = {
@@ -84,6 +91,12 @@ type BowlAgg = {
   perInnings: Map<string, { wickets: number; runs: number }>;
   /** Credited wickets per match (all innings pooled) — the haul bonus unit. */
   wicketsByMatch: Map<string, number>;
+  bowled: number;
+  caughtBowled: number;
+  worstOver: number;
+  wicketRun: number;
+  /** Per batter: credited dismissals and sixes conceded. */
+  vs: Map<string, { outs: number; sixes: number }>;
 };
 
 type RecordAgg = {
@@ -169,6 +182,11 @@ type OrgSnapshot = {
   reachedAt: Map<string, Map<string, number>>;
   focus: Focus;
   matchCount: number;
+  /** Player of the Match count — ties share it, as on the hero page. */
+  potm: Map<string, number>;
+  /** Longest run of wins and of losses, among decided matches played. */
+  streaks: Map<string, { win: number; lose: number; w: number; l: number }>;
+  maxDropsMatch: Map<string, number>;
 };
 
 type Window = { afterTs?: number; beforeTs?: number };
@@ -287,6 +305,9 @@ function aggregateStamps(
     reachedAt: new Map(),
     focus: emptyFocus(),
     matchCount: set.matches.filter((m) => inWindow(m, opts)).length,
+    potm: new Map(),
+    streaks: new Map(),
+    maxDropsMatch: new Map(),
   };
 
   const byMatch = new Map<string, Doc<"playerMatchStats">[]>();
@@ -328,10 +349,25 @@ function aggregateStamps(
         snap.records.set(key, rec);
       }
       const w = r.work;
+      const st = snap.streaks.get(key) ?? { win: 0, lose: 0, w: 0, l: 0 };
+      snap.streaks.set(key, st);
       if (r.winnerSide) {
         rec.decided += 1;
-        if (matchResult({ ...w, winnerSide: r.winnerSide }) === "won")
+        const res = matchResult({ ...w, winnerSide: r.winnerSide });
+        if (res === "won") {
           rec.wins += 1;
+          st.w += 1;
+          st.l = 0;
+        } else if (res === "lost") {
+          st.l += 1;
+          st.w = 0;
+        }
+        st.win = Math.max(st.win, st.w);
+        st.lose = Math.max(st.lose, st.l);
+      } else {
+        // A tie or no result ends both runs.
+        st.w = 0;
+        st.l = 0;
       }
       if (w.onA && w.onB) {
         rec.playerPoints += w.pointsA + w.pointsB;
@@ -367,9 +403,18 @@ function aggregateStamps(
           bestScore: 0,
           scoreThisInnings: new Map(),
           ballsThisInnings: new Map(),
+          bestOver: 0,
+          maxSixesMatch: 0,
+          dotRun: 0,
+          quotaHits: 0,
+          inningsSeq: [],
         };
         snap.batting.set(key, agg);
       }
+      agg.bestOver = Math.max(agg.bestOver, s.bestOver ?? 0);
+      agg.maxSixesMatch = Math.max(agg.maxSixesMatch, s.sixes);
+      agg.dotRun = Math.max(agg.dotRun, s.dotRun ?? 0);
+      agg.quotaHits += s.quotaHits ?? 0;
       agg.runs += s.runs;
       agg.balls += s.balls;
       agg.fours += s.fours;
@@ -385,6 +430,7 @@ function aggregateStamps(
         agg.innings.add(innKey);
         agg.scoreThisInnings.set(innKey, inn.runs);
         agg.ballsThisInnings.set(innKey, inn.balls);
+        agg.inningsSeq.push({ runs: inn.runs, balls: inn.balls, outs: inn.outs });
         if (inn.runs > agg.bestScore) agg.bestScore = inn.runs;
       }
     }
@@ -406,8 +452,24 @@ function aggregateStamps(
           innings: new Set(),
           perInnings: new Map(),
           wicketsByMatch: new Map(),
+          bowled: 0,
+          caughtBowled: 0,
+          worstOver: 0,
+          wicketRun: 0,
+          vs: new Map(),
         };
         snap.bowling.set(key, agg);
+      }
+      agg.bowled += s.bowled ?? 0;
+      agg.caughtBowled += s.caughtBowled ?? 0;
+      agg.worstOver = Math.max(agg.worstOver, s.worstOver ?? 0);
+      agg.wicketRun = Math.max(agg.wicketRun, s.wicketRun ?? 0);
+      for (const v of s.vs ?? []) {
+        const vk = String(v.userId);
+        const cur = agg.vs.get(vk) ?? { outs: 0, sixes: 0 };
+        cur.outs += v.outs;
+        cur.sixes += v.sixes;
+        agg.vs.set(vk, cur);
       }
       agg.legalBalls += s.legalBalls;
       agg.runs += s.runs;
@@ -430,7 +492,23 @@ function aggregateStamps(
     for (const r of inOrder(rows, "drop")) {
       const key = String(r.userId);
       snap.drops.set(key, (snap.drops.get(key) ?? 0) + r.drops);
+      if (r.drops > (snap.maxDropsMatch.get(key) ?? 0))
+        snap.maxDropsMatch.set(key, r.drops);
     }
+
+    // Player of the Match: the same points the story and hero pages rank by.
+    let bestPts = 0;
+    let potmKeys: string[] = [];
+    for (const r of rows) {
+      const p = matchPoints(r);
+      if (p > bestPts) {
+        bestPts = p;
+        potmKeys = [String(r.userId)];
+      } else if (p === bestPts && p > 0) {
+        potmKeys.push(String(r.userId));
+      }
+    }
+    for (const k of potmKeys) snap.potm.set(k, (snap.potm.get(k) ?? 0) + 1);
 
     for (const r of rows) {
       const key = String(r.userId);
@@ -457,6 +535,20 @@ function aggregateStamps(
   }
 
   return snap;
+}
+
+/**
+ * One stamp's points for its match alone — base plus bonuses, exactly as
+ * `addPoints` sums them and `potmPoints` in convex/story.ts ranks them.
+ */
+function matchPoints(r: Doc<"playerMatchStats">): number {
+  const runs = r.pts?.runs ?? r.bat?.runs ?? 0;
+  const wickets = r.pts?.wickets ?? r.bowl?.wickets ?? 0;
+  const catches = r.pts?.catches ?? r.catches;
+  const innings = r.pts?.innings ?? r.bat?.innings ?? [];
+  let bonus = bowlingHaulBonus(wickets);
+  for (const inn of innings) bonus += battingMilestoneBonus(inn.runs);
+  return basePoints(runs, wickets, catches) + bonus;
 }
 
 /**
@@ -669,12 +761,46 @@ const MIN_LEGAL_BALLS_BOWLED = 6;
  * exact ordering the Leaders tab shows, so the two screens can never disagree
  * about where somebody stands.
  */
+/** An innings needs this many balls before it can be the slowest. */
+const SLOWEST_MIN_BALLS = 6;
+
+/** Longest run of ducks, and the lowest-strike-rate knock, in match order. */
+function battingStreaks(seq: BatAgg["inningsSeq"]) {
+  let duckStreak = 0;
+  let run = 0;
+  let slowest: { runs: number; balls: number } | null = null;
+  for (const inn of seq) {
+    if (inn.outs > 0 && inn.runs === 0) {
+      run += 1;
+      duckStreak = Math.max(duckStreak, run);
+    } else {
+      run = 0;
+    }
+    if (inn.balls < SLOWEST_MIN_BALLS) continue;
+    if (
+      !slowest ||
+      inn.runs / inn.balls < slowest.runs / slowest.balls ||
+      (inn.runs / inn.balls === slowest.runs / slowest.balls &&
+        inn.balls > slowest.balls)
+    ) {
+      slowest = { runs: inn.runs, balls: inn.balls };
+    }
+  }
+  return { duckStreak, slowest };
+}
+
 function buildBattingRows(
   batting: Map<string, BatAgg>,
   names: Map<string, string>,
 ) {
   return Array.from(batting.values())
     .map((agg) => ({
+      ...battingStreaks(agg.inningsSeq),
+      singles: agg.singles,
+      bestOver: agg.bestOver,
+      maxSixesMatch: agg.maxSixesMatch,
+      dotRun: agg.dotRun,
+      quotaHits: agg.quotaHits,
       userId: agg.userId,
       displayName: names.get(String(agg.userId)) ?? "Player",
       runs: agg.runs,
@@ -719,6 +845,10 @@ function buildBowlingRows(
         economy: agg.legalBalls > 0 ? agg.runs / (agg.legalBalls / 6) : 0,
         best: best ? `${best.wickets}/${best.runs}` : "\u2014",
         legalBalls: agg.legalBalls,
+        bowled: agg.bowled,
+        caughtBowled: agg.caughtBowled,
+        worstOver: agg.worstOver,
+        wicketRun: agg.wicketRun,
         qualified: agg.legalBalls >= MIN_LEGAL_BALLS_BOWLED,
       };
     })
@@ -896,6 +1026,72 @@ async function resolveNames(ctx: QueryCtx, keys: Iterable<string>) {
 }
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** A head-to-head needs this many before it is a record, not a coincidence. */
+const PAIR_MIN = 2;
+
+/**
+ * Records that are not one player's running total: Player of the Match,
+ * streaks, one bad day in the field, and bowler-v-batter pairs. Same
+ * population as the boards — regulars only unless the caller asks for all,
+ * and a pair needs both ends to qualify.
+ */
+function buildFeats(
+  snap: OrgSnapshot,
+  names: Map<string, string>,
+  tags: Map<string, PlayerTag[]>,
+  includeExtras: boolean,
+) {
+  const ok = (key: string) =>
+    includeExtras || isBoardRegular(tags.get(key) ?? []);
+  const name = (key: string) => names.get(key) ?? "Player";
+  const potm = Array.from(snap.potm.entries())
+    .filter(([k]) => ok(k))
+    .map(([k, count]) => ({
+      userId: k as Id<"users">,
+      displayName: name(k),
+      count,
+    }));
+  const streaks = Array.from(snap.streaks.entries())
+    .filter(([k]) => ok(k))
+    .map(([k, st]) => ({
+      userId: k as Id<"users">,
+      displayName: name(k),
+      win: st.win,
+      lose: st.lose,
+    }));
+  const dropsMatch = Array.from(snap.maxDropsMatch.entries())
+    .filter(([k]) => ok(k))
+    .map(([k, drops]) => ({
+      userId: k as Id<"users">,
+      displayName: name(k),
+      drops,
+    }));
+  const pairs: Array<{
+    bowlerId: Id<"users">;
+    bowlerName: string;
+    batterId: Id<"users">;
+    batterName: string;
+    outs: number;
+    sixes: number;
+  }> = [];
+  for (const [bk, agg] of Array.from(snap.bowling.entries())) {
+    if (!ok(bk)) continue;
+    for (const [tk, v] of Array.from(agg.vs.entries())) {
+      if (!ok(tk)) continue;
+      if (v.outs < PAIR_MIN && v.sixes < PAIR_MIN) continue;
+      pairs.push({
+        bowlerId: bk as Id<"users">,
+        bowlerName: name(bk),
+        batterId: tk as Id<"users">,
+        batterName: name(tk),
+        outs: v.outs,
+        sixes: v.sixes,
+      });
+    }
+  }
+  return { potm, streaks, dropsMatch, pairs };
+}
 
 /**
  * Stamps each current row with where it sat a week ago, so the board can draw
@@ -1145,6 +1341,7 @@ async function leaderboardFor(
   });
   const cur = rows(current);
   const prev = rows(previous);
+  const feats = buildFeats(current, names, tags, includeExtras);
 
   const seen = new Set(keys);
   let excludedCount = 0;
@@ -1170,6 +1367,7 @@ async function leaderboardFor(
     // which is all-time, not a ranked board with its own ↑/↓ arrows.
     drops: cur.drops,
     records: cur.records,
+    feats,
     // Not a player board: no tags, no arrows. Records reads the top row.
     teams: await buildTeamRows(ctx, teamResults),
   };

@@ -15,6 +15,10 @@ import {
 import { useAuth } from "@/components/providers/AuthProvider";
 import type { PlayerShareData, ShareStat } from "@/components/share/ShareCard";
 import { ShareButton } from "@/components/share/ShareButton";
+import {
+  SeasonScopeMenu,
+  type Scope,
+} from "@/components/shelf/SeasonScopeMenu";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
@@ -27,7 +31,7 @@ import { useMutation, useQuery } from "convex/react";
 import { ArrowLeft, ChevronDown, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 const LOG_PREVIEW = 8;
 
@@ -225,6 +229,7 @@ function buildShareStats(stats: Profile): ShareStat[] {
 function buildShareData(
   stats: Profile,
   topTrophy: Trophy | undefined,
+  season: string | undefined,
 ): PlayerShareData {
   return {
     kind: "player",
@@ -235,6 +240,7 @@ function buildShareData(
     matchesPlayed: stats.matchesPlayed,
     stats: buildShareStats(stats),
     trophy: topTrophy ?? null,
+    season,
   };
 }
 
@@ -391,14 +397,39 @@ export default function PlayerDetailPage() {
   // player's role/innings split once `stats` loads, without a hook that has
   // to run conditionally.
   const [discipline, setDiscipline] = useState<"bat" | "bowl" | null>(null);
-  const stats = useQuery(
-    api.stats.playerStats,
-    token && activeOrgId ? { token, orgId: activeOrgId, userId } : "skip",
-  );
+  // A profile opens on the whole career; a season is one tap away.
+  const [scope, setScope] = useState<Scope>("all");
   const seasons = useQuery(
     api.seasons.list,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
   );
+  const selectedSeason =
+    scope === "all"
+      ? null
+      : (seasons?.find((s) => s._id === scope.seasonId) ?? null);
+  const fresh = useQuery(
+    api.stats.playerStats,
+    token && activeOrgId
+      ? {
+          token,
+          orgId: activeOrgId,
+          userId,
+          ...(selectedSeason ? { seasonId: selectedSeason._id } : {}),
+        }
+      : "skip",
+  );
+  // Switching season keeps the last numbers on screen, dimmed, until the new
+  // ones land — no spinner flash. Keyed by player so another profile never
+  // shows this one's numbers.
+  const kept = useRef<{ userId: string; stats: typeof fresh }>();
+  if (fresh !== undefined) kept.current = { userId, stats: fresh };
+  const stats =
+    fresh !== undefined
+      ? fresh
+      : kept.current?.userId === userId
+        ? kept.current.stats
+        : undefined;
+  const switching = fresh === undefined && stats !== undefined;
   // Both, or neither. The season chips are prepended to the career chips, so a
   // `seasons` that lands a tick after `stats` reorders the row under the
   // reader's thumb — and a share tapped in that window builds its poster
@@ -441,12 +472,15 @@ export default function PlayerDetailPage() {
   // null on the same failure, so the page has already shown "Player not found"
   // before this line can matter.
   const trophies = [
-    ...computeSeasonTrophies(seasons ?? [], String(stats.userId)),
+    ...computeSeasonTrophies(
+      selectedSeason ? [selectedSeason] : (seasons ?? []),
+      String(stats.userId),
+    ),
     ...computeTrophies(stats),
   ];
   const hasBothDisciplines = Boolean(stats.batting && stats.bowling);
   const activeDiscipline = discipline ?? defaultDiscipline(stats);
-  const shareData = buildShareData(stats, trophies[0]);
+  const shareData = buildShareData(stats, trophies[0], selectedSeason?.name);
   const shareSlug = stats.displayName
     .trim()
     .toLowerCase()
@@ -499,6 +533,17 @@ export default function PlayerDetailPage() {
               </div>
             </div>
           </div>
+
+          {seasons && seasons.length > 0 ? (
+            <div className="mt-1">
+              <SeasonScopeMenu
+                seasons={seasons}
+                selected={selectedSeason}
+                onSelect={setScope}
+                tone="dark"
+              />
+            </div>
+          ) : null}
 
           {/* The whole career in one line, before any card is read. Innings
               sits next to matches on purpose — a Test where they came out
@@ -584,7 +629,12 @@ export default function PlayerDetailPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-md space-y-6 px-5 py-4">
+      <main
+        className={cn(
+          "mx-auto max-w-md space-y-6 px-5 py-4 transition-opacity",
+          switching && "opacity-60",
+        )}
+      >
         {isAdmin && token && activeOrgId ? (
           <Section title="Tags">
             <PlayerTagEditor
@@ -692,8 +742,12 @@ export default function PlayerDetailPage() {
 
         {!stats.batting && !stats.bowling ? (
           <EmptyState
-            title="Nothing scored yet"
-            body="Stats appear here once they have batted or bowled in a completed match."
+            title={selectedSeason ? "Nothing this season" : "Nothing scored yet"}
+            body={
+              selectedSeason
+                ? `No batting or bowling in ${selectedSeason.name} yet.`
+                : "Stats appear here once they have batted or bowled in a completed match."
+            }
           />
         ) : null}
 

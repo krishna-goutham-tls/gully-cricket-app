@@ -315,7 +315,7 @@ function Row({
  * CSS, it never renders.
  */
 /**
- * The Records doorway — trophies and the record book, one page. It has no tab
+ * The Records doorway — honours and roasts, one page. It has no tab
  * of its own: it is a place you go looking for, once, after a match day, so it
  * lives here beside the other two doors rather than costing the tab bar a
  * fifth slot.
@@ -338,7 +338,7 @@ function RecordsRow() {
           Records
         </span>
         <span className="block text-[13px] text-muted">
-          Twelve trophies, one owner each
+          Honours and roasts
         </span>
       </span>
       <ChevronRight className="h-5 w-5 shrink-0 text-faint" />

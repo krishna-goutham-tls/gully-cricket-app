@@ -68,6 +68,12 @@ type BatWork = {
   ducks: number;
   goldenDucks: number;
   facedDucks: number;
+  /** Most runs off the bat in one over. */
+  bestOver: number;
+  /** Longest run of legal dot balls faced in a row, within an innings. */
+  dotRun: number;
+  /** Retired having faced their full ball quota. */
+  quotaHits: number;
   innings: Map<
     string,
     { inningsId: Id<"innings">; runs: number; balls: number; outs: number }
@@ -81,6 +87,14 @@ type BowlWork = {
   dots: number;
   widesNoballs: number;
   sixesConceded: number;
+  bowled: number;
+  caughtBowled: number;
+  /** Most runs conceded in one over. */
+  worstOver: number;
+  /** Most credited wickets on consecutive deliveries — 3 is a hat-trick. */
+  wicketRun: number;
+  /** Per batter faced: credited dismissals and sixes conceded. */
+  vs: Map<string, { userId: Id<"users">; outs: number; sixes: number }>;
   innings: Map<
     string,
     {
@@ -189,6 +203,9 @@ export function foldMatch(
         ducks: 0,
         goldenDucks: 0,
         facedDucks: 0,
+        bestOver: 0,
+        dotRun: 0,
+        quotaHits: 0,
         innings: new Map(),
       };
     }
@@ -205,6 +222,11 @@ export function foldMatch(
         dots: 0,
         widesNoballs: 0,
         sixesConceded: 0,
+        bowled: 0,
+        caughtBowled: 0,
+        worstOver: 0,
+        wicketRun: 0,
+        vs: new Map(),
         innings: new Map(),
       };
     }
@@ -279,6 +301,28 @@ export function foldMatch(
 
   const balls = [...ballsIn].sort((a, b) => a.sequence - b.sequence);
 
+  // Running tallies for the one-over and in-a-row feats. Overs are keyed per
+  // innings; a bowler's wicket run spans the match, a batter's dot run does not.
+  const overBat = new Map<string, number>();
+  const overBowl = new Map<string, number>();
+  const dotRunNow = new Map<string, number>();
+  // Legal balls faced per innings — the quota counts only these.
+  const legalFaced = new Map<string, number>();
+  const wicketRunNow = new Map<string, number>();
+  const rules = match.ruleSnapshot;
+  const commonIds = new Set(
+    match.sideAPlayerIds
+      .map(String)
+      .filter((id) => match.sideBPlayerIds.some((x) => String(x) === id)),
+  );
+  // Mirrors `battingCapBalls` in convex/scoring.ts.
+  const capOf = (id: string) =>
+    rules.maxBallsPerBatsman === undefined
+      ? undefined
+      : rules.commonMaxBallsPerBatsman !== undefined && commonIds.has(id)
+        ? rules.commonMaxBallsPerBatsman
+        : rules.maxBallsPerBatsman;
+
   for (const b of balls) {
     // Drop tags ride every row (rare on a retirement marker, but the tag is
     // just a patched field, not a delivery) — count before the retire skip.
@@ -288,8 +332,19 @@ export function foldMatch(
       p.drops += 1;
       markAt(b.droppedById, "field.drops", b.createdAt);
     }
-    // Retirement markers are not deliveries
-    if (b.isRetire) continue;
+    // Retirement markers are not deliveries. One that ends a full quota is
+    // the only thing they count for.
+    if (b.isRetire) {
+      if (b.playerOutId) {
+        const cap = capOf(String(b.playerOutId));
+        const faced =
+          legalFaced.get(`${String(b.inningsId)}:${String(b.playerOutId)}`) ??
+          0;
+        if (cap !== undefined && cap > 0 && faced >= cap)
+          getBat(b.playerOutId).quotaHits += 1;
+      }
+      continue;
+    }
     const innKey = String(b.inningsId);
     const batSide = battingSideOf.get(innKey);
     const bowlSide: Side | undefined =
@@ -339,6 +394,21 @@ export function foldMatch(
     }
     inn.runs += b.runsBat;
     if (faced) inn.balls += 1;
+    {
+      const k = `${innKey}:${b.overNumber}:${String(b.strikerId)}`;
+      const o = (overBat.get(k) ?? 0) + b.runsBat;
+      overBat.set(k, o);
+      if (o > bat.bestOver) bat.bestOver = o;
+      const dk = `${innKey}:${String(b.strikerId)}`;
+      if (b.isLegal) legalFaced.set(dk, (legalFaced.get(dk) ?? 0) + 1);
+      if (b.isLegal && b.runsBat === 0) {
+        const n = (dotRunNow.get(dk) ?? 0) + 1;
+        dotRunNow.set(dk, n);
+        if (n > bat.dotRun) bat.dotRun = n;
+      } else if (b.runsBat > 0) {
+        dotRunNow.set(dk, 0);
+      }
+    }
 
     // Every ball faced, by bowler — not just the ones that got them out.
     {
@@ -429,7 +499,41 @@ export function foldMatch(
     per.runs += b.runsBat + b.extrasRuns;
     if (b.isLegal) per.legalBalls += 1;
     const credited = b.isWicket && b.wicketType !== "runout";
+    {
+      const k = `${innKey}:${b.overNumber}:${String(b.bowlerId)}`;
+      const o = (overBowl.get(k) ?? 0) + b.runsBat + b.extrasRuns;
+      overBowl.set(k, o);
+      if (o > bowl.worstOver) bowl.worstOver = o;
+      // A wide or no-ball that takes nothing is not a delivery in the run.
+      const wk = String(b.bowlerId);
+      if (credited) {
+        const n = (wicketRunNow.get(wk) ?? 0) + 1;
+        wicketRunNow.set(wk, n);
+        if (n > bowl.wicketRun) bowl.wicketRun = n;
+      } else if (b.isLegal || b.isWicket) {
+        wicketRunNow.set(wk, 0);
+      }
+      if (String(b.strikerId) !== String(b.bowlerId)) {
+        const vk = String(b.strikerId);
+        const v = bowl.vs.get(vk) ?? { userId: b.strikerId, outs: 0, sixes: 0 };
+        if (b.runsBat === 6) v.sixes += 1;
+        bowl.vs.set(vk, v);
+      }
+      if (credited && b.playerOutId && String(b.playerOutId) !== String(b.bowlerId)) {
+        const vk = String(b.playerOutId);
+        const v = bowl.vs.get(vk) ?? { userId: b.playerOutId, outs: 0, sixes: 0 };
+        v.outs += 1;
+        bowl.vs.set(vk, v);
+      }
+    }
     if (credited) {
+      if (b.wicketType === "bowled") bowl.bowled += 1;
+      if (
+        b.wicketType === "caught" &&
+        b.fielderId &&
+        String(b.fielderId) === String(b.bowlerId)
+      )
+        bowl.caughtBowled += 1;
       bowl.wickets += 1;
       markAt(b.bowlerId, "bowl.wickets", b.createdAt);
       per.wickets += 1;
@@ -487,7 +591,15 @@ export function foldMatch(
         ? { ...p.bat, innings: Array.from(p.bat.innings.values()) }
         : undefined,
       bowl: p.bowl
-        ? { ...p.bowl, innings: Array.from(p.bowl.innings.values()) }
+        ? {
+            ...p.bowl,
+            innings: Array.from(p.bowl.innings.values()),
+            // Only batters with something to their name — a head-to-head of
+            // no outs and no sixes is every batter ever faced.
+            vs: Array.from(p.bowl.vs.values()).filter(
+              (v) => v.outs > 0 || v.sixes > 0,
+            ),
+          }
         : undefined,
       catches: p.catches,
       drops: p.drops,

@@ -32,11 +32,14 @@ export function SeasonScopeMenu({
   seasons,
   selected,
   onSelect,
+  tone = "light",
 }: {
   seasons: Season[];
   /** null = All time. */
   selected: Season | null;
   onSelect: (next: Scope) => void;
+  /** "dark" for an ink header, like the player profile. */
+  tone?: "light" | "dark";
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -57,7 +60,12 @@ export function SeasonScopeMenu({
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="-mx-1 flex h-11 items-center gap-1 rounded-lg px-1 text-[13px] font-semibold text-muted active:bg-bg"
+        className={cn(
+          "-mx-1 flex h-11 items-center gap-1 rounded-lg px-1 text-[13px] font-semibold",
+          tone === "dark"
+            ? "text-bg/70 active:bg-white/10"
+            : "text-muted active:bg-bg",
+        )}
       >
         <span className="whitespace-nowrap">
           {selected ? selected.name : "All time"}
