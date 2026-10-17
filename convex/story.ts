@@ -144,6 +144,8 @@ export const matchStory = query({
       outId: Id<"users">;
     }> = [];
     for (const m of orgMatches) {
+      // Practice games feed no tally, except on their own story.
+      if (m.practice && m._id !== match._id) continue;
       const mBalls = await ctx.db
         .query("balls")
         .withIndex("by_match", (q) => q.eq("matchId", m._id))

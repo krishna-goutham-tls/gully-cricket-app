@@ -348,3 +348,40 @@ export const recomputeSeriesAwards = internalMutation({
     return { seasonsChecked: ended.length, changed: changes.length, changes };
   },
 });
+
+/**
+ * Move a season's start back to take matches played before it was started.
+ * Matches are not tagged, so the window is the only link. Refuses to overlap
+ * the season before it. `dryRun` lists the matches the move takes in.
+ *   npx convex run seasons:moveStart '{"seasonId":"…","startedAt":0,"dryRun":true}'
+ */
+export const moveStart = internalMutation({
+  args: {
+    seasonId: v.id("seasons"),
+    startedAt: v.number(),
+    dryRun: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { seasonId, startedAt, dryRun }) => {
+    const season = await ctx.db.get(seasonId);
+    if (!season) throw new Error("No such season");
+    if (startedAt >= season.startedAt) {
+      throw new Error("New start must be earlier than the current start");
+    }
+    const others = await seasonsForOrg(ctx, season.orgId);
+    for (const s of others) {
+      if (s._id === seasonId || s.startedAt > season.startedAt) continue;
+      if ((s.endedAt ?? Infinity) > startedAt) {
+        throw new Error(`Would overlap ${s.name}`);
+      }
+    }
+    const matches = await ctx.db
+      .query("matches")
+      .withIndex("by_org", (q) => q.eq("orgId", season.orgId))
+      .collect();
+    const takenIn = matches
+      .filter((m) => m.createdAt >= startedAt && m.createdAt < season.startedAt)
+      .map((m) => m._id);
+    if (!dryRun) await ctx.db.patch(seasonId, { startedAt });
+    return { before: season.startedAt, after: startedAt, takenIn };
+  },
+});

@@ -1913,19 +1913,22 @@ export const backfillStamps = internalMutation({
 });
 
 /**
- * After a backfill: every completed match has a stamp and a frozen junior
- * list, and nothing else is stamped. Empty `mismatches` is a pass.
+ * After a backfill: every completed match that is not practice has a stamp
+ * and a frozen junior list, and nothing else is stamped. Empty `mismatches`
+ * is a pass.
  */
 export const checkStamps = internalQuery({
   args: { orgId: v.id("orgs") },
   handler: async (ctx, { orgId }) => {
     const mismatches: string[] = [];
-    const completed = await ctx.db
-      .query("matches")
-      .withIndex("by_org_status", (q) =>
-        q.eq("orgId", orgId).eq("status", "completed"),
-      )
-      .collect();
+    const completed = (
+      await ctx.db
+        .query("matches")
+        .withIndex("by_org_status", (q) =>
+          q.eq("orgId", orgId).eq("status", "completed"),
+        )
+        .collect()
+    ).filter((m) => !m.practice);
     const stamped = await ctx.db
       .query("matchStats")
       .withIndex("by_org_date", (q) => q.eq("orgId", orgId))

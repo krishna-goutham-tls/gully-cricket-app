@@ -357,6 +357,11 @@ export default defineSchema({
      * (convex/lib/points.ts `earnsPoints`). Absent = not completed yet.
      */
     juniorIds: v.optional(v.array(v.id("users"))),
+    /**
+     * A practice game: kept with its scorecard, but never stamped, so it
+     * counts on no board, record or season. Set by `maintenance:markPractice`.
+     */
+    practice: v.optional(v.boolean()),
     createdBy: v.id("users"),
     createdAt: v.number(),
   })

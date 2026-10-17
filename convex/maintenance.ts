@@ -472,3 +472,32 @@ export const wipeMatchData = internalMutation({
     return counts;
   },
 });
+
+/**
+ * Ops: mark completed matches as practice (or back). The match keeps its
+ * scorecard and story; its stamps go, so it leaves every board, record and
+ * season. `practice: false` stamps it again. `dryRun` checks without writing.
+ */
+export const markPractice = internalMutation({
+  args: {
+    matchIds: v.array(v.id("matches")),
+    practice: v.boolean(),
+    dryRun: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { matchIds, practice, dryRun }) => {
+    const out: Array<{ matchId: Id<"matches">; was: boolean }> = [];
+    for (const matchId of matchIds) {
+      const match = await ctx.db.get(matchId);
+      if (!match) throw new Error(`Match not found: ${matchId}`);
+      if (match.status !== "completed")
+        throw new Error(`Match not completed (status=${match.status})`);
+      out.push({ matchId, was: match.practice === true });
+    }
+    if (dryRun) return out;
+    for (const { matchId } of out) {
+      await ctx.db.patch(matchId, { practice: practice || undefined });
+      await restampMatch(ctx, matchId);
+    }
+    return out;
+  },
+});
