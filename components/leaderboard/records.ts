@@ -228,6 +228,10 @@ export function buildRecords(
   push(batting, "Most singles", bestBy(bat, (r) => r.singles, { tieBreak: tieHonourBat }), (r) => count(r.singles));
   push(batting, "Most balls faced", bestBy(bat, (r) => r.balls, { tieBreak: tieHonourBat }), (r) => count(r.balls));
   push(batting, "Quota King", bestBy(bat, (r) => r.quotaHits, { tieBreak: tieHonourBat }), (r) => count(r.quotaHits));
+  push(batting, "Most 30s", bestBy(bat, (r) => r.thirties, { tieBreak: tieHonourBat }), (r) => count(r.thirties));
+  push(batting, "Most 50s", bestBy(bat, (r) => r.fifties, { tieBreak: tieHonourBat }), (r) => count(r.fifties));
+  push(batting, "Most 70s", bestBy(bat, (r) => r.seventies, { tieBreak: tieHonourBat }), (r) => count(r.seventies));
+  push(batting, "Most 100s", bestBy(bat, (r) => r.hundreds, { tieBreak: tieHonourBat }), (r) => count(r.hundreds));
 
   const bowling: FeatRecord[] = [];
   push(bowling, "Most wickets", bestBy(bowl, (r) => r.wickets, { tieBreak: tieHonourBowl }), (r) => count(r.wickets));
@@ -276,6 +280,8 @@ export function buildRecords(
   );
   push(bowling, "Most dots", bestBy(bowl, (r) => r.dots, { tieBreak: tieHonourBowl }), (r) => count(r.dots));
   push(bowling, "Most overs bowled", bestBy(bowl, (r) => r.legalBalls, { tieBreak: tieHonourBowl }), (r) => r.oversText);
+  push(bowling, "Most 3-fors", bestBy(bowl, (r) => r.threeFors, { tieBreak: tieHonourBowl }), (r) => count(r.threeFors));
+  push(bowling, "Most 5-fors", bestBy(bowl, (r) => r.fiveFors, { tieBreak: tieHonourBowl }), (r) => count(r.fiveFors));
 
   // Head-to-heads need 2 or more of the thing measured — once is luck. A tie
   // goes to the holder with more points for an honour and fewer for a

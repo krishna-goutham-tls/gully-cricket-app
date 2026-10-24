@@ -677,8 +677,9 @@ export async function clearMatchStamps(
 
 /**
  * Brings one match's stamps in line with its ball log: clears them, and if
- * the match is (still) completed, folds it again. Idempotent — every caller
- * that changes a completed match, or takes one out of `completed`, ends here.
+ * the match is (still) completed and not practice, folds it again. Idempotent —
+ * every caller that changes a completed match, or takes one out of
+ * `completed`, ends here.
  */
 export async function restampMatch(
   ctx: MutationCtx,
@@ -686,7 +687,7 @@ export async function restampMatch(
 ): Promise<boolean> {
   await clearMatchStamps(ctx, matchId);
   const match = await ctx.db.get(matchId);
-  if (!match || match.status !== "completed") return false;
+  if (!match || match.status !== "completed" || match.practice) return false;
   const innings = await ctx.db
     .query("innings")
     .withIndex("by_match", (q) => q.eq("matchId", matchId))

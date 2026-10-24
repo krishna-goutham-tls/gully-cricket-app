@@ -5,9 +5,11 @@ import { shortDate } from "@/lib/dates";
 import type { Trophy } from "@/lib/trophies";
 import { cn } from "@/lib/utils";
 import type { FunctionReturnType } from "convex/server";
+import { ClimbChart } from "@/components/player/Charts";
 import {
   Award,
   BarChart3,
+  Check,
   ChevronDown,
   Crown,
   Flame,
@@ -604,6 +606,161 @@ export function InningsLog({ rows }: { rows: LogRow[] }) {
           </Link>
         );
       })}
+    </div>
+  );
+}
+
+export type Climb = NonNullable<
+  NonNullable<FunctionReturnType<typeof api.stats.milestones>>["player"]
+>;
+
+const fmtCount = (n: number) => n.toLocaleString("en-IN");
+
+function ordinal(n: number) {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
+}
+
+/** "Fastest of 7" · "3rd fastest of 7" · "Only one so far". */
+function raceLine(rank: number | null, of: number) {
+  if (rank === null) return null;
+  if (of === 1) return "Only one so far";
+  if (rank === 1) return `Fastest of ${of}`;
+  return `${ordinal(rank)} fastest of ${of}`;
+}
+
+const LADDER_PREVIEW = 3;
+
+/**
+ * A career as a ladder: the next rung on top with how far there is to go,
+ * the climb drawn innings by innings, then every rung already reached, each
+ * with the innings it took and where that puts them in the race.
+ */
+export function MilestoneLadder({ climb }: { climb: Climb }) {
+  const kinds = (["runs", "wickets"] as const).filter(
+    (k) => climb[k].total > 0,
+  );
+  const [picked, setPicked] = useState<"runs" | "wickets" | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  const kind = picked && kinds.includes(picked) ? picked : kinds[0];
+  if (!kind) return null;
+  const l = climb[kind];
+  const gap = l.next - l.prev;
+  const pct = gap > 0 ? ((l.total - l.prev) / gap) * 100 : 0;
+  const reached = [...l.reached].reverse();
+  const shown = showAll ? reached : reached.slice(0, LADDER_PREVIEW);
+
+  return (
+    <div>
+      {kinds.length > 1 ? (
+        <div className="mb-3 flex gap-1.5 rounded-2xl border border-line bg-surface p-1">
+          {kinds.map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => {
+                setPicked(k);
+                setShowAll(false);
+              }}
+              aria-current={kind === k}
+              className={cn(
+                "min-h-11 min-w-0 flex-1 rounded-xl text-center text-[13px] font-semibold capitalize transition",
+                kind === k ? "bg-ink text-bg" : "text-muted active:bg-line/60",
+              )}
+            >
+              {k}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="rounded-2xl border border-line bg-surface p-4 shadow-card">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">
+            Next milestone
+          </p>
+          <p className="tabular text-[13px] text-muted">
+            {fmtCount(l.total)} now
+          </p>
+        </div>
+        <div className="mt-1 flex items-baseline justify-between gap-2">
+          <p className="tabular text-2xl font-semibold tracking-tight text-ink">
+            {fmtCount(l.next)} {kind}
+          </p>
+          <p className="tabular shrink-0 text-[15px] font-semibold text-accent-deep">
+            {fmtCount(l.next - l.total)} to go
+          </p>
+        </div>
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-line">
+          <div
+            className="h-full rounded-r-full bg-accent"
+            style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+          />
+        </div>
+
+        {l.series.length >= 2 ? (
+          <div className="mt-4 border-t border-line pt-3">
+            <ClimbChart
+              series={l.series}
+              marks={l.reached}
+              next={l.next}
+              unit={kind}
+            />
+          </div>
+        ) : null}
+      </div>
+
+      {reached.length > 0 ? (
+        <ol className="mt-3">
+          {shown.map((r, i) => {
+            const race = raceLine(r.rank, r.of);
+            return (
+              <li key={r.target} className="relative flex gap-3 pb-3 last:pb-0">
+                {/* The rail: each rung joined to the one below it. */}
+                {i < shown.length - 1 ? (
+                  <span className="absolute left-[11px] top-6 h-[calc(100%-12px)] w-0.5 bg-accent/40" />
+                ) : null}
+                <span className="relative mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-ink">
+                  <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="tabular text-[15px] font-semibold text-ink">
+                      {fmtCount(r.target)} {kind}
+                    </p>
+                    {race ? (
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                          r.rank === 1
+                            ? "bg-accent-soft text-accent-deep"
+                            : "bg-ink/[0.06] text-muted",
+                        )}
+                      >
+                        {race}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="tabular text-[13px] text-faint">
+                    In {r.innings} innings · {shortDate(r.date)}
+                  </p>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      ) : null}
+
+      {reached.length > LADDER_PREVIEW ? (
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          className="mt-3 min-h-11 w-full rounded-xl border border-line bg-surface text-[13px] font-semibold text-muted active:bg-bg"
+        >
+          {showAll ? "Show less" : `Show all ${reached.length} milestones`}
+        </button>
+      ) : null}
     </div>
   );
 }

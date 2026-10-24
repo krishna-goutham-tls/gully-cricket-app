@@ -9,10 +9,13 @@ import {
   NemesisCard,
   StatTile,
   FeatChips,
+  MilestoneLadder,
   type LogRow,
   type Profile,
 } from "@/components/player/ProfileParts";
+import { CountStrip, InningsBars } from "@/components/player/Charts";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { shortDate } from "@/lib/dates";
 import type { PlayerShareData, ShareStat } from "@/components/share/ShareCard";
 import { ShareButton } from "@/components/share/ShareButton";
 import {
@@ -159,7 +162,8 @@ function Expander({
  * they've actually played more of, so a specialist bowler with no role set
  * still opens on bowling.
  */
-function defaultDiscipline(stats: Profile): "bat" | "bowl" {
+function defaultDiscipline(stats: Profile): Discipline {
+  if (!stats.batting && !stats.bowling) return "field";
   if (!stats.batting) return "bowl";
   if (!stats.bowling) return "bat";
   const role = stats.primaryRole ?? stats.secondaryRole;
@@ -168,28 +172,6 @@ function defaultDiscipline(stats: Profile): "bat" | "bowl" {
     return "bat";
   }
   return stats.bowling.innings > stats.batting.innings ? "bowl" : "bat";
-}
-
-/**
- * The one line the app says about a player, in words rather than numbers —
- * strictly what the figures already show, no personality guesswork.
- */
-function summaryLine(stats: Profile): string | null {
-  const parts: string[] = [];
-  const bat = stats.batting;
-  const bowl = stats.bowling;
-  if (bat?.rank?.rank === 1) parts.push("Top of the run charts");
-  else if (bowl?.rank?.rank === 1) parts.push("Leads the wicket charts");
-
-  if (bat && bat.balls >= 20) {
-    parts.push(`strikes at ${bat.strikeRate.toFixed(0)}`);
-  }
-  if (bowl?.strikeRate != null && bowl.wickets >= 3) {
-    parts.push(`a wicket every ${bowl.strikeRate.toFixed(0)} balls`);
-  }
-  if (parts.length === 0) return null;
-  const [first, ...rest] = parts;
-  return [first, ...rest].join(" · ");
 }
 
 /**
@@ -244,6 +226,102 @@ function buildShareData(
   };
 }
 
+/** Below this many innings, "last 10" is most of the career and says nothing new. */
+const FORM_MIN_INNINGS = 15;
+const FORM_WINDOW = 10;
+
+/**
+ * Last 10 innings against the career, in words: the one line that says
+ * whether a player is in form, without a chart or a legend.
+ */
+/** Bars beyond this many get too thin to tap on a phone. */
+const CHART_INNINGS = 40;
+
+function battingBars(log: LogRow[]) {
+  return log
+    .flatMap((r) =>
+      [...r.bat].reverse().map((b) => ({ ...b, date: r.date })),
+    )
+    .filter((b) => b.balls > 0 || b.out)
+    .slice(0, CHART_INNINGS)
+    .reverse()
+    .map((b) => ({
+      value: b.runs,
+      highlight: b.runs >= 30,
+      label: `${shortDate(b.date)} · ${b.runs}${b.out ? "" : "*"} off ${b.balls}`,
+    }));
+}
+
+function bowlingBars(log: LogRow[]) {
+  return log
+    .flatMap((r) =>
+      [...r.bowl].reverse().map((s) => ({ ...s, date: r.date })),
+    )
+    .filter((s) => s.legalBalls > 0)
+    .slice(0, CHART_INNINGS)
+    .reverse()
+    .map((s) => ({
+      value: s.wickets,
+      highlight: s.wickets >= 3,
+      label: `${shortDate(s.date)} · ${s.wickets}/${s.runs} in ${s.oversText} overs`,
+    }));
+}
+
+function BattingForm({
+  b,
+  log,
+}: {
+  b: NonNullable<Profile["batting"]>;
+  log: LogRow[];
+}) {
+  if (b.innings < FORM_MIN_INNINGS) return null;
+  const recent = log
+    .flatMap((r) => [...r.bat].reverse())
+    .filter((x) => x.balls > 0 || x.out)
+    .slice(0, FORM_WINDOW);
+  const runs = recent.reduce((t, x) => t + x.runs, 0);
+  const balls = recent.reduce((t, x) => t + x.balls, 0);
+  const outs = recent.filter((x) => x.out).length;
+  const avg = outs > 0 ? runs / outs : runs;
+  const sr = balls > 0 ? (runs / balls) * 100 : 0;
+  return (
+    <p className="mt-2 text-[13px] leading-snug text-muted">
+      Last {FORM_WINDOW} innings: average{" "}
+      <span className="font-semibold text-ink">{avg.toFixed(0)}</span> (career{" "}
+      {b.average.toFixed(0)}), strike rate{" "}
+      <span className="font-semibold text-ink">{sr.toFixed(0)}</span> (career{" "}
+      {b.strikeRate.toFixed(0)}).
+    </p>
+  );
+}
+
+function BowlingForm({
+  b,
+  log,
+}: {
+  b: NonNullable<Profile["bowling"]>;
+  log: LogRow[];
+}) {
+  if (b.innings < FORM_MIN_INNINGS) return null;
+  const recent = log
+    .flatMap((r) => [...r.bowl].reverse())
+    .filter((x) => x.legalBalls > 0)
+    .slice(0, FORM_WINDOW);
+  const runs = recent.reduce((t, x) => t + x.runs, 0);
+  const balls = recent.reduce((t, x) => t + x.legalBalls, 0);
+  const wickets = recent.reduce((t, x) => t + x.wickets, 0);
+  const econ = balls > 0 ? runs / (balls / 6) : 0;
+  return (
+    <p className="mt-2 text-[13px] leading-snug text-muted">
+      Last {FORM_WINDOW} spells:{" "}
+      <span className="font-semibold text-ink">{wickets}</span> wicket
+      {wickets === 1 ? "" : "s"}, economy{" "}
+      <span className="font-semibold text-ink">{econ.toFixed(1)}</span> (career{" "}
+      {b.economy.toFixed(1)}).
+    </p>
+  );
+}
+
 function BattingCard({
   b,
   log,
@@ -271,6 +349,7 @@ function BattingCard({
       </div>
 
       <FormStrip entries={battingForm(log)} />
+      <BattingForm b={b} log={log} />
 
       <div className="mt-3 grid grid-cols-3 gap-y-3">
         <StatTile
@@ -286,9 +365,32 @@ function BattingCard({
         {/* Innings moved up beside the runs, so the hint here is free to say
             what the best score actually is. */}
         <StatTile label="Best" value={String(b.bestScore)} hint="highest" />
-        <StatTile label="4s / 6s" value={`${b.fours}/${b.sixes}`} />
-        <StatTile label="Fifties" value={String(b.fifties)} />
-        <StatTile label="Thirties" value={String(b.thirties)} hint="30 to 49" />
+        <StatTile label="Fours" value={String(b.fours)} />
+        <StatTile label="Sixes" value={String(b.sixes)} />
+        <StatTile label="Not outs" value={String(b.notOuts)} />
+      </div>
+
+      <div className="mt-4">
+        <CountStrip
+          items={[
+            { label: "30s", value: b.thirties, hint: "30-49" },
+            { label: "50s", value: b.fifties, hint: "50-69" },
+            { label: "70s", value: b.seventies, hint: "70-99" },
+            { label: "100s", value: b.hundreds, hint: "100+" },
+          ]}
+        />
+      </div>
+
+      <div className="mt-4 border-t border-line pt-3">
+        <InningsBars
+          bars={battingBars(log)}
+          reference={
+            b.innings >= 3
+              ? { value: b.average, label: `avg ${b.average.toFixed(0)}` }
+              : undefined
+          }
+          hint="Every innings. Gold is 30 or more. Tap a bar."
+        />
       </div>
 
       {/* The character read: where the runs come from, and how often a ball
@@ -342,13 +444,10 @@ function BowlingCard({
       </div>
 
       <FormStrip entries={bowlingForm(log)} />
+      <BowlingForm b={b} log={log} />
 
       <div className="mt-3 grid grid-cols-3 gap-y-3">
-        <StatTile
-          label="Economy"
-          value={b.economy.toFixed(1)}
-          hint={`${b.runs} conceded`}
-        />
+        <StatTile label="Economy" value={b.economy.toFixed(1)} />
         <StatTile
           label="Average"
           value={b.average === null ? "—" : b.average.toFixed(1)}
@@ -364,6 +463,23 @@ function BowlingCard({
             beside the wickets, so showing it twice would only re-open the
             question of which innings number is which. */}
         <StatTile label="Overs" value={b.oversText} />
+        <StatTile label="Conceded" value={String(b.runs)} hint="runs" />
+      </div>
+
+      <div className="mt-4">
+        <CountStrip
+          items={[
+            { label: "3-fors", value: b.threeFors, hint: "3-4 wickets" },
+            { label: "5-fors", value: b.fiveFors, hint: "5+ wickets" },
+          ]}
+        />
+      </div>
+
+      <div className="mt-4 border-t border-line pt-3">
+        <InningsBars
+          bars={bowlingBars(log)}
+          hint="Wickets in every spell. Gold is 3 or more. Tap a bar."
+        />
       </div>
 
       <div className="mt-3.5 space-y-3 border-t border-line pt-3">
@@ -384,6 +500,49 @@ function BowlingCard({
   );
 }
 
+function FieldingCard({ f }: { f: Profile["fielding"] }) {
+  const chances = f.catches + f.drops;
+  const heldPct = chances > 0 ? (f.catches / chances) * 100 : 0;
+  return (
+    <div>
+      <p className="text-[28px] font-semibold leading-none text-ink">
+        {f.catches}
+        <span className="ml-1.5 text-[13px] font-normal text-faint">
+          catch{f.catches === 1 ? "" : "es"}
+        </span>
+      </p>
+      <div className="mt-3 grid grid-cols-3 gap-y-3">
+        <StatTile label="Catches" value={String(f.catches)} />
+        <StatTile label="Run-outs" value={String(f.runOuts)} />
+        <StatTile label="Drops" value={String(f.drops)} />
+      </div>
+      {chances > 0 ? (
+        <div className="mt-3.5 border-t border-line pt-3">
+          <Meter
+            label="Catches held"
+            pct={heldPct}
+            caption={`${f.catches} of ${chances} chances taken`}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+type Discipline = "bat" | "bowl" | "field";
+const DISCIPLINE_LABEL: Record<Discipline, string> = {
+  bat: "Batting",
+  bowl: "Bowling",
+  field: "Fielding",
+};
+
+type FormatPick = "all" | "test" | "limited";
+const FORMAT_LABEL: Record<FormatPick, string> = {
+  all: "All",
+  test: "Test",
+  limited: "Limited",
+};
+
 export default function PlayerDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -396,9 +555,10 @@ export default function PlayerDetailPage() {
   // Null until the viewer taps the toggle — lets the default follow the
   // player's role/innings split once `stats` loads, without a hook that has
   // to run conditionally.
-  const [discipline, setDiscipline] = useState<"bat" | "bowl" | null>(null);
+  const [discipline, setDiscipline] = useState<Discipline | null>(null);
   // A profile opens on the whole career; a season is one tap away.
   const [scope, setScope] = useState<Scope>("all");
+  const [format, setFormat] = useState<FormatPick>("all");
   const seasons = useQuery(
     api.seasons.list,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
@@ -415,9 +575,19 @@ export default function PlayerDetailPage() {
           orgId: activeOrgId,
           userId,
           ...(selectedSeason ? { seasonId: selectedSeason._id } : {}),
+          ...(format !== "all" ? { format } : {}),
         }
       : "skip",
   );
+  // Milestones are a whole-career race, so they only show on the default view.
+  const careerView = scope === "all" && format === "all";
+  const milestones = useQuery(
+    api.stats.milestones,
+    token && activeOrgId && careerView
+      ? { token, orgId: activeOrgId, userId }
+      : "skip",
+  );
+  const climb = careerView ? (milestones?.player ?? null) : null;
   // Switching season keeps the last numbers on screen, dimmed, until the new
   // ones land — no spinner flash. Keyed by player so another profile never
   // shows this one's numbers.
@@ -458,7 +628,6 @@ export default function PlayerDetailPage() {
 
   const role = stats.primaryRole ?? stats.secondaryRole;
   const log = showAll ? stats.log : stats.log.slice(0, LOG_PREVIEW);
-  const summary = summaryLine(stats);
   const firstName = stats.displayName.trim().split(/\s+/)[0];
   // The section label must not survive on its own when nobody qualifies yet.
   const m = stats.matchups;
@@ -478,9 +647,22 @@ export default function PlayerDetailPage() {
     ),
     ...computeTrophies(stats),
   ];
-  const hasBothDisciplines = Boolean(stats.batting && stats.bowling);
-  const activeDiscipline = discipline ?? defaultDiscipline(stats);
-  const shareData = buildShareData(stats, trophies[0], selectedSeason?.name);
+  const f = stats.fielding;
+  const disciplines: Discipline[] = [
+    ...(stats.batting ? (["bat"] as const) : []),
+    ...(stats.bowling ? (["bowl"] as const) : []),
+    ...(f.catches + f.drops + f.runOuts > 0 ? (["field"] as const) : []),
+  ];
+  const activeDiscipline =
+    discipline && disciplines.includes(discipline)
+      ? discipline
+      : defaultDiscipline(stats);
+  const showFormats = stats.formats.test > 0 && stats.formats.limited > 0;
+  const scopeLabel =
+    [selectedSeason?.name, format === "all" ? null : FORMAT_LABEL[format]]
+      .filter(Boolean)
+      .join(" · ") || undefined;
+  const shareData = buildShareData(stats, trophies[0], scopeLabel);
   const shareSlug = stats.displayName
     .trim()
     .toLowerCase()
@@ -534,26 +716,47 @@ export default function PlayerDetailPage() {
             </div>
           </div>
 
-          {seasons && seasons.length > 0 ? (
-            <div className="mt-1">
-              <SeasonScopeMenu
-                seasons={seasons}
-                selected={selectedSeason}
-                onSelect={setScope}
-                tone="dark"
-              />
+          {(seasons && seasons.length > 0) || showFormats || format !== "all" ? (
+            <div className="mt-1 flex items-center justify-between gap-3">
+              {seasons && seasons.length > 0 ? (
+                <SeasonScopeMenu
+                  seasons={seasons}
+                  selected={selectedSeason}
+                  onSelect={(next) => {
+                    setScope(next);
+                    // A season may hold one format only; start it on both.
+                    setFormat("all");
+                  }}
+                  tone="dark"
+                />
+              ) : (
+                <span />
+              )}
+              {showFormats || format !== "all" ? (
+                <div className="flex shrink-0 rounded-xl bg-white/10 p-1">
+                  {(["all", "test", "limited"] as const).map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setFormat(k)}
+                      aria-current={format === k}
+                      className={cn(
+                        "min-h-11 rounded-lg px-3 text-[13px] font-semibold transition",
+                        format === k
+                          ? "bg-bg text-ink"
+                          : "text-bg/70 active:bg-white/10",
+                      )}
+                    >
+                      {FORMAT_LABEL[k]}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : null}
 
-          {/* The whole career in one line, before any card is read. Innings
-              sits next to matches on purpose — a Test where they came out
-              twice is 2 innings inside 1 match, and that gap is worth
-              showing before the reader gets to a single average or rate.
-              This one is every innings they took the field in, batting OR
-              bowling, so it reads higher than the batting innings the average
-              below is built from — hence the split spelled out underneath,
-              which is the only thing stopping it being misread as "times I
-              came out to bat". */}
+          {/* The whole career in one line, before any card is read: one
+              number per discipline, so Catches sits beside Runs and Wickets. */}
           <div className="mt-3 flex gap-4 border-t border-white/10 pt-3">
             {[
               {
@@ -564,15 +767,9 @@ export default function PlayerDetailPage() {
                     ? `${stats.record.wins} won`
                     : undefined,
               },
-              {
-                label: "Innings",
-                value: String(stats.inningsPlayed),
-                hint: `${stats.batting?.innings ?? 0} bat · ${
-                  stats.bowling?.innings ?? 0
-                } bowl`,
-              },
               { label: "Runs", value: String(stats.batting?.runs ?? 0) },
               { label: "Wickets", value: String(stats.bowling?.wickets ?? 0) },
+              { label: "Catches", value: String(f.catches) },
             ].map((s) => (
               <div key={s.label} className="min-w-0">
                 <p className="text-[22px] font-semibold leading-none text-bg">
@@ -612,12 +809,6 @@ export default function PlayerDetailPage() {
                   contribution
                 </>
               ) : null}
-            </p>
-          ) : null}
-
-          {summary ? (
-            <p className="mt-2.5 text-[13px] leading-snug text-accent">
-              {summary}
             </p>
           ) : null}
 
@@ -675,49 +866,46 @@ export default function PlayerDetailPage() {
           </Section>
         ) : null}
 
-        {stats.batting || stats.bowling ? (
+        {/* The chase: high on the page, because it is the number a player
+            comes back to check. Whole career only. */}
+        {climb && (climb.runs.total > 0 || climb.wickets.total > 0) ? (
+          <Section title="Milestones">
+            <MilestoneLadder climb={climb} />
+          </Section>
+        ) : null}
+
+        {disciplines.length > 0 ? (
           <section>
-            {/* Same segmented-pill visual as the Test innings rail on a
-                match page — one discipline on screen at a time is the
-                single biggest scroll cut on this page. Skipped entirely
-                for a player who only has one discipline to show. */}
-            {hasBothDisciplines ? (
+            {/* One discipline on screen at a time is the single biggest
+                scroll cut on this page. Skipped for a player with one. */}
+            {disciplines.length > 1 ? (
               <div className="mb-3 flex gap-1.5 rounded-2xl border border-line bg-surface p-1">
-                <button
-                  type="button"
-                  onClick={() => setDiscipline("bat")}
-                  aria-current={activeDiscipline === "bat"}
-                  className={cn(
-                    "min-h-11 min-w-0 flex-1 rounded-xl text-center text-[13px] font-semibold transition",
-                    activeDiscipline === "bat"
-                      ? "bg-ink text-bg"
-                      : "text-muted active:bg-line/60",
-                  )}
-                >
-                  Batting
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDiscipline("bowl")}
-                  aria-current={activeDiscipline === "bowl"}
-                  className={cn(
-                    "min-h-11 min-w-0 flex-1 rounded-xl text-center text-[13px] font-semibold transition",
-                    activeDiscipline === "bowl"
-                      ? "bg-ink text-bg"
-                      : "text-muted active:bg-line/60",
-                  )}
-                >
-                  Bowling
-                </button>
+                {disciplines.map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setDiscipline(d)}
+                    aria-current={activeDiscipline === d}
+                    className={cn(
+                      "min-h-11 min-w-0 flex-1 rounded-xl text-center text-[13px] font-semibold transition",
+                      activeDiscipline === d
+                        ? "bg-ink text-bg"
+                        : "text-muted active:bg-line/60",
+                    )}
+                  >
+                    {DISCIPLINE_LABEL[d]}
+                  </button>
+                ))}
               </div>
             ) : null}
 
-            {stats.batting && (!hasBothDisciplines || activeDiscipline === "bat") ? (
+            {stats.batting && activeDiscipline === "bat" ? (
               <BattingCard b={stats.batting} log={stats.log} vs={stats.vsBowlers} />
             ) : null}
-            {stats.bowling && (!hasBothDisciplines || activeDiscipline === "bowl") ? (
+            {stats.bowling && activeDiscipline === "bowl" ? (
               <BowlingCard b={stats.bowling} log={stats.log} vs={stats.vsBatters} />
             ) : null}
+            {activeDiscipline === "field" ? <FieldingCard f={f} /> : null}
           </section>
         ) : null}
 
