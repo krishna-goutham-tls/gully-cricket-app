@@ -7,6 +7,12 @@ import {
   MutationCtx,
 } from "./_generated/server";
 import { restampMatch } from "./lib/matchStats";
+import {
+  climbOf,
+  racesOf,
+  rungsAround,
+  type MilestoneKind,
+} from "./lib/milestones";
 import { homeGroundOf } from "./lib/grounds";
 import { Doc, Id } from "./_generated/dataModel";
 import { requireOrgViewer } from "./lib/session";
@@ -776,6 +782,30 @@ function battingStreaks(seq: BatAgg["inningsSeq"]) {
   return { duckStreak, slowest };
 }
 
+/** 30s are 30 to 49, 50s are 50 to 99, then 100s: each innings in one bucket. */
+function scoreCounts(scores: Iterable<{ runs: number }>) {
+  let thirties = 0;
+  let fifties = 0;
+  let hundreds = 0;
+  for (const { runs } of Array.from(scores)) {
+    if (runs >= 100) hundreds += 1;
+    else if (runs >= 50) fifties += 1;
+    else if (runs >= 30) thirties += 1;
+  }
+  return { thirties, fifties, hundreds };
+}
+
+/** Three or four wickets in an innings is a 3-for; five or more a 5-for. */
+function haulCounts(spells: Iterable<{ wickets: number }>) {
+  let threeFors = 0;
+  let fiveFors = 0;
+  for (const { wickets } of Array.from(spells)) {
+    if (wickets >= 5) fiveFors += 1;
+    else if (wickets >= 3) threeFors += 1;
+  }
+  return { threeFors, fiveFors };
+}
+
 function buildBattingRows(
   batting: Map<string, BatAgg>,
   names: Map<string, string>,
@@ -783,6 +813,7 @@ function buildBattingRows(
   return Array.from(batting.values())
     .map((agg) => ({
       ...battingStreaks(agg.inningsSeq),
+      ...scoreCounts(agg.inningsSeq),
       singles: agg.singles,
       bestOver: agg.bestOver,
       maxSixesMatch: agg.maxSixesMatch,
@@ -831,6 +862,7 @@ function buildBowlingRows(
         innings: agg.innings.size,
         economy: agg.legalBalls > 0 ? agg.runs / (agg.legalBalls / 6) : 0,
         best: best ? `${best.wickets}/${best.runs}` : "\u2014",
+        ...haulCounts(agg.perInnings.values()),
         legalBalls: agg.legalBalls,
         bowled: agg.bowled,
         caughtBowled: agg.caughtBowled,
@@ -1501,6 +1533,7 @@ async function playerStatsFor(
     orgId: Id<"orgs">;
     userId: Id<"users">;
     seasonId?: Id<"seasons">;
+    format?: Format;
   },
 ) {
   const player = await ctx.db.get(args.userId);
@@ -1516,8 +1549,9 @@ async function playerStatsFor(
   // The profile ranks against the whole board, so it still sums every
   // player's rows in the window — but its own log comes off its own rows.
   const set = await loadStampSet(ctx, args.orgId, window);
-  const snap = aggregateStamps(set, window);
-  snap.focus = await stampFocus(ctx, set, args.orgId, args.userId, window);
+  const filter = { ...window, format: args.format };
+  const snap = aggregateStamps(set, filter);
+  snap.focus = await stampFocus(ctx, set, args.orgId, args.userId, filter);
   const { batting, bowling, focus } = snap;
   const names = await resolveNames(ctx, [
     ...Array.from(batting.keys()),
@@ -1533,14 +1567,28 @@ async function playerStatsFor(
   const bowl = bowling.get(key);
   const best = bowl ? bestFigures(bowl) : null;
 
-  // Distinct innings they took part in, batting or bowling — a Test where
-  // they came out twice and bowled twice is 4 innings, not the 1 match it
-  // sits inside, and a specialist bowler's 0 batting innings never drags
-  // this down since it's a union, not a sum.
-  const inningsPlayed = new Set([
-    ...Array.from(bat?.innings ?? []),
-    ...Array.from(bowl?.innings ?? []),
-  ]).size;
+  // Matches of each format in the window, before the format filter, so the
+  // profile only offers the Test / Limited switch to someone who played both.
+  const formats = { test: 0, limited: 0 };
+  for (const r of set.players) {
+    if (String(r.userId) !== key || !inWindow(r, window)) continue;
+    if (!r.named && !r.bat && !r.bowl) continue;
+    formats[r.format] += 1;
+  }
+
+  // Run-outs are stamped on the batter who was out, under the fielder who
+  // ended it, so they are read off everyone's match-ups.
+  let runOuts = 0;
+  for (const r of await ctx.db
+    .query("playerMatchups")
+    .withIndex("by_org_user_date", (q) => q.eq("orgId", args.orgId))
+    .collect()) {
+    if (!inWindow(r, filter)) continue;
+    for (const f of r.byFielder) {
+      if (String(f.userId) !== key) continue;
+      for (const t of f.types) if (t.type === "runout") runOuts += t.count;
+    }
+  }
 
   // Rank against the default Leaders board (regulars only), so "#3 of 14"
   // cannot disagree with what the tab shows until someone flips Everyone.
@@ -1776,7 +1824,12 @@ async function playerStatsFor(
     primaryRole: player.primaryRole,
     secondaryRole: player.secondaryRole,
     matchesPlayed: focus.perMatch.size,
-    inningsPlayed,
+    formats,
+    fielding: {
+      catches: snap.catches.get(key) ?? 0,
+      drops: snap.drops.get(key) ?? 0,
+      runOuts,
+    },
     record: {
       wins,
       decided,
@@ -1827,8 +1880,7 @@ async function playerStatsFor(
           average: bat.dismissals > 0 ? bat.runs / bat.dismissals : bat.runs,
           /** Share of runs that came in fours and sixes. */
           boundaryRuns: bat.fours * 4 + bat.sixes * 6,
-          thirties: scores.filter((s) => s.runs >= 30 && s.runs < 50).length,
-          fifties: scores.filter((s) => s.runs >= 50).length,
+          ...scoreCounts(scores),
           dismissalTypes: counts(focus.dismissalTypes),
           rank: rankOf(battingRows),
         }
@@ -1848,6 +1900,7 @@ async function playerStatsFor(
           strikeRate:
             bowl.wickets > 0 ? bowl.legalBalls / bowl.wickets : null,
           best: best ? `${best.wickets}/${best.runs}` : null,
+          ...haulCounts(bowl.perInnings.values()),
           wicketTypes: counts(focus.wicketTypes),
           rank: rankOf(bowlingRows),
         }
@@ -1861,6 +1914,8 @@ const playerStatsArgs = {
   userId: v.id("users"),
   /** Omit for the career numbers — the default every profile shows. */
   seasonId: v.optional(v.id("seasons")),
+  /** Tests or limited only. Omit for both. */
+  format: v.optional(matchFormat),
 };
 
 export const playerStats = query({
@@ -1872,6 +1927,84 @@ export const playerStats = query({
       return null;
     }
     return playerStatsFor(ctx, args);
+  },
+});
+
+/**
+ * Career milestones, all time and every format: the run and wicket ladders
+ * (convex/lib/milestones.ts). Races are run among regulars, the same field as
+ * Leaders and Records. Pass `userId` for one player's climb as well: every
+ * rung they reached, where they finished in that race, and the next rung.
+ */
+export const milestones = query({
+  args: {
+    token: v.optional(v.string()),
+    orgId: v.id("orgs"),
+    userId: v.optional(v.id("users")),
+  },
+  handler: async (ctx, { token, orgId, userId }) => {
+    try {
+      await requireOrgViewer(ctx, token, orgId);
+    } catch {
+      return null;
+    }
+    const { players } = await loadStampSet(ctx, orgId, {});
+    const rowsBy = new Map<string, Doc<"playerMatchStats">[]>();
+    for (const r of players) {
+      const k = String(r.userId);
+      const list = rowsBy.get(k);
+      if (list) list.push(r);
+      else rowsBy.set(k, [r]);
+    }
+    const keys = Array.from(rowsBy.keys());
+    const tags = await tagsForUsers(ctx, orgId, keys);
+    const regulars = keys.filter((k) => isBoardRegular(tags.get(k) ?? []));
+    const field = regulars.map((k) =>
+      climbOf(rowsBy.get(k)![0].userId, rowsBy.get(k)!),
+    );
+    const races = racesOf(field);
+    const names = await resolveNames(
+      ctx,
+      races.map((r) => String(r.finishers[0].userId)),
+    );
+
+    let player = null;
+    if (userId) {
+      const key = String(userId);
+      const climb =
+        field.find((c) => String(c.userId) === key) ??
+        climbOf(userId, rowsBy.get(key) ?? []);
+      const ladder = (kind: MilestoneKind) => ({
+        total: climb[kind].total,
+        ...rungsAround(kind, climb[kind].total),
+        reached: climb[kind].reached.map((reach) => {
+          const race = races.find(
+            (r) => r.kind === kind && r.target === reach.target,
+          );
+          const idx =
+            race?.finishers.findIndex((f) => String(f.userId) === key) ?? -1;
+          return {
+            ...reach,
+            // Null for a visitor or junior: they climb, but race nobody.
+            rank: idx >= 0 ? idx + 1 : null,
+            of: race?.finishers.length ?? 0,
+          };
+        }),
+      });
+      player = { runs: ladder("runs"), wickets: ladder("wickets") };
+    }
+
+    return {
+      races: races.map((r) => ({
+        kind: r.kind,
+        target: r.target,
+        holderId: r.finishers[0].userId,
+        holder: names.get(String(r.finishers[0].userId)) ?? "Player",
+        innings: r.finishers[0].reach.innings,
+        finishers: r.finishers.length,
+      })),
+      player,
+    };
   },
 });
 

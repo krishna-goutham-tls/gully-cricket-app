@@ -607,3 +607,107 @@ export function InningsLog({ rows }: { rows: LogRow[] }) {
     </div>
   );
 }
+
+export type Climb = NonNullable<
+  NonNullable<FunctionReturnType<typeof api.stats.milestones>>["player"]
+>;
+
+const fmtCount = (n: number) => n.toLocaleString("en-IN");
+
+function ordinal(n: number) {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
+}
+
+/**
+ * The next rung on each ladder, and how far along the gap from the last one
+ * they are. A bowler who never batted gets no runs row, and the reverse.
+ */
+export function NextUp({ climb }: { climb: Climb }) {
+  const rows = (["runs", "wickets"] as const)
+    .filter((kind) => climb[kind].total > 0)
+    .map((kind) => {
+      const l = climb[kind];
+      const gap = l.next - l.prev;
+      return {
+        kind,
+        label: `${fmtCount(l.next)} ${kind}`,
+        toGo: `${fmtCount(l.next - l.total)} to go`,
+        pct: gap > 0 ? ((l.total - l.prev) / gap) * 100 : 0,
+      };
+    });
+  if (rows.length === 0) return null;
+  return (
+    <div className="space-y-3">
+      {rows.map((r) => (
+        <div key={r.kind}>
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="truncate text-[15px] font-semibold text-ink">
+              {r.label}
+            </p>
+            <p className="tabular shrink-0 text-[13px] text-muted">{r.toGo}</p>
+          </div>
+          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-line">
+            <div
+              className="h-full rounded-r-full bg-accent"
+              style={{ width: `${Math.min(100, Math.max(0, r.pct))}%` }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** "Fastest of 7" · "3rd fastest of 7" · "Only one so far". */
+function raceLine(rank: number | null, of: number) {
+  if (rank === null) return null;
+  if (of === 1) return "Only one so far";
+  if (rank === 1) return `Fastest of ${of}`;
+  return `${ordinal(rank)} fastest of ${of}`;
+}
+
+/**
+ * Every rung reached, newest first: the innings it took, and where that puts
+ * them in the race to the same number.
+ */
+export function MilestoneList({ climb }: { climb: Climb }) {
+  const rows = (["runs", "wickets"] as const)
+    .flatMap((kind) => climb[kind].reached.map((r) => ({ ...r, kind })))
+    .sort((a, b) => b.date - a.date || b.target - a.target);
+  return (
+    <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+      {rows.map((r) => {
+        const race = raceLine(r.rank, r.of);
+        return (
+          <div
+            key={`${r.kind}-${r.target}`}
+            className="flex min-h-12 items-center gap-3 border-b border-line/60 px-4 py-2.5 last:border-b-0"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="text-[15px] font-semibold text-ink">
+                {fmtCount(r.target)} {r.kind}
+              </p>
+              <p className="tabular truncate text-[13px] text-faint">
+                {shortDate(r.date)} · {r.innings} innings
+              </p>
+            </div>
+            {race ? (
+              <span
+                className={cn(
+                  "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                  r.rank === 1
+                    ? "bg-accent-soft text-accent-deep"
+                    : "bg-ink/[0.06] text-muted",
+                )}
+              >
+                {race}
+              </span>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}

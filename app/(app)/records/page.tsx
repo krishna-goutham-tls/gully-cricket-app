@@ -192,10 +192,23 @@ export default function RecordsPage() {
       : "skip",
   );
 
+  // Milestone races are all time and every ground, so only that view has them.
+  const milestones = useQuery(
+    api.stats.milestones,
+    ready && !selectedSeason && !ground
+      ? { token: token!, orgId: activeOrgId! }
+      : "skip",
+  );
+
   const groups = useMemo(
     () =>
-      board ? buildRecords(board, { season: Boolean(selectedSeason) }) : [],
-    [board, selectedSeason],
+      board
+        ? buildRecords(board, {
+            season: Boolean(selectedSeason),
+            milestones: !selectedSeason && !ground ? milestones : null,
+          })
+        : [],
+    [board, selectedSeason, ground, milestones],
   );
   const shown = groups.filter((g) => g.tone === tab);
   const onInk = tab === "roast";

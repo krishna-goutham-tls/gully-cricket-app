@@ -3,6 +3,9 @@ import { Id } from "@/convex/_generated/dataModel";
 import type { FunctionReturnType } from "convex/server";
 
 type Board = NonNullable<FunctionReturnType<typeof api.stats.leaderboard>>;
+type Milestones = NonNullable<
+  FunctionReturnType<typeof api.stats.milestones>
+>;
 
 export type FeatRecord = {
   label: string;
@@ -114,7 +117,7 @@ const tieRoastAllRound = <T extends Named & { points: number }>(a: T, b: T) =>
  */
 export function buildRecords(
   board: Board,
-  opts: { season?: boolean } = {},
+  opts: { season?: boolean; milestones?: Milestones | null } = {},
 ): RecordGroup[] {
   const push = <T extends { displayName: string; userId: Id<"users"> }>(
     items: FeatRecord[],
@@ -228,6 +231,9 @@ export function buildRecords(
   push(batting, "Most singles", bestBy(bat, (r) => r.singles, { tieBreak: tieHonourBat }), (r) => count(r.singles));
   push(batting, "Most balls faced", bestBy(bat, (r) => r.balls, { tieBreak: tieHonourBat }), (r) => count(r.balls));
   push(batting, "Quota King", bestBy(bat, (r) => r.quotaHits, { tieBreak: tieHonourBat }), (r) => count(r.quotaHits));
+  push(batting, "Most 30s", bestBy(bat, (r) => r.thirties, { tieBreak: tieHonourBat }), (r) => count(r.thirties));
+  push(batting, "Most 50s", bestBy(bat, (r) => r.fifties, { tieBreak: tieHonourBat }), (r) => count(r.fifties));
+  push(batting, "Most 100s", bestBy(bat, (r) => r.hundreds, { tieBreak: tieHonourBat }), (r) => count(r.hundreds));
 
   const bowling: FeatRecord[] = [];
   push(bowling, "Most wickets", bestBy(bowl, (r) => r.wickets, { tieBreak: tieHonourBowl }), (r) => count(r.wickets));
@@ -276,6 +282,8 @@ export function buildRecords(
   );
   push(bowling, "Most dots", bestBy(bowl, (r) => r.dots, { tieBreak: tieHonourBowl }), (r) => count(r.dots));
   push(bowling, "Most overs bowled", bestBy(bowl, (r) => r.legalBalls, { tieBreak: tieHonourBowl }), (r) => r.oversText);
+  push(bowling, "Most 3-fors", bestBy(bowl, (r) => r.threeFors, { tieBreak: tieHonourBowl }), (r) => count(r.threeFors));
+  push(bowling, "Most 5-fors", bestBy(bowl, (r) => r.fiveFors, { tieBreak: tieHonourBowl }), (r) => count(r.fiveFors));
 
   // Head-to-heads need 2 or more of the thing measured — once is luck. A tie
   // goes to the holder with more points for an honour and fewer for a
@@ -425,7 +433,28 @@ export function buildRecords(
     );
   }
 
+  // The race to each rung, fastest first. Only the three highest rungs
+  // anyone has reached per ladder: "fastest to 100" stops being news once
+  // the whole community is past it.
+  const races: FeatRecord[] = [];
+  for (const kind of ["runs", "wickets"] as const) {
+    const top = (opts.milestones?.races ?? [])
+      .filter((r) => r.kind === kind)
+      .slice(-3)
+      .reverse();
+    for (const r of top) {
+      races.push({
+        label: `Fastest to ${r.target.toLocaleString("en-IN")} ${kind}`,
+        value: `${r.innings} inns`,
+        holder: r.holder,
+        detail: r.finishers > 1 ? `${r.finishers} got there` : undefined,
+        holderId: r.holderId,
+      });
+    }
+  }
+
   return [
+    { title: "Milestones", tone: "honour" as const, items: races },
     { title: "Match winners", tone: "honour" as const, items: winners },
     { title: "Batting", tone: "honour" as const, items: batting },
     { title: "Bowling", tone: "honour" as const, items: bowling },

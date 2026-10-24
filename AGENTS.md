@@ -147,7 +147,7 @@ numbers do not get a new tab by default.
 - **Breathable, not rushed.** Empty space is doing work. Do not fill a
   gap because a stat exists. One new fact per surface, with air around it.
 - **Mobile real estate decides the home.** The profile header is four
-  numbers today (matches, innings, runs, wickets). If a new fact fits as
+  numbers today (matches, runs, wickets, catches). If a new fact fits as
   a line under one of those, it lives there. The Leaders tab is already a
   two-level board — a new discipline tab is a last resort, not a first
   home for a career stat.
