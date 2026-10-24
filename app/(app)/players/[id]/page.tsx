@@ -9,12 +9,13 @@ import {
   NemesisCard,
   StatTile,
   FeatChips,
-  MilestoneList,
-  NextUp,
+  MilestoneLadder,
   type LogRow,
   type Profile,
 } from "@/components/player/ProfileParts";
+import { CountStrip, InningsBars } from "@/components/player/Charts";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { shortDate } from "@/lib/dates";
 import type { PlayerShareData, ShareStat } from "@/components/share/ShareCard";
 import { ShareButton } from "@/components/share/ShareButton";
 import {
@@ -233,6 +234,39 @@ const FORM_WINDOW = 10;
  * Last 10 innings against the career, in words: the one line that says
  * whether a player is in form, without a chart or a legend.
  */
+/** Bars beyond this many get too thin to tap on a phone. */
+const CHART_INNINGS = 40;
+
+function battingBars(log: LogRow[]) {
+  return log
+    .flatMap((r) =>
+      [...r.bat].reverse().map((b) => ({ ...b, date: r.date })),
+    )
+    .filter((b) => b.balls > 0 || b.out)
+    .slice(0, CHART_INNINGS)
+    .reverse()
+    .map((b) => ({
+      value: b.runs,
+      highlight: b.runs >= 30,
+      label: `${shortDate(b.date)} · ${b.runs}${b.out ? "" : "*"} off ${b.balls}`,
+    }));
+}
+
+function bowlingBars(log: LogRow[]) {
+  return log
+    .flatMap((r) =>
+      [...r.bowl].reverse().map((s) => ({ ...s, date: r.date })),
+    )
+    .filter((s) => s.legalBalls > 0)
+    .slice(0, CHART_INNINGS)
+    .reverse()
+    .map((s) => ({
+      value: s.wickets,
+      highlight: s.wickets >= 3,
+      label: `${shortDate(s.date)} · ${s.wickets}/${s.runs} in ${s.oversText} overs`,
+    }));
+}
+
 function BattingForm({
   b,
   log,
@@ -331,16 +365,31 @@ function BattingCard({
         {/* Innings moved up beside the runs, so the hint here is free to say
             what the best score actually is. */}
         <StatTile label="Best" value={String(b.bestScore)} hint="highest" />
-        <StatTile label="4s / 6s" value={`${b.fours}/${b.sixes}`} />
-        <StatTile label="30s" value={String(b.thirties)} hint="30 to 49" />
-        <StatTile
-          label="50s"
-          value={String(b.fifties)}
-          hint={
-            b.hundreds > 0
-              ? `${b.hundreds} hundred${b.hundreds === 1 ? "" : "s"}`
-              : "50 to 99"
+        <StatTile label="Fours" value={String(b.fours)} />
+        <StatTile label="Sixes" value={String(b.sixes)} />
+        <StatTile label="Not outs" value={String(b.notOuts)} />
+      </div>
+
+      <div className="mt-4">
+        <CountStrip
+          items={[
+            { label: "30s", value: b.thirties, hint: "30-49" },
+            { label: "50s", value: b.fifties, hint: "50-69" },
+            { label: "70s", value: b.seventies, hint: "70-99" },
+            { label: "100s", value: b.hundreds, hint: "100+" },
+          ]}
+        />
+      </div>
+
+      <div className="mt-4 border-t border-line pt-3">
+        <InningsBars
+          bars={battingBars(log)}
+          reference={
+            b.innings >= 3
+              ? { value: b.average, label: `avg ${b.average.toFixed(0)}` }
+              : undefined
           }
+          hint="Every innings. Gold is 30 or more. Tap a bar."
         />
       </div>
 
@@ -398,11 +447,7 @@ function BowlingCard({
       <BowlingForm b={b} log={log} />
 
       <div className="mt-3 grid grid-cols-3 gap-y-3">
-        <StatTile
-          label="Economy"
-          value={b.economy.toFixed(1)}
-          hint={`${b.runs} conceded`}
-        />
+        <StatTile label="Economy" value={b.economy.toFixed(1)} />
         <StatTile
           label="Average"
           value={b.average === null ? "—" : b.average.toFixed(1)}
@@ -418,14 +463,22 @@ function BowlingCard({
             beside the wickets, so showing it twice would only re-open the
             question of which innings number is which. */}
         <StatTile label="Overs" value={b.oversText} />
-        <StatTile
-          label="3-fors"
-          value={String(b.threeFors)}
-          hint={
-            b.fiveFors > 0
-              ? `${b.fiveFors} five-for${b.fiveFors === 1 ? "" : "s"}`
-              : "3 or 4 wkts"
-          }
+        <StatTile label="Conceded" value={String(b.runs)} hint="runs" />
+      </div>
+
+      <div className="mt-4">
+        <CountStrip
+          items={[
+            { label: "3-fors", value: b.threeFors, hint: "3-4 wickets" },
+            { label: "5-fors", value: b.fiveFors, hint: "5+ wickets" },
+          ]}
+        />
+      </div>
+
+      <div className="mt-4 border-t border-line pt-3">
+        <InningsBars
+          bars={bowlingBars(log)}
+          hint="Wickets in every spell. Gold is 3 or more. Tap a bar."
         />
       </div>
 
@@ -605,9 +658,6 @@ export default function PlayerDetailPage() {
       ? discipline
       : defaultDiscipline(stats);
   const showFormats = stats.formats.test > 0 && stats.formats.limited > 0;
-  const reachedCount = climb
-    ? climb.runs.reached.length + climb.wickets.reached.length
-    : 0;
   const scopeLabel =
     [selectedSeason?.name, format === "all" ? null : FORMAT_LABEL[format]]
       .filter(Boolean)
@@ -819,8 +869,8 @@ export default function PlayerDetailPage() {
         {/* The chase: high on the page, because it is the number a player
             comes back to check. Whole career only. */}
         {climb && (climb.runs.total > 0 || climb.wickets.total > 0) ? (
-          <Section title="Next up">
-            <NextUp climb={climb} />
+          <Section title="Milestones">
+            <MilestoneLadder climb={climb} />
           </Section>
         ) : null}
 
@@ -856,17 +906,6 @@ export default function PlayerDetailPage() {
               <BowlingCard b={stats.bowling} log={stats.log} vs={stats.vsBatters} />
             ) : null}
             {activeDiscipline === "field" ? <FieldingCard f={f} /> : null}
-          </section>
-        ) : null}
-
-        {climb && reachedCount > 0 ? (
-          <section>
-            <Expander
-              label={`Milestones · ${reachedCount} reached ›`}
-              bordered={false}
-            >
-              <MilestoneList climb={climb} />
-            </Expander>
           </section>
         ) : null}
 

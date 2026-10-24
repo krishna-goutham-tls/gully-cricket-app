@@ -782,17 +782,22 @@ function battingStreaks(seq: BatAgg["inningsSeq"]) {
   return { duckStreak, slowest };
 }
 
-/** 30s are 30 to 49, 50s are 50 to 99, then 100s: each innings in one bucket. */
+/**
+ * Each innings in one bucket: 30s are 30 to 49, 50s 50 to 69, 70s 70 to 99,
+ * then 100s. Krishna asked for 70s on 2026-10-24, so a 50 here stops at 69.
+ */
 function scoreCounts(scores: Iterable<{ runs: number }>) {
   let thirties = 0;
   let fifties = 0;
+  let seventies = 0;
   let hundreds = 0;
   for (const { runs } of Array.from(scores)) {
     if (runs >= 100) hundreds += 1;
+    else if (runs >= 70) seventies += 1;
     else if (runs >= 50) fifties += 1;
     else if (runs >= 30) thirties += 1;
   }
-  return { thirties, fifties, hundreds };
+  return { thirties, fifties, seventies, hundreds };
 }
 
 /** Three or four wickets in an innings is a 3-for; five or more a 5-for. */
@@ -1963,10 +1968,8 @@ export const milestones = query({
       climbOf(rowsBy.get(k)![0].userId, rowsBy.get(k)!),
     );
     const races = racesOf(field);
-    const names = await resolveNames(
-      ctx,
-      races.map((r) => String(r.finishers[0].userId)),
-    );
+    const names = await resolveNames(ctx, regulars);
+    const nameOf = (id: Id<"users">) => names.get(String(id)) ?? "Player";
 
     let player = null;
     if (userId) {
@@ -1976,6 +1979,7 @@ export const milestones = query({
         climbOf(userId, rowsBy.get(key) ?? []);
       const ladder = (kind: MilestoneKind) => ({
         total: climb[kind].total,
+        series: climb[kind].series,
         ...rungsAround(kind, climb[kind].total),
         reached: climb[kind].reached.map((reach) => {
           const race = races.find(
@@ -1994,15 +1998,37 @@ export const milestones = query({
       player = { runs: ladder("runs"), wickets: ladder("wickets") };
     }
 
+    // The open race on each ladder: the first rung nobody has reached yet,
+    // and the three regulars closest to it.
+    const chase = (kind: MilestoneKind) => {
+      const leaders = field
+        .filter((c) => c[kind].total > 0)
+        .sort((a, b) => b[kind].total - a[kind].total)
+        .slice(0, 3);
+      if (leaders.length === 0) return null;
+      return {
+        target: rungsAround(kind, leaders[0][kind].total).next,
+        leaders: leaders.map((c) => ({
+          userId: c.userId,
+          displayName: nameOf(c.userId),
+          total: c[kind].total,
+        })),
+      };
+    };
+
     return {
       races: races.map((r) => ({
         kind: r.kind,
         target: r.target,
-        holderId: r.finishers[0].userId,
-        holder: names.get(String(r.finishers[0].userId)) ?? "Player",
-        innings: r.finishers[0].reach.innings,
         finishers: r.finishers.length,
+        podium: r.finishers.slice(0, 3).map((f) => ({
+          userId: f.userId,
+          displayName: nameOf(f.userId),
+          innings: f.reach.innings,
+          date: f.reach.date,
+        })),
       })),
+      chase: { runs: chase("runs"), wickets: chase("wickets") },
       player,
     };
   },

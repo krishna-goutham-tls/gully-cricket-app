@@ -144,12 +144,12 @@ export function computeTrophies(stats: Profile): Trophy[] {
       });
     }
 
-    if (bat.fifties + bat.hundreds >= 2) {
+    if (bat.fifties + bat.seventies + bat.hundreds >= 2) {
       trophies.push({
         id: "fifties",
         icon: "BarChart3",
         label: "Fifties",
-        value: `×${bat.fifties + bat.hundreds}`,
+        value: `×${bat.fifties + bat.seventies + bat.hundreds}`,
         tier: "silver",
       });
     }

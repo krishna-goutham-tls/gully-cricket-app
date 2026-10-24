@@ -14,6 +14,7 @@ import {
   SeasonScopeMenu,
   type Scope,
 } from "@/components/shelf/SeasonScopeMenu";
+import { MilestoneRaces } from "@/components/leaderboard/MilestoneRaces";
 import { AppHeader } from "@/components/shell/AppHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
@@ -23,10 +24,11 @@ import { useQuery } from "convex/react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-const TABS = ["honour", "roast"] as const;
+const TABS = ["honour", "milestones", "roast"] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABEL: Record<Tab, string> = {
   honour: "Honours",
+  milestones: "Milestones",
   roast: "The Roast",
 };
 
@@ -192,23 +194,18 @@ export default function RecordsPage() {
       : "skip",
   );
 
-  // Milestone races are all time and every ground, so only that view has them.
+  // Milestones are one all-time race across every ground, so their tab
+  // ignores the season and ground pickers.
+  const onMilestones = tab === "milestones";
   const milestones = useQuery(
     api.stats.milestones,
-    ready && !selectedSeason && !ground
-      ? { token: token!, orgId: activeOrgId! }
-      : "skip",
+    ready && onMilestones ? { token: token!, orgId: activeOrgId! } : "skip",
   );
 
   const groups = useMemo(
     () =>
-      board
-        ? buildRecords(board, {
-            season: Boolean(selectedSeason),
-            milestones: !selectedSeason && !ground ? milestones : null,
-          })
-        : [],
-    [board, selectedSeason, ground, milestones],
+      board ? buildRecords(board, { season: Boolean(selectedSeason) }) : [],
+    [board, selectedSeason],
   );
   const shown = groups.filter((g) => g.tone === tab);
   const onInk = tab === "roast";
@@ -245,7 +242,11 @@ export default function RecordsPage() {
       <AppHeader
         title="Records"
         subtitle={
-          seasons && seasons.length > 0 ? (
+          onMilestones ? (
+            <span className="text-[13px] font-semibold text-muted">
+              All time
+            </span>
+          ) : seasons && seasons.length > 0 ? (
             <SeasonScopeMenu
               seasons={seasons}
               selected={selectedSeason}
@@ -258,7 +259,31 @@ export default function RecordsPage() {
       />
 
       <div className="relative">
-        {board === undefined ? (
+        {onMilestones ? (
+          <main className="mx-auto max-w-md px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-4">
+            {milestones === undefined ? (
+              <div className="space-y-3">
+                {[0, 1].map((i) => (
+                  <div key={i} className="h-40 animate-pulse rounded-2xl bg-line" />
+                ))}
+              </div>
+            ) : milestones === null ? (
+              <EmptyState
+                title="Records unavailable"
+                body="Sign in to this community to see its records."
+              />
+            ) : milestones.races.length === 0 &&
+              !milestones.chase.runs &&
+              !milestones.chase.wickets ? (
+              <EmptyState
+                title="No milestones yet"
+                body="The race starts once matches finish."
+              />
+            ) : (
+              <MilestoneRaces data={milestones} />
+            )}
+          </main>
+        ) : board === undefined ? (
           <main className="mx-auto max-w-md space-y-3 px-5 py-4">
             {[0, 1, 2].map((i) => (
               <div

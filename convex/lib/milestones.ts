@@ -23,8 +23,9 @@ export type Reach = {
 
 export type PlayerClimb = {
   userId: Id<"users">;
-  runs: { total: number; reached: Reach[] };
-  wickets: { total: number; reached: Reach[] };
+  /** `series` is the running total after each innings: the climb chart. */
+  runs: { total: number; reached: Reach[]; series: number[] };
+  wickets: { total: number; reached: Reach[]; series: number[] };
 };
 
 /** The rung at index i, extending the ladder past its top in fixed steps. */
@@ -59,8 +60,8 @@ export function climbOf(
   const ordered = [...rows].sort((a, b) => a.matchOrder - b.matchOrder);
   const climb: PlayerClimb = {
     userId,
-    runs: { total: 0, reached: [] },
-    wickets: { total: 0, reached: [] },
+    runs: { total: 0, reached: [], series: [] },
+    wickets: { total: 0, reached: [], series: [] },
   };
 
   let batInns = 0;
@@ -72,6 +73,7 @@ export function climbOf(
       batInns += 1;
       ballsFaced += inn.balls;
       climb.runs.total += inn.runs;
+      climb.runs.series.push(climb.runs.total);
       while (rungAt("runs", next) <= climb.runs.total) {
         climb.runs.reached.push({
           target: rungAt("runs", next),
@@ -93,6 +95,7 @@ export function climbOf(
       bowlInns += 1;
       ballsBowled += inn.legalBalls;
       climb.wickets.total += inn.wickets;
+      climb.wickets.series.push(climb.wickets.total);
       while (rungAt("wickets", next) <= climb.wickets.total) {
         climb.wickets.reached.push({
           target: rungAt("wickets", next),
