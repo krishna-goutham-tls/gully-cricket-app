@@ -501,3 +501,20 @@ export const markPractice = internalMutation({
     return out;
   },
 });
+
+/**
+ * Ops: change how many matches a series is set for. The app has no edit
+ * screen for it after create; standings read `matchCount` for remaining /
+ * overrun only, so nothing else needs a rewrite.
+ */
+export const setTournamentMatchCount = internalMutation({
+  args: { tournamentId: v.id("tournaments"), matchCount: v.number() },
+  handler: async (ctx, { tournamentId, matchCount }) => {
+    if (!Number.isInteger(matchCount) || matchCount < 1 || matchCount > 50)
+      throw new Error("Match count must be a whole number from 1 to 50");
+    const t = await ctx.db.get(tournamentId);
+    if (!t) throw new Error("Tournament not found");
+    await ctx.db.patch(tournamentId, { matchCount });
+    return { name: t.name, from: t.matchCount, to: matchCount };
+  },
+});
