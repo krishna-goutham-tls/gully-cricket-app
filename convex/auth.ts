@@ -11,6 +11,14 @@ import {
 import { playerRole } from "./schema";
 import { resolvePlayerTags, sortTags } from "./lib/playerLabel";
 import { featuredSeasonForOrg } from "./lib/seasons";
+import {
+  isClaimableRow,
+  isUnclaimedNoPhone,
+  joinOrg,
+  namesShareWord,
+  orgByInviteCode,
+  uniqueNameInOrg,
+} from "./lib/invite";
 
 const MAX_FAILED = 8;
 const LOCK_MS = 1000 * 60 * 15;
@@ -133,6 +141,10 @@ export const signUp = mutation({
     phone: v.string(),
     pin: v.string(),
     displayName: v.string(),
+    /** From the invite link. The person ends this call as a member. */
+    inviteCode: v.optional(v.string()),
+    /** "Is this you?": the added player, with no phone, that this person is. */
+    claimUserId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
     const phone = normalizePhone(args.phone);
@@ -141,6 +153,15 @@ export const signUp = mutation({
     const displayName = args.displayName.trim();
     if (displayName.length < 2) throw new Error("Name is too short");
     if (displayName.length > 40) throw new Error("Name is too long");
+
+    const invite =
+      args.inviteCode !== undefined
+        ? await orgByInviteCode(ctx, args.inviteCode)
+        : null;
+    if (args.inviteCode !== undefined && !invite) {
+      throw new Error("This link has stopped working. Ask your organiser for the new one.");
+    }
+    if (args.claimUserId && !invite) throw new Error("Could not claim that player");
 
     const existing = await ctx.db
       .query("users")
@@ -179,6 +200,7 @@ export const signUp = mutation({
         lockUntil: undefined,
         updatedAt: now,
       });
+      if (invite) await joinOrg(ctx, invite, existing._id);
 
       const token = randomToken(32);
       const tokenHash = await hashToken(token);
@@ -189,16 +211,47 @@ export const signUp = mutation({
         createdAt: now,
       });
 
-      return { token, user: publicUser(existing), claimed: false };
+      return {
+        token,
+        user: publicUser(existing),
+        claimed: false,
+        orgId: invite?._id,
+      };
     }
 
     const { hash, salt } = await hashPin(args.pin);
 
+    // The number is new, and the person said an added player with no phone is
+    // them. That row must be a real match in this community, not any id.
+    let claimed = existing;
+    if (!existing && args.claimUserId) {
+      const target = await ctx.db.get(args.claimUserId);
+      const member =
+        target &&
+        (await ctx.db
+          .query("orgMembers")
+          .withIndex("by_org_user", (q) =>
+            q.eq("orgId", invite!._id).eq("userId", target._id),
+          )
+          .unique());
+      if (
+        !target ||
+        !isClaimableRow(member) ||
+        !isUnclaimedNoPhone(target) ||
+        !namesShareWord(target.displayName, displayName)
+      ) {
+        throw new Error("Could not claim that player");
+      }
+      claimed = target;
+    }
+
     let userId;
-    if (existing) {
+    if (claimed) {
+      const claimedId = claimed._id;
       // Claim: the guest row becomes the real account — all match history
       // already points at this user id, so nothing needs migrating.
-      await ctx.db.patch(existing._id, {
+      await ctx.db.patch(claimedId, {
+        phone,
         pinHash: hash,
         pinSalt: salt,
         displayName,
@@ -207,13 +260,13 @@ export const signUp = mutation({
         lockUntil: undefined,
         updatedAt: now,
       });
-      userId = existing._id;
+      userId = claimedId;
       // Walk-on stays a Visitor on the board until an admin says otherwise.
       // isGuest is about to flip false, so make sure Visitor is in the tags
       // without wiping Junior if they already have it.
       const memberships = await ctx.db
         .query("orgMembers")
-        .withIndex("by_user", (q) => q.eq("userId", existing._id))
+        .withIndex("by_user", (q) => q.eq("userId", claimedId))
         .collect();
       for (const m of memberships) {
         const tags = new Set(
@@ -227,11 +280,19 @@ export const signUp = mutation({
         phone,
         pinHash: hash,
         pinSalt: salt,
-        displayName,
+        displayName: invite
+          ? await uniqueNameInOrg(ctx, invite._id, displayName)
+          : displayName,
         failedPinAttempts: 0,
         createdAt: now,
         updatedAt: now,
       });
+    }
+
+    // A claim through the link shows New too, so an admin can spot a wrong name.
+    if (invite) {
+      const { membershipId } = await joinOrg(ctx, invite, userId);
+      await ctx.db.patch(membershipId, { joinedByLinkAt: now });
     }
 
     const token = randomToken(32);
@@ -244,7 +305,12 @@ export const signUp = mutation({
     });
 
     const user = await ctx.db.get(userId);
-    return { token, user: publicUser(user!), claimed: !!existing };
+    return {
+      token,
+      user: publicUser(user!),
+      claimed: !!claimed,
+      orgId: invite?._id,
+    };
   },
 });
 
@@ -355,14 +421,20 @@ export const requestPinReset = mutation({
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
     const active = memberships.filter((m) => m.status === "active");
-    if (active.length === 0) {
+    // Someone removed who forgot their PIN cannot use the link without it.
+    // Their last community decides whether to help.
+    const removed = memberships
+      .filter((m) => m.status === "removed")
+      .sort((a, b) => (b.decidedAt ?? 0) - (a.decidedAt ?? 0));
+    const preferred =
+      active.find((m) => m.orgId === user.preferredOrgId) ??
+      active[0] ??
+      removed[0];
+    if (!preferred) {
       throw new Error(
         "You are not in a community yet. Ask your community admin to add you.",
       );
     }
-
-    const preferred =
-      active.find((m) => m.orgId === user.preferredOrgId) ?? active[0];
 
     const existing = await ctx.db
       .query("pinResets")

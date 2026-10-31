@@ -220,8 +220,11 @@ export default defineSchema({
     features: v.optional(v.record(v.string(), v.boolean())),
     /** This community's own name for the junior board in The Roast. */
     juniorBoardTitle: v.optional(v.string()),
+    /** The code in this community's invite link. Made on first use. */
+    inviteCode: v.optional(v.string()),
     createdAt: v.number(),
   })
+    .index("by_invite_code", ["inviteCode"])
     .index("by_discoverable", ["isDiscoverable"])
     .index("by_name", ["name"])
     .index("by_sandbox_for", ["sandboxForOrgId"]),
@@ -238,6 +241,8 @@ export default defineSchema({
     requestedAt: v.number(),
     decidedAt: v.optional(v.number()),
     decidedBy: v.optional(v.id("users")),
+    /** When this person came in or claimed a player through the invite link. */
+    joinedByLinkAt: v.optional(v.number()),
   })
     .index("by_org", ["orgId"])
     .index("by_user", ["userId"])

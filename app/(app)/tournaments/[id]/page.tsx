@@ -168,7 +168,12 @@ export default function TournamentDetailPage() {
 
   async function confirmStart() {
     if (!token) return;
-    if (presentA.size < 2 || presentB.size < 2) {
+    // Someone removed from the community can still sit in a squad or the last
+    // lineup. They cannot play, so they must not block the start.
+    const inCommunity = new Set((orgPlayers ?? []).map((p) => String(p.userId)));
+    const sideA = Array.from(presentA).filter((id) => inCommunity.has(id));
+    const sideB = Array.from(presentB).filter((id) => inCommunity.has(id));
+    if (sideA.length < 2 || sideB.length < 2) {
       setError("Each side needs at least 2 players today.");
       return;
     }
@@ -182,8 +187,8 @@ export default function TournamentDetailPage() {
       const res = await startMatch({
         token,
         tournamentId,
-        sideAPlayerIds: Array.from(presentA) as Id<"users">[],
-        sideBPlayerIds: Array.from(presentB) as Id<"users">[],
+        sideAPlayerIds: sideA as Id<"users">[],
+        sideBPlayerIds: sideB as Id<"users">[],
       });
       router.replace(`/matches/${res.matchId}/score`);
     } catch (e) {

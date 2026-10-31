@@ -37,6 +37,15 @@ export async function fetchPublicPoll(id: string): Promise<PublicPoll | null> {
   }
 }
 
+/** Null for a stopped or mangled code. Only the community name comes back. */
+export async function fetchInvite(code: string) {
+  try {
+    return (await client()?.query(api.orgs.inviteInfo, { code })) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function matchTeams(m: PublicMatch) {
   return `${m.sideA.name} vs ${m.sideB.name}`;
 }

@@ -27,7 +27,12 @@ export const addGuest = mutation({
     phone: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { user } = await requireActiveMembership(ctx, args.token, args.orgId);
+    const { user, membership: caller } = await requireActiveMembership(
+      ctx,
+      args.token,
+      args.orgId,
+    );
+    const callerIsAdmin = caller.roles.includes("admin");
 
     const rawName = args.name.trim();
     if (rawName.length < 2) throw new Error("Name is too short");
@@ -62,6 +67,33 @@ export const addGuest = mutation({
       }
     }
 
+    // An admin who removed someone by mistake adds the name again and gets the
+    // same player back with their stats, not a second one.
+    if (callerIsAdmin && !args.phone?.trim()) {
+      const all = await ctx.db
+        .query("orgMembers")
+        .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
+        .collect();
+      for (const row of all) {
+        if (row.status !== "removed") continue;
+        const u = await ctx.db.get(row.userId);
+        if (
+          u &&
+          !u.phone &&
+          !u.pinHash &&
+          u.displayName.trim().toLowerCase() === rawName.toLowerCase()
+        ) {
+          await ctx.db.patch(row._id, {
+            status: "active",
+            roles: ["player"],
+            decidedAt: Date.now(),
+            decidedBy: user._id,
+          });
+          return { userId: u._id, displayName: u.displayName };
+        }
+      }
+    }
+
     let phone: string | undefined;
     if (args.phone && args.phone.trim().length > 0) {
       const normalized = normalizePhone(args.phone);
@@ -71,6 +103,22 @@ export const addGuest = mutation({
         .withIndex("by_phone", (q) => q.eq("phone", normalized))
         .unique();
       if (existing) {
+        // A removed player comes back with their history, not as a dead end.
+        const old = await ctx.db
+          .query("orgMembers")
+          .withIndex("by_org_user", (q) =>
+            q.eq("orgId", args.orgId).eq("userId", existing._id),
+          )
+          .unique();
+        if (callerIsAdmin && old?.status === "removed") {
+          await ctx.db.patch(old._id, {
+            status: "active",
+            roles: ["player"],
+            decidedAt: Date.now(),
+            decidedBy: user._id,
+          });
+          return { userId: existing._id, displayName: existing.displayName };
+        }
         throw new Error(
           `This number already belongs to ${existing.displayName}. Pick them from the list instead.`,
         );
@@ -140,6 +188,7 @@ export const listOrgPlayers = query({
           ),
           isAdmin: m.roles.includes("admin"),
           photoUrl: u.photoUrl,
+          joinedByLinkAt: m.joinedByLinkAt,
         };
       }),
     );
