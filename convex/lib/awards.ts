@@ -156,6 +156,8 @@ type EconomyRow = {
   innings: number;
   countedBalls: number;
   countedEconomy: number;
+  /** When the counted economy last moved. Rung (c) on a screen. */
+  economyAt?: number;
 };
 
 /** Balls bowled to juniors do not help a bowler reach the bar. */
@@ -163,18 +165,10 @@ export function economyQualifies(r: EconomyRow): boolean {
   return r.countedBalls >= AWARD_MIN_BALLS && r.innings >= AWARD_MIN_INNINGS;
 }
 
-/** Runs behind `countedEconomy`, for a screen that prints them beside the rate. */
-export function countedRunsConceded(r: EconomyRow): number {
-  return Math.round((r.countedEconomy * r.countedBalls) / 6);
-}
-
 /**
  * Economy order for the screens, using the same pool and ladder as the saved
  * award. Rows that miss the bar come last, and a bowler with no counted balls
  * comes last of all, because their 0.0 is not a rate.
- *
- * Board rows from the leaderboard query carry no `at`, so rung (c) is skipped
- * here: an exact tie on economy and on matches falls to userId on a screen.
  */
 export function rankEconomy<T extends EconomyRow>(
   rows: T[],
@@ -184,7 +178,7 @@ export function rankEconomy<T extends EconomyRow>(
   const contender = (r: T): LadderRow => ({
     userId: r.userId,
     turnoutMatches: matches.get(String(r.userId)) ?? 0,
-    at: new Map(),
+    at: new Map(r.economyAt ? [[ECONOMY_COUNTERS[0], r.economyAt]] : []),
   });
   return rows.slice().sort(
     (a, b) =>

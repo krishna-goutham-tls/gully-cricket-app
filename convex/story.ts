@@ -524,7 +524,6 @@ export const matchStory = query({
       const a = wicketIdx[k - 1];
       const b = wicketIdx[k];
       if (b - a <= 5 && timeline[a].inn === timeline[b].inn) {
-        const first = timeline[a];
         const last = timeline[b];
         // Walk back through any earlier wickets in the same burst, for the count.
         let start = k - 1;
@@ -537,15 +536,15 @@ export const matchStory = query({
         }
         const burst = k - start + 1;
         const burstStart = timeline[wicketIdx[start]];
-        const overs = `${burstStart.over}.${burstStart.ballInOver} to ${last.over}.${last.ballInOver}`;
+        const burstNames = wicketIdx
+          .slice(start, k + 1)
+          .map((i) => timeline[i].outName);
+        const gone = `${burstNames.slice(0, -1).join(", ")} and ${burstNames[burstNames.length - 1]}`;
+        const count = burst === 2 ? "Two" : String(burst);
         turningPoint = {
           title: `${ordinalWord(timeline[b].inn)} innings`,
-          text: `Two wickets in ${b - a + 1} balls — ${first.outName} and ${last.outName} gone in a blink.`,
-          // The line above already says two wickets, so only a bigger burst adds a count.
-          meta:
-            burst > 2
-              ? `${burst} wickets in ${b - wicketIdx[start] + 1} balls · overs ${overs}`
-              : `Overs ${overs}`,
+          text: `${count} wickets in ${b - wicketIdx[start] + 1} balls — ${gone} gone in a blink.`,
+          meta: `Overs ${burstStart.over}.${burstStart.ballInOver} to ${last.over}.${last.ballInOver}`,
           ballIndex: b,
           at: last.at,
         };

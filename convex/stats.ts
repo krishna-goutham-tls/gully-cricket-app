@@ -156,6 +156,8 @@ type Head2Head = {
   userId: Id<"users">;
   outs: number;
   runs: number;
+  /** Of `balls`, the ones bowled by a junior. */
+  juniorBalls: number;
   balls: number;
   fours: number;
   sixes: number;
@@ -597,13 +599,9 @@ function addPoints(
  * One stamp as the match card reads it, for the profile log: every ball,
  * juniors included. Old rows have no real fields and read as they did.
  *
- * Two things the stamp cannot say exactly, so this works them out from the
- * match total in `real`:
- * - An innings only off juniors, not out, has no batting row. It reads as one
- *   more innings, so two of those in one Test show as one.
- * - Wickets off juniors have no per-innings count. They go on the last spell,
- *   so a player with two spells in a match has the right total, and the split
- *   between the spells can be wrong.
+ * An innings only off juniors, not out, has no batting row, so this works it
+ * out from the match total in `real`. It reads as one more innings, so two of
+ * those in one Test show as one.
  */
 function scorecardRows(r: Doc<"playerMatchStats">) {
   const logBat = (r.bat?.innings ?? []).map((i) => ({
@@ -617,14 +615,10 @@ function scorecardRows(r: Doc<"playerMatchStats">) {
     if (runs > 0 || balls > 0) logBat.push({ runs, balls, out: false });
   }
   const logBowl = (r.bowl?.innings ?? []).map((i) => ({
-    wickets: i.wickets,
+    wickets: i.realWickets ?? i.wickets,
     runs: i.runs,
     legalBalls: i.legalBalls,
   }));
-  if (r.real && logBowl.length > 0) {
-    logBowl[logBowl.length - 1].wickets +=
-      r.real.wickets - logBowl.reduce((t, i) => t + i.wickets, 0);
-  }
   return { logBat, logBowl };
 }
 
@@ -719,6 +713,7 @@ async function stampFocus(
           fours: 0,
           sixes: 0,
           dots: 0,
+          juniorBalls: 0,
           types: new Map(),
           at: 0,
           seq: 0,
@@ -731,6 +726,7 @@ async function stampFocus(
       e.fours += s.fours;
       e.sixes += s.sixes;
       e.dots += s.dots;
+      e.juniorBalls += s.juniorBalls ?? 0;
       addCounts(e.types, s.types);
       if (at > e.at || (at === e.at && s.seq > e.seq)) {
         e.at = at;
@@ -911,6 +907,7 @@ function buildBattingRows(
 function buildBowlingRows(
   bowling: Map<string, BowlAgg>,
   names: Map<string, string>,
+  reachedAt?: Map<string, Map<string, number>>,
 ) {
   return Array.from(bowling.values())
     .map((agg) => {
@@ -930,7 +927,13 @@ function buildBowlingRows(
         countedEconomy:
           agg.countedBalls > 0 ? agg.countedRuns / (agg.countedBalls / 6) : 0,
         countedBalls: agg.countedBalls,
+        countedRuns: agg.countedRuns,
         countedOversText: legalBallToOverText(agg.countedBalls, 6),
+        // When the counted economy last moved, for the tie-break on a screen.
+        economyAt: Math.max(
+          reachedAt?.get(String(agg.userId))?.get("bowl.runs") ?? 0,
+          reachedAt?.get(String(agg.userId))?.get("bowl.legalBalls") ?? 0,
+        ),
         best: best ? `${best.wickets}/${best.runs}` : "\u2014",
         ...haulCounts(agg.perInnings.values()),
         legalBalls: agg.legalBalls,
@@ -945,7 +948,7 @@ function buildBowlingRows(
       (a, b) =>
         Number(b.qualified) - Number(a.qualified) ||
         b.wickets - a.wickets ||
-        a.economy - b.economy,
+        a.countedEconomy - b.countedEconomy,
     );
 }
 
@@ -1315,7 +1318,10 @@ export async function loadRegularsBoard(
       snap.reachedAt,
     ),
     bowling: stampContender(
-      boardFilter(stampTags(buildBowlingRows(snap.bowling, names), tags), false),
+      boardFilter(
+        stampTags(buildBowlingRows(snap.bowling, names, snap.reachedAt), tags),
+        false,
+      ),
       snap.turnout,
       snap.reachedAt,
     ),
@@ -1808,11 +1814,13 @@ async function playerStatsFor(
   const bowledAt = Array.from(focus.byBatter.values()).filter(
     (e) => e.balls > 0,
   );
+  // A junior's balls have no runs in them, so a pace read leaves them out.
+  const paceBalls = (e: Head2Head) => e.balls - e.juniorBalls;
   const enough = (list: Head2Head[]) =>
-    list.filter((e) => e.balls >= NEMESIS_MIN_BALLS);
+    list.filter((e) => paceBalls(e) >= NEMESIS_MIN_BALLS);
   const not = (list: Head2Head[], exclude: Head2Head | null) =>
     exclude ? list.filter((e) => e !== exclude) : list;
-  const sr = (e: Head2Head) => (e.runs / e.balls) * 100;
+  const sr = (e: Head2Head) => (e.runs / paceBalls(e)) * 100;
 
   // Batting. Toughest is whoever takes the wicket most; failing that — a
   // batter whose dismissals are all run-outs has no bowler to their name —
@@ -2085,6 +2093,8 @@ async function playerStatsFor(
           dots: bowl.dots,
           innings: bowl.innings.size,
           countedBalls: bowl.countedBalls,
+          countedRuns: bowl.countedRuns,
+          countedOversText: legalBallToOverText(bowl.countedBalls, 6),
           // Good records, so balls and runs to juniors stay out, as they do
           // for the wickets beside them.
           economy:

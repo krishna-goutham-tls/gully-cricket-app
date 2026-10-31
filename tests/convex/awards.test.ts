@@ -3,7 +3,6 @@ import { internal } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import {
   bestEconomyRow,
-  countedRunsConceded,
   economyQualifies,
   rankEconomy,
   seasonAwardKinds,
@@ -82,9 +81,9 @@ describe("D2: one economy winner", () => {
 
     // The runs a screen prints agree with the rate and overs it prints.
     expect(row(steady).countedOversText).toBe("4.0");
-    expect(countedRunsConceded(row(steady))).toBe(16);
+    expect(row(steady).countedRuns).toBe(16);
     expect(row(cheap).countedOversText).toBe("4.0");
-    expect(countedRunsConceded(row(cheap))).toBe(24);
+    expect(row(cheap).countedRuns).toBe(24);
   });
 
   const bowler = (id: string, over: Partial<Parameters<typeof economyQualifies>[0]> = {}) => ({
@@ -110,6 +109,15 @@ describe("D2: one economy winner", () => {
       { userId: "c" as Id<"users">, matches: 4 },
     ];
     expect(ids(rankEconomy([bowler("a"), bowler("c"), bowler("b")], turnout))).toEqual(["b", "c", "a"]);
+  });
+
+  test("a tie on economy and matches goes to who got there first", () => {
+    const turnout = [
+      { userId: "b" as Id<"users">, matches: 4 },
+      { userId: "c" as Id<"users">, matches: 4 },
+    ];
+    const rows = [bowler("b", { economyAt: 300 }), bowler("c", { economyAt: 100 })];
+    expect(rankEconomy(rows, turnout).map((r) => String(r.userId))).toEqual(["c", "b"]);
   });
 
   test("a bowler with no counted balls sits last, below thin samples", () => {

@@ -14,7 +14,6 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import {
-  countedRunsConceded,
   economyQualifies,
   rankEconomy,
 } from "@/convex/lib/awards";
@@ -260,7 +259,7 @@ const MEASURES: Measure[] = [
         displayName: r.displayName,
         value: r.countedEconomy,
         display: r.countedBalls > 0 ? r.countedEconomy.toFixed(2) : "—",
-        meta: `${r.countedOversText} ov · ${countedRunsConceded(r)} conceded · ${inns(r.innings)}`,
+        meta: `${r.countedOversText} ov · ${r.countedRuns} conceded · ${inns(r.innings)}`,
         qualified: economyQualifies(r),
       })),
   },

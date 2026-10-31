@@ -338,8 +338,8 @@ test("turning point lines say what happened in plain words", async () => {
     { striker: b1, other: b2, bowler: a1, balls: dots(6) },
   ]);
   const clustered = await t.query(api.story.matchStory, { token: a1.token, matchId: three });
-  expect(clustered!.turningPoint!.meta).toBe("3 wickets in 6 balls · overs 0.1 to 0.6");
-  expect(clustered!.turningPoint!.text).toContain("Two wickets in");
+  expect(clustered!.turningPoint!.meta).toBe("Overs 0.1 to 0.6");
+  expect(clustered!.turningPoint!.text).toContain("3 wickets in 6 balls");
 
   const two = await play(t, a1, orgId, [a1, a2, a3, a4], [b1, b2], [
     {

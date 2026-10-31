@@ -55,6 +55,8 @@ export type StampH2H = {
   balls: number;
   fours: number;
   sixes: number;
+  /** Of `balls`, the ones a junior bowled. Their runs stay out of `runs`. */
+  juniorBalls: number;
   dots: number;
   types: Counts;
   seq: number;
@@ -112,6 +114,7 @@ type BowlWork = {
     {
       inningsId: Id<"innings">;
       wickets: number;
+      realWickets: number;
       runs: number;
       legalBalls: number;
     }
@@ -278,6 +281,7 @@ export function foldMatch(
         fours: 0,
         sixes: 0,
         dots: 0,
+        juniorBalls: 0,
         types: new Map(),
         seq: 0,
       };
@@ -454,7 +458,10 @@ export function foldMatch(
       // shows in this head-to-head. The runs stay out.
       const e = h2h(striker, striker.byBowler, b.bowlerId);
       if (e) {
-        if (faced) e.balls += 1;
+        if (faced) {
+          e.balls += 1;
+          e.juniorBalls += 1;
+        }
         if (b.isLegal && b.runsBat === 0) e.dots += 1;
         touch(e, b.sequence);
       }
@@ -552,13 +559,17 @@ export function foldMatch(
     const per = bowl.innings.get(innKey) ?? {
       inningsId: b.inningsId,
       wickets: 0,
+      realWickets: 0,
       runs: 0,
       legalBalls: 0,
     };
     per.runs += b.runsBat + b.extrasRuns;
     if (b.isLegal) per.legalBalls += 1;
     const credited = b.isWicket && b.wicketType !== "runout";
-    if (credited) bowler.real.wickets += 1;
+    if (credited) {
+      bowler.real.wickets += 1;
+      per.realWickets += 1;
+    }
     const wicketCounts =
       credited && earnsPoints(b.bowlerId, b.playerOutId, juniors);
     {

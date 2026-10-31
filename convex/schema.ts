@@ -158,6 +158,8 @@ const headToHead = v.object({
   fours: v.number(),
   sixes: v.number(),
   dots: v.number(),
+  /** Of `balls`, the ones bowled by a junior. Their runs stay out of `runs`. */
+  juniorBalls: v.optional(v.number()),
   types: v.array(v.object({ type: v.string(), count: v.number() })),
   seq: v.number(),
 });
@@ -597,6 +599,8 @@ export default defineSchema({
           v.object({
             inningsId: v.id("innings"),
             wickets: v.number(),
+            /** Every wicket in this spell, juniors included. */
+            realWickets: v.optional(v.number()),
             runs: v.number(),
             legalBalls: v.number(),
           }),

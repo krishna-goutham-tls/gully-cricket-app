@@ -462,8 +462,8 @@ function BowlingCard({
         {/* "Spells" was this same innings count under another name; it now sits
             beside the wickets, so showing it twice would only re-open the
             question of which innings number is which. */}
-        <StatTile label="Overs" value={b.oversText} />
-        <StatTile label="Conceded" value={String(b.runs)} hint="runs" />
+        <StatTile label="Overs" value={b.countedOversText} />
+        <StatTile label="Conceded" value={String(b.countedRuns)} hint="runs" />
       </div>
 
       <div className="mt-4">

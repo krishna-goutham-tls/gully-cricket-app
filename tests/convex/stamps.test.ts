@@ -207,6 +207,18 @@ describe("batting off juniors", () => {
     expect(row(juniorView.vsBatters, a1)).toMatchObject({ balls: 6, outs: 1, runs: 4, fours: 1 });
   });
 
+  test("D3: a slow-scoring read never names a junior, whose runs stay out", async () => {
+    const t = newTest();
+    const { a1, a2, b1, j, orgId } = await setup(t);
+    const chase = quietChase({ b1, j, a2 });
+    await playMatch(t, a1, orgId, [a1, a2], [b1, j], { striker: a1, other: a2, bowler: j, balls: balls(4, 4, 4, 4, 4, 4) }, chase);
+    await playMatch(t, a1, orgId, [a1, a2], [b1, j], { striker: a1, other: a2, bowler: b1, balls: balls(2, 2, 2, 2, 2, 2) }, chase);
+    const stats = await profile(t, a1, orgId, a1);
+    expect(row(stats.vsBowlers, j)).toMatchObject({ balls: 6, runs: 0 });
+    expect(String(stats.matchups.batting.toughest!.userId)).toBe(String(b1.userId));
+    expect(stats.matchups.batting.easiest).toBeNull();
+  });
+
   test("D4: a scoring shot off a junior ends a dot run", async () => {
     const t = newTest();
     const { a1, a2, b1, j, orgId } = await setup(t);
@@ -314,8 +326,29 @@ describe("bowling at juniors", () => {
       average: 4,
       strikeRate: 2,
       countedBalls: 2,
+      countedRuns: 4,
+      countedOversText: "0.2",
       wickets: 1,
     });
+  });
+
+  test("real wickets sit on the spell that took them", async () => {
+    const t = newTest();
+    const { a1, a2, b1, j, orgId } = await setup(t);
+    const matchId = await playMatch(
+      t,
+      a1,
+      orgId,
+      [a1, a2],
+      [b1, j],
+      { striker: a1, other: a2, bowler: b1, balls: balls(1, 1, 1, 1, 1, 1) },
+      { striker: j, other: b1, bowler: a1, balls: [{ out: j.userId }, ...balls(0, 0), { out: b1.userId }] },
+    );
+    const stamp = await stampOf(t, matchId, a1);
+    expect(stamp.bowl!.innings[0]).toMatchObject({ wickets: 1, realWickets: 2 });
+    const stats = await profile(t, a1, orgId, a1);
+    expect(stats.log[0].bowl[0].wickets).toBe(2);
+    expect(stats.bowling!.wickets).toBe(1);
   });
 
   test("D6: Miser needs a counted economy on counted balls", () => {
