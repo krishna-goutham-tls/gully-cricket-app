@@ -271,15 +271,19 @@ export function buildRecords(
   push(
     bowling,
     "Best economy",
-    bestBy(bowl, (r) => r.economy, {
-      better: (a, b) => a < b,
-      keepZero: true,
-      tieBreak: tieHonourBowl,
-    }),
-    (r) => r.economy.toFixed(1),
+    bestBy(
+      bowl.filter((r) => r.countedBalls >= minBalls),
+      (r) => r.countedEconomy,
+      {
+        better: (a, b) => a < b,
+        keepZero: true,
+        tieBreak: tieHonourBowl,
+      },
+    ),
+    (r) => r.countedEconomy.toFixed(1),
   );
   push(bowling, "Most dots", bestBy(bowl, (r) => r.dots, { tieBreak: tieHonourBowl }), (r) => count(r.dots));
-  push(bowling, "Most overs bowled", bestBy(bowl, (r) => r.legalBalls, { tieBreak: tieHonourBowl }), (r) => r.oversText);
+  push(bowling, "Most overs bowled", bestBy(bowl, (r) => r.countedBalls, { tieBreak: tieHonourBowl }), (r) => r.countedOversText);
   push(bowling, "Most 3-fors", bestBy(bowl, (r) => r.threeFors, { tieBreak: tieHonourBowl }), (r) => count(r.threeFors));
   push(bowling, "Most 5-fors", bestBy(bowl, (r) => r.fiveFors, { tieBreak: tieHonourBowl }), (r) => count(r.fiveFors));
 

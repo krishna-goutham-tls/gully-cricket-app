@@ -566,6 +566,10 @@ export default defineSchema({
         caughtBowled: v.optional(v.number()),
         worstOver: v.optional(v.number()),
         wicketRun: v.optional(v.number()),
+        /** Balls and runs without those bowled to juniors. */
+        counted: v.optional(
+          v.object({ legalBalls: v.number(), runs: v.number() }),
+        ),
         vs: v.optional(
           v.array(
             v.object({
@@ -602,6 +606,10 @@ export default defineSchema({
           v.object({ inningsId: v.id("innings"), runs: v.number() }),
         ),
       }),
+    ),
+    /** What a senior took off juniors. `bat`, `bowl` and `catches` leave it out. */
+    offJuniors: v.optional(
+      v.object({ runs: v.number(), wickets: v.number(), catches: v.number() }),
     ),
     /** Named players only: the all-round points behind win credit and share. */
     work: v.optional(
