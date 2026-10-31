@@ -89,6 +89,9 @@ type BowlAgg = {
   userId: Id<"users">;
   legalBalls: number;
   runs: number;
+  /** Without balls bowled to juniors. Good records read these. */
+  countedBalls: number;
+  countedRuns: number;
   wickets: number;
   /** Legal balls that cost nothing at all — bat or extras. */
   dots: number;
@@ -453,6 +456,8 @@ function aggregateStamps(
           userId: r.userId,
           legalBalls: 0,
           runs: 0,
+          countedBalls: 0,
+          countedRuns: 0,
           wickets: 0,
           dots: 0,
           widesNoballs: 0,
@@ -481,6 +486,8 @@ function aggregateStamps(
       }
       agg.legalBalls += s.legalBalls;
       agg.runs += s.runs;
+      agg.countedBalls += s.counted?.legalBalls ?? s.legalBalls;
+      agg.countedRuns += s.counted?.runs ?? s.runs;
       agg.wickets += s.wickets;
       agg.dots += s.dots;
       agg.widesNoballs += s.widesNoballs;
@@ -867,6 +874,11 @@ function buildBowlingRows(
         sixesConceded: agg.sixesConceded,
         innings: agg.innings.size,
         economy: agg.legalBalls > 0 ? agg.runs / (agg.legalBalls / 6) : 0,
+        // Good records read these, so bowling at juniors cannot improve them.
+        countedEconomy:
+          agg.countedBalls > 0 ? agg.countedRuns / (agg.countedBalls / 6) : 0,
+        countedBalls: agg.countedBalls,
+        countedOversText: legalBallToOverText(agg.countedBalls, 6),
         best: best ? `${best.wickets}/${best.runs}` : "\u2014",
         ...haulCounts(agg.perInnings.values()),
         legalBalls: agg.legalBalls,
@@ -1218,7 +1230,7 @@ export async function loadRegularsBoard(
         dotsFaced: bat?.dots ?? 0,
         ducks: bat?.facedDucks ?? 0,
         wickets: bowl?.wickets ?? 0,
-        legalBallsBowled: bowl?.legalBalls ?? 0,
+        legalBallsBowled: bowl?.countedBalls ?? 0,
         dotsConceded: bowl?.dots ?? 0,
         catches: snap.catches.get(key) ?? 0,
         drops: snap.drops.get(key) ?? 0,
@@ -1447,9 +1459,8 @@ function facedJunior(match: Doc<"matches">, userId: Id<"users">) {
 /**
  * The Roast's junior board: runs, wickets and catches a player took off
  * juniors, ranked by the base points those would have earned. Each stamp holds
- * the real numbers and the counted ones (`pts`), so the gap is the answer. A
- * row stamped before the junior rule has no `pts` and adds nothing. Milestone
- * bonuses stay out. Nothing here feeds any other board.
+ * them in `offJuniors`. Milestone bonuses stay out. Nothing here feeds any
+ * other board.
  */
 export const juniorBoard = query({
   args: {
@@ -1477,9 +1488,7 @@ export const juniorBoard = query({
     if (ground === null) return null;
 
     const { players } = await loadStampSet(ctx, orgId, window);
-    const stamps = players.filter(
-      (r) => r.pts && inWindow(r, { ...window, ground }),
-    );
+    const stamps = players.filter((r) => inWindow(r, { ...window, ground }));
     const matchIds = Array.from(new Set(stamps.map((r) => r.matchId)));
     const matchDocs = await Promise.all(matchIds.map((id) => ctx.db.get(id)));
     const matches = new Map(matchIds.map((id, i) => [id, matchDocs[i]]));
@@ -1495,9 +1504,11 @@ export const juniorBoard = query({
       }
     >();
     for (const r of stamps) {
-      const runs = (r.bat?.runs ?? 0) - (r.pts?.runs ?? 0);
-      const wickets = (r.bowl?.wickets ?? 0) - (r.pts?.wickets ?? 0);
-      const catches = r.catches - (r.pts?.catches ?? 0);
+      const { runs, wickets, catches } = r.offJuniors ?? {
+        runs: 0,
+        wickets: 0,
+        catches: 0,
+      };
       const tookFromJunior = runs > 0 || wickets > 0 || catches > 0;
       const played = r.named || Boolean(r.bat) || Boolean(r.bowl);
       const match = matches.get(r.matchId);

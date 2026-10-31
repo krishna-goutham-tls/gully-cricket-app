@@ -101,9 +101,9 @@ export function awardsFromBoard(board: Board): SeasonAward[] {
 
   const econPool = board.bowling.filter(
     (r) =>
-      r.legalBalls >= RECORD_MIN_BALLS && r.innings >= RECORD_MIN_INNINGS,
+      r.countedBalls >= RECORD_MIN_BALLS && r.innings >= RECORD_MIN_INNINGS,
   );
-  const econ = pickWinner(econPool, (r) => r.economy, {
+  const econ = pickWinner(econPool, (r) => r.countedEconomy, {
     better: (a, b) => a < b,
     keepZero: true,
     counters: ["bowl.runs", "bowl.legalBalls"],
@@ -304,11 +304,11 @@ export const end = mutation({
 });
 
 /**
- * One-shot after the no-points-off-juniors rebuild (LOG 2026-09-25): redo
- * Player of the Series on every ended season from the restamped board. Only
- * `pots` reads points, so every other saved award is left as it was — a
- * season that ended before the trophy shelf keeps its six. `dryRun` returns
- * what would change without writing. Run after `stats:backfillStamps`.
+ * After a change to what counts (LOG 2026-09-25, 2026-10-31): redo the saved
+ * awards of every ended season from the restamped board. A season keeps the
+ * kinds it saved, so one that ended before the trophy shelf keeps its six.
+ * `dryRun` returns what would change without writing. Run after
+ * `stats:backfillStamps`.
  *   npx convex run seasons:recomputeSeriesAwards '{"orgId":"…","dryRun":true}'
  */
 export const recomputeSeriesAwards = internalMutation({
@@ -322,6 +322,7 @@ export const recomputeSeriesAwards = internalMutation({
       .collect();
     const changes: Array<{
       seasonId: Id<"seasons">;
+      kind: SeasonAwardKind;
       before: SeasonAward | null;
       after: SeasonAward | null;
     }> = [];
@@ -331,19 +332,28 @@ export const recomputeSeriesAwards = internalMutation({
         afterTs: season.startedAt,
         beforeTs: season.endedAt,
       });
-      const after = awardsFromBoard(board).find((a) => a.kind === "pots") ?? null;
+      const fresh = new Map(awardsFromBoard(board).map((a) => [a.kind, a]));
       const saved = season.awards ?? [];
-      const before = saved.find((a) => a.kind === "pots") ?? null;
-      const same =
-        String(before?.userId) === String(after?.userId) &&
-        before?.value === after?.value;
-      if (same) continue;
-      changes.push({ seasonId: season._id, before, after });
-      if (dryRun) continue;
-      const rest = saved.filter((a) => a.kind !== "pots");
-      await ctx.db.patch(season._id, {
-        awards: after ? [after, ...rest] : rest,
-      });
+      const kinds = new Set<SeasonAwardKind>([
+        "pots",
+        ...saved.map((a) => a.kind),
+      ]);
+      const next: SeasonAward[] = [];
+      let changed = false;
+      for (const kind of Array.from(kinds)) {
+        const before = saved.find((a) => a.kind === kind) ?? null;
+        const after = fresh.get(kind) ?? null;
+        if (after) next.push(after);
+        if (
+          String(before?.userId) === String(after?.userId) &&
+          before?.value === after?.value
+        ) {
+          continue;
+        }
+        changed = true;
+        changes.push({ seasonId: season._id, kind, before, after });
+      }
+      if (changed && !dryRun) await ctx.db.patch(season._id, { awards: next });
     }
     return { seasonsChecked: ended.length, changed: changes.length, changes };
   },

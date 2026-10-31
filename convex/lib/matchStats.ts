@@ -22,8 +22,16 @@ import { tagsForUsers } from "./playerLabel";
  *
  * Names and board tags are deliberately not stamped — they are read live, so
  * renaming or tagging a player never needs a restamp. The one exception is
- * junior status for points: it is frozen on the match (`juniorIds`) the
- * first time it completes, and `pts` is folded against that list.
+ * junior status: it is frozen on the match (`juniorIds`) the first time it
+ * completes, and the fold reads that list.
+ *
+ * Seniors gain nothing from juniors (Krishna, 2026-10-31). A senior's runs,
+ * balls faced, boundaries, dots, wickets and catches against a junior stay out
+ * of `bat`, `bowl` and `catches`, and the gained totals go to `offJuniors`.
+ * Dismissals, ducks, drops, wides and runs and sixes conceded stay in, so a
+ * junior keeps the credit. `bowl.counted` is the balls and runs without those
+ * bowled to juniors, for good bowling records. Scorecards read the ball log, so
+ * they keep every ball.
  *
  * The ground is stamped exactly as the match carries it. A match with no
  * groundId stamps none, and the boards read that as the community's Home
@@ -93,6 +101,8 @@ type BowlWork = {
   worstOver: number;
   /** Most credited wickets on consecutive deliveries — 3 is a hat-trick. */
   wicketRun: number;
+  /** Balls and runs without those bowled to juniors. */
+  counted: { legalBalls: number; runs: number };
   /** Per batter faced: credited dismissals and sixes conceded. */
   vs: Map<string, { userId: Id<"users">; outs: number; sixes: number }>;
   innings: Map<
@@ -125,6 +135,7 @@ type Player = {
   catches: number;
   drops: number;
   pts: PtsWork;
+  offJuniors: { runs: number; wickets: number; catches: number };
   reached: Map<string, number>;
   dismissalTypes: Map<string, number>;
   wicketTypes: Map<string, number>;
@@ -172,6 +183,7 @@ export function foldMatch(
         catches: 0,
         drops: 0,
         pts: { runs: 0, wickets: 0, catches: 0, innings: new Map() },
+        offJuniors: { runs: 0, wickets: 0, catches: 0 },
         reached: new Map(),
         dismissalTypes: new Map(),
         wicketTypes: new Map(),
@@ -226,6 +238,7 @@ export function foldMatch(
         caughtBowled: 0,
         worstOver: 0,
         wicketRun: 0,
+        counted: { legalBalls: 0, runs: 0 },
         vs: new Map(),
         innings: new Map(),
       };
@@ -308,6 +321,9 @@ export function foldMatch(
   const dotRunNow = new Map<string, number>();
   // Legal balls faced per innings — the quota counts only these.
   const legalFaced = new Map<string, number>();
+  // Every ball of an innings, juniors included. A duck is a fact of the
+  // innings, so runs off juniors still stop it being one.
+  const realInnings = new Map<string, { runs: number; balls: number }>();
   const wicketRunNow = new Map<string, number>();
   const rules = match.ruleSnapshot;
   const commonIds = new Set(
@@ -364,43 +380,50 @@ export function foldMatch(
       }
       striker.pts.innings.set(innKey, row);
     }
-    const bat = getBat(b.strikerId);
-    const inn = batInnings(bat, b.inningsId);
-    bat.runs += b.runsBat;
     striker.contributed = true;
-    if (b.runsBat > 0) markAt(b.strikerId, "bat.runs", b.createdAt);
     const faced = b.isLegal || b.extrasType === "noball";
-    if (faced) {
-      bat.balls += 1;
-      markAt(b.strikerId, "bat.balls", b.createdAt);
-    }
-    // A dot is a legal ball the bat got nothing off. Byes and leg-byes still
-    // count as dots for the batter — the runs weren't theirs.
-    if (b.isLegal && b.runsBat === 0) {
-      bat.dots += 1;
-      markAt(b.strikerId, "bat.dots", b.createdAt);
-    }
-    if (b.runsBat === 1) {
-      bat.singles += 1;
-      markAt(b.strikerId, "bat.singles", b.createdAt);
-    }
-    if (b.runsBat === 4) {
-      bat.fours += 1;
-      markAt(b.strikerId, "bat.fours", b.createdAt);
-    }
-    if (b.runsBat === 6) {
-      bat.sixes += 1;
-      markAt(b.strikerId, "bat.sixes", b.createdAt);
-    }
-    inn.runs += b.runsBat;
-    if (faced) inn.balls += 1;
     {
+      const dk = `${innKey}:${String(b.strikerId)}`;
+      const real = realInnings.get(dk) ?? { runs: 0, balls: 0 };
+      real.runs += b.runsBat;
+      if (faced) real.balls += 1;
+      realInnings.set(dk, real);
+      if (b.isLegal) legalFaced.set(dk, (legalFaced.get(dk) ?? 0) + 1);
+    }
+    if (runsCount) {
+      const bat = getBat(b.strikerId);
+      const inn = batInnings(bat, b.inningsId);
+      bat.runs += b.runsBat;
+      if (b.runsBat > 0) markAt(b.strikerId, "bat.runs", b.createdAt);
+      if (faced) {
+        bat.balls += 1;
+        markAt(b.strikerId, "bat.balls", b.createdAt);
+      }
+      // A dot is a legal ball the bat got nothing off. Byes and leg-byes still
+      // count as dots for the batter — the runs weren't theirs.
+      if (b.isLegal && b.runsBat === 0) {
+        bat.dots += 1;
+        markAt(b.strikerId, "bat.dots", b.createdAt);
+      }
+      if (b.runsBat === 1) {
+        bat.singles += 1;
+        markAt(b.strikerId, "bat.singles", b.createdAt);
+      }
+      if (b.runsBat === 4) {
+        bat.fours += 1;
+        markAt(b.strikerId, "bat.fours", b.createdAt);
+      }
+      if (b.runsBat === 6) {
+        bat.sixes += 1;
+        markAt(b.strikerId, "bat.sixes", b.createdAt);
+      }
+      inn.runs += b.runsBat;
+      if (faced) inn.balls += 1;
       const k = `${innKey}:${b.overNumber}:${String(b.strikerId)}`;
       const o = (overBat.get(k) ?? 0) + b.runsBat;
       overBat.set(k, o);
       if (o > bat.bestOver) bat.bestOver = o;
       const dk = `${innKey}:${String(b.strikerId)}`;
-      if (b.isLegal) legalFaced.set(dk, (legalFaced.get(dk) ?? 0) + 1);
       if (b.isLegal && b.runsBat === 0) {
         const n = (dotRunNow.get(dk) ?? 0) + 1;
         dotRunNow.set(dk, n);
@@ -408,10 +431,8 @@ export function foldMatch(
       } else if (b.runsBat > 0) {
         dotRunNow.set(dk, 0);
       }
-    }
 
-    // Every ball faced, by bowler — not just the ones that got them out.
-    {
+      // Every ball faced, by bowler — not just the ones that got them out.
       const e = h2h(striker, striker.byBowler, b.bowlerId);
       if (e) {
         e.runs += b.runsBat;
@@ -421,6 +442,8 @@ export function foldMatch(
         if (b.runsBat === 6) e.sixes += 1;
         touch(e, b.sequence);
       }
+    } else {
+      striker.offJuniors.runs += b.runsBat;
     }
 
     if (b.isWicket && b.playerOutId) {
@@ -430,10 +453,11 @@ export function foldMatch(
       outBat.dismissals += 1;
       // A duck is out for 0 off the bat; golden if it was the first ball
       // faced (a no-ball dismissal can't happen, so faced-balls == 1 is safe).
-      if (outInn.runs === 0) {
+      const outReal = realInnings.get(`${innKey}:${String(b.playerOutId)}`);
+      if ((outReal?.runs ?? 0) === 0) {
         outBat.ducks += 1;
-        if (outInn.balls === 1) outBat.goldenDucks += 1;
-        if (outInn.balls >= 1) {
+        if (outReal?.balls === 1) outBat.goldenDucks += 1;
+        if ((outReal?.balls ?? 0) >= 1) {
           outBat.facedDucks += 1;
           markAt(b.playerOutId, "bat.ducks", b.createdAt);
         }
@@ -443,13 +467,15 @@ export function foldMatch(
       // dismissal only, credited to the fielder on the ball.
       if (b.wicketType === "caught" && b.fielderId) {
         const f = get(b.fielderId);
-        if (f.order.catch === undefined) f.order.catch = tick++;
-        f.catches += 1;
         f.contributed = true;
-        markAt(b.fielderId, "field.catches", b.createdAt);
         if (earnsPoints(b.fielderId, b.playerOutId, juniors)) {
+          if (f.order.catch === undefined) f.order.catch = tick++;
+          f.catches += 1;
+          markAt(b.fielderId, "field.catches", b.createdAt);
           f.pts.catches += 1;
           if (bowlSide) addPts(bowlSide, b.fielderId, CATCH_POINTS);
+        } else {
+          f.offJuniors.catches += 1;
         }
       }
       if (b.wicketType) bump(outP.dismissalTypes, b.wicketType);
@@ -483,7 +509,12 @@ export function foldMatch(
       bowl.legalBalls += 1;
       markAt(b.bowlerId, "bowl.legalBalls", b.createdAt);
     }
-    if (b.isLegal && b.runsBat + b.extrasRuns === 0) {
+    const bowlCounts = earnsPoints(b.bowlerId, b.strikerId, juniors);
+    if (bowlCounts) {
+      bowl.counted.runs += b.runsBat + b.extrasRuns;
+      if (b.isLegal) bowl.counted.legalBalls += 1;
+    }
+    if (bowlCounts && b.isLegal && b.runsBat + b.extrasRuns === 0) {
       bowl.dots += 1;
       markAt(b.bowlerId, "bowl.dots", b.createdAt);
     }
@@ -499,6 +530,8 @@ export function foldMatch(
     per.runs += b.runsBat + b.extrasRuns;
     if (b.isLegal) per.legalBalls += 1;
     const credited = b.isWicket && b.wicketType !== "runout";
+    const wicketCounts =
+      credited && earnsPoints(b.bowlerId, b.playerOutId, juniors);
     {
       const k = `${innKey}:${b.overNumber}:${String(b.bowlerId)}`;
       const o = (overBowl.get(k) ?? 0) + b.runsBat + b.extrasRuns;
@@ -506,7 +539,7 @@ export function foldMatch(
       if (o > bowl.worstOver) bowl.worstOver = o;
       // A wide or no-ball that takes nothing is not a delivery in the run.
       const wk = String(b.bowlerId);
-      if (credited) {
+      if (wicketCounts) {
         const n = (wicketRunNow.get(wk) ?? 0) + 1;
         wicketRunNow.set(wk, n);
         if (n > bowl.wicketRun) bowl.wicketRun = n;
@@ -519,14 +552,15 @@ export function foldMatch(
         if (b.runsBat === 6) v.sixes += 1;
         bowl.vs.set(vk, v);
       }
-      if (credited && b.playerOutId && String(b.playerOutId) !== String(b.bowlerId)) {
+      if (wicketCounts && b.playerOutId && String(b.playerOutId) !== String(b.bowlerId)) {
         const vk = String(b.playerOutId);
         const v = bowl.vs.get(vk) ?? { userId: b.playerOutId, outs: 0, sixes: 0 };
         v.outs += 1;
         bowl.vs.set(vk, v);
       }
     }
-    if (credited) {
+    if (credited && !wicketCounts) bowler.offJuniors.wickets += 1;
+    if (wicketCounts) {
       if (b.wicketType === "bowled") bowl.bowled += 1;
       if (
         b.wicketType === "caught" &&
@@ -538,10 +572,8 @@ export function foldMatch(
       markAt(b.bowlerId, "bowl.wickets", b.createdAt);
       per.wickets += 1;
       if (b.wicketType) bump(bowler.wicketTypes, b.wicketType);
-      if (earnsPoints(b.bowlerId, b.playerOutId, juniors)) {
-        bowler.pts.wickets += 1;
-        if (bowlSide) addPts(bowlSide, b.bowlerId, WICKET_POINTS);
-      }
+      bowler.pts.wickets += 1;
+      if (bowlSide) addPts(bowlSide, b.bowlerId, WICKET_POINTS);
     }
     bowl.innings.set(innKey, per);
 
@@ -555,7 +587,7 @@ export function foldMatch(
       if (b.runsBat === 4) e.fours += 1;
       if (b.runsBat === 6) e.sixes += 1;
       if (
-        credited &&
+        wicketCounts &&
         b.playerOutId &&
         String(b.playerOutId) === String(b.strikerId)
       ) {
@@ -609,6 +641,7 @@ export function foldMatch(
         catches: p.pts.catches,
         innings: Array.from(p.pts.innings.values()),
       },
+      offJuniors: p.offJuniors,
       work: p.named
         ? {
             onA,

@@ -209,9 +209,10 @@ export const list = query({
             top.map(async (r) => ({
               userId: r.userId,
               name: (await captainName(r.userId)) ?? "Player",
-              runs: r.bat?.runs ?? 0,
-              wickets: r.bowl?.wickets ?? 0,
-              catches: r.catches,
+              // A match card is a scoreboard, so it shows every run and wicket.
+              runs: (r.bat?.runs ?? 0) + (r.offJuniors?.runs ?? 0),
+              wickets: (r.bowl?.wickets ?? 0) + (r.offJuniors?.wickets ?? 0),
+              catches: r.catches + (r.offJuniors?.catches ?? 0),
             })),
           );
         }
