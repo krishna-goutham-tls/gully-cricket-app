@@ -40,3 +40,8 @@ yarn-error.log*
 next-env.d.ts
 .claude/
 backups/
+
+# browser tests
+/test-results/
+/playwright-report/
+/e2e/out/

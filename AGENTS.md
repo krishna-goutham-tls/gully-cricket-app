@@ -77,6 +77,24 @@ npx convex deploy --yes # Push convex/ to PROD — see the rules below
 
 ---
 
+## Testing and staging
+
+```bash
+npm test                # Server tests (tests/convex), no deployment needed
+npm run e2e:seed        # Test accounts and communities on Convex dev, safe to rerun
+npm run e2e             # Browser tests against local next dev and Convex dev
+E2E_BASE_URL=https://staging--boundary-os.netlify.app npm run e2e   # Same, on staging
+```
+
+- Staging is `staging--boundary-os.netlify.app`, on the Convex **dev** database.
+  PR previews also use Convex dev. Only `main` builds use prod (`netlify.toml`).
+- Test numbers and the PIN live in `.env.local` as `E2E_PHONE_PREFIX` and `E2E_PIN`.
+  Never commit them. The scripts refuse any database except Convex dev, and
+  `e2e:guard` refuses a deployment without `E2E_ALLOWED`.
+- Run tests before a staging push. Run them again on staging after it.
+
+---
+
 ## Convex deploys — the rules
 
 **One Convex project: `cricket-scoring-app`.** Two deployments inside it. The
@@ -140,8 +158,8 @@ so the live bundle talks to `dusty-jellyfish-63`. Do not set
   Krishna explicitly put there. New inputs otherwise go to post-match
   surfaces, never mid-over.
 - **`recomputeAndPersist` (`convex/scoring.ts`) changes with extreme care.**
-- **You cannot log into this app** (phone + 4-digit PIN). Say "not
-  browser-verified" and name what Krishna should eyeball — never claim a UI
+- **Prod stays not browser-verified.** Agents log in only on Convex dev, with the
+  test accounts below. Name what Krishna should eyeball on prod. Never claim a UI
   change works because it compiled.
 
 ---

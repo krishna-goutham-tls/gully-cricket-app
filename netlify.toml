@@ -8,5 +8,17 @@
     NEXT_PUBLIC_CONVEX_URL = "https://dusty-jellyfish-63.convex.cloud"
     NEXT_PUBLIC_CONVEX_SITE_URL = "https://dusty-jellyfish-63.convex.site"
 
+# Staging and PR previews use the Convex dev database, so a test never writes
+# real data. Only a main build reads the prod values above.
+[context.staging.environment]
+  NEXT_PUBLIC_CONVEX_URL = "https://posh-mastiff-400.convex.cloud"
+  NEXT_PUBLIC_CONVEX_SITE_URL = "https://posh-mastiff-400.convex.site"
+  NEXT_PUBLIC_DEPLOY_ENV = "staging"
+
+[context.deploy-preview.environment]
+  NEXT_PUBLIC_CONVEX_URL = "https://posh-mastiff-400.convex.cloud"
+  NEXT_PUBLIC_CONVEX_SITE_URL = "https://posh-mastiff-400.convex.site"
+  NEXT_PUBLIC_DEPLOY_ENV = "staging"
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"

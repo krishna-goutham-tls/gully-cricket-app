@@ -11,6 +11,7 @@
 import type * as access from "../access.js";
 import type * as admin from "../admin.js";
 import type * as auth from "../auth.js";
+import type * as e2e from "../e2e.js";
 import type * as grounds from "../grounds.js";
 import type * as hero from "../hero.js";
 import type * as lib_access from "../lib/access.js";
@@ -56,6 +57,7 @@ declare const fullApi: ApiFromModules<{
   access: typeof access;
   admin: typeof admin;
   auth: typeof auth;
+  e2e: typeof e2e;
   grounds: typeof grounds;
   hero: typeof hero;
   "lib/access": typeof lib_access;
