@@ -16,8 +16,8 @@ type Side = "A" | "B";
 /**
  * "Hero" — a social-shareable one-screen story of how one player played on
  * one calendar DAY (a day often holds several matches). Entirely read-model:
- * everything here replays the `balls` log for completed matches at read
- * time, same as `story.ts` and `stats.ts` — no schema change, no backfill.
+ * the day replays the `balls` log of that day's matches at read time, and the
+ * career baseline reads the player's saved match summaries.
  *
  * Day boundaries (`dayStart`/`dayEnd`) are computed on the client from
  * `lib/dates.ts`-style local-day math and passed in as plain timestamps, so
@@ -378,11 +378,12 @@ export const heroDay = query({
       potmCount,
     });
 
-    // Career baseline (before this day) — cheap second pass, this player
-    // only, over matches already loaded in `allCompleted`. Powers the
+    // Career baseline (before this day), from this player's saved summaries
+    // for the matches already loaded in `allCompleted`. Powers the
     // "way above his usual" / "doubled his usual haul" comparison lines.
     const careerBaseline = await computeCareerBaseline(
       ctx,
+      args.orgId,
       args.playerId,
       args.dayStart,
       allCompleted,
@@ -512,13 +513,15 @@ function buildHeadline(d: {
 }
 
 /** This player's career figures from every completed match that landed
- * before `dayStart` — a cheap, player-scoped second pass over the ball log
- * (org scale is small, so re-reading a prior match's balls once per Hero
- * view is fine). Returns null when the player has no prior history, so the
- * comparison lines simply don't fire on someone's first day rather than
+ * before `dayStart`, read from their saved match summaries (`real`: every ball,
+ * juniors included). A match with no `real` is replayed from its balls, so the
+ * numbers stay correct before a backfill. Practice matches have no summary, so
+ * they always replay. Returns null when the player has no prior history, so
+ * the comparison lines simply don't fire on someone's first day rather than
  * printing a baseline of zero. */
-async function computeCareerBaseline(
+export async function computeCareerBaseline(
   ctx: QueryCtx,
+  orgId: Id<"orgs">,
   playerId: Id<"users">,
   dayStart: number,
   allCompleted: Doc<"matches">[],
@@ -533,11 +536,26 @@ async function computeCareerBaseline(
   );
   if (priorMatches.length === 0) return null;
 
+  const stamps = await ctx.db
+    .query("playerMatchStats")
+    .withIndex("by_org_user_date", (q) =>
+      q.eq("orgId", orgId).eq("userId", playerId),
+    )
+    .collect();
+  const realByMatch = new Map(stamps.map((r) => [String(r.matchId), r.real]));
+
   let careerRuns = 0;
   let careerBallsFaced = 0;
   let careerWickets = 0;
 
   for (const match of priorMatches) {
+    const real = realByMatch.get(String(match._id));
+    if (real) {
+      careerRuns += real.runs;
+      careerBallsFaced += real.ballsFaced;
+      careerWickets += real.wickets;
+      continue;
+    }
     const balls = await ctx.db
       .query("balls")
       .withIndex("by_match", (q) => q.eq("matchId", match._id))

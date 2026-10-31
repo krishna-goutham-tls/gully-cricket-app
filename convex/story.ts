@@ -7,6 +7,7 @@ import {
   battingMilestoneBonus,
   bowlingHaulBonus,
   earnsPoints,
+  matchPoints,
   POINTS_RECEIPT,
 } from "./lib/points";
 import { loadMatchAccess, sideLabel, sidePlayers } from "./scoring";
@@ -16,8 +17,11 @@ type Side = "A" | "B";
 /**
  * The Match Story — everything on this page is derived from the ball log at
  * read time, so it exists retroactively for every completed match and never
- * asks the scorer for anything new. Badges, the lead worm, the turning point
- * and nemesis counts are all deterministic replays of data already recorded.
+ * asks the scorer for anything new. Badges and the turning point are
+ * deterministic replays of data already recorded. It reads this match only.
+ *
+ * `timeline` and `firstBallIndex` stay in the answer because phones with the
+ * old app still draw the replay from them. Nothing else reads them now.
  */
 
 /** One delivery on the story timeline (retire markers are skipped). */
@@ -39,12 +43,6 @@ type StoryBall = {
   at: number;
   /** Batter milestone crossed on this ball. */
   milestone?: "fifty" | "hundred";
-  /**
-   * All-time count (this org, completed matches, chronological) of this
-   * bowler dismissing this batter, attached only from the 3rd time on —
-   * the "that's the Nth time he's got you" moment.
-   */
-  nemesisCount?: number;
 };
 
 type Badge = {
@@ -81,6 +79,23 @@ type PlayerAgg = {
 
 function ordinalWord(n: number) {
   return n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : `${n}th`;
+}
+
+function plural(n: number, one: string, many: string) {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/** "42 runs · 1 wkt · 2 catches": the Player of the Match line, badge and poster. */
+function potmLine(runs: number, wickets: number, catches: number) {
+  return (
+    [
+      runs > 0 ? plural(runs, "run", "runs") : null,
+      wickets > 0 ? plural(wickets, "wkt", "wkts") : null,
+      catches > 0 ? plural(catches, "catch", "catches") : null,
+    ]
+      .filter(Boolean)
+      .join(" · ") || "all-round"
+  );
 }
 
 export const matchStory = query({
@@ -126,55 +141,6 @@ export const matchStory = query({
       nameCache.set(key, name);
       return name;
     };
-
-    // ---- Nemesis: chronological bowler→victim ordinals across the org ----
-    // Same on-demand ball-log scan stats.ts already does for leaderboards;
-    // org scale keeps this cheap, and it stays org-scoped (sandbox orgs are
-    // their own orgs, so they never leak in).
-    const orgMatches = await ctx.db
-      .query("matches")
-      .withIndex("by_org_status", (q) =>
-        q.eq("orgId", match.orgId).eq("status", "completed"),
-      )
-      .collect();
-    const wicketEvents: Array<{
-      at: number;
-      ballId: Id<"balls">;
-      bowlerId: Id<"users">;
-      outId: Id<"users">;
-    }> = [];
-    for (const m of orgMatches) {
-      // Practice games feed no tally, except on their own story.
-      if (m.practice && m._id !== match._id) continue;
-      const mBalls = await ctx.db
-        .query("balls")
-        .withIndex("by_match", (q) => q.eq("matchId", m._id))
-        .collect();
-      for (const b of mBalls) {
-        if (
-          b.isWicket &&
-          !b.isRetire &&
-          b.playerOutId &&
-          b.wicketType !== "runout"
-        ) {
-          wicketEvents.push({
-            at: b.createdAt,
-            ballId: b._id,
-            bowlerId: b.bowlerId,
-            outId: b.playerOutId,
-          });
-        }
-      }
-    }
-    wicketEvents.sort((a, b) => a.at - b.at);
-    const pairRunning = new Map<string, number>();
-    const nemesisByBall = new Map<string, number>();
-    for (const e of wicketEvents) {
-      const key = `${e.bowlerId}>${e.outId}`;
-      const n = (pairRunning.get(key) ?? 0) + 1;
-      pairRunning.set(key, n);
-      nemesisByBall.set(String(e.ballId), n);
-    }
 
     // ---- Replay this match into a timeline + per-player aggregates ----
     const agg = new Map<string, PlayerAgg>();
@@ -316,10 +282,6 @@ export const matchStory = query({
           lead: firstRuns - secondRuns,
           at: b.createdAt,
           milestone,
-          nemesisCount:
-            b.isWicket && (nemesisByBall.get(String(b._id)) ?? 0) >= 3
-              ? nemesisByBall.get(String(b._id))
-              : undefined,
         });
       }
       // Bank each batter's final score this innings — milestone bonuses are
@@ -380,14 +342,8 @@ export const matchStory = query({
         "shine",
         "Player of the Match",
         potm,
-        [
-          potm.runs > 0 ? `${potm.runs} run${potm.runs === 1 ? "" : "s"}` : null,
-          potm.wickets > 0 ? `${potm.wickets} wkts` : null,
-          potm.catches > 0 ? `${potm.catches} catches` : null,
-        ]
-          .filter(Boolean)
-          .join(" · ") || "all-round",
-        `${potmPoints(potm)} points — ${POINTS_RECEIPT}.` +
+        potmLine(potm.runs, potm.wickets, potm.catches),
+        `${plural(potmPoints(potm), "point", "points")} — ${POINTS_RECEIPT}.` +
           (runner
             ? ` Next best: ${runner.name}, ${potmPoints(runner)}.`
             : ""),
@@ -459,7 +415,7 @@ export const matchStory = query({
           "The Miser",
           miser,
           `economy ${econ.toFixed(1)}`,
-          `${miser.runsConceded} runs off ${legalBallToOverText(miser.ballsBowled, rules.ballsPerOver)} overs — tightest spell of the match.`,
+          `${plural(miser.runsConceded, "run", "runs")} off ${legalBallToOverText(miser.ballsBowled, rules.ballsPerOver)} overs — tightest spell of the match.`,
         );
       }
     }
@@ -562,6 +518,7 @@ export const matchStory = query({
       text: string;
       meta: string;
       ballIndex: number;
+      at: number;
     } | null = null;
     for (let k = wicketIdx.length - 1; k > 0; k--) {
       const a = wicketIdx[k - 1];
@@ -569,11 +526,28 @@ export const matchStory = query({
       if (b - a <= 5 && timeline[a].inn === timeline[b].inn) {
         const first = timeline[a];
         const last = timeline[b];
+        // Walk back through any earlier wickets in the same burst, for the count.
+        let start = k - 1;
+        while (
+          start > 0 &&
+          wicketIdx[start] - wicketIdx[start - 1] <= 5 &&
+          timeline[wicketIdx[start - 1]].inn === last.inn
+        ) {
+          start -= 1;
+        }
+        const burst = k - start + 1;
+        const burstStart = timeline[wicketIdx[start]];
+        const overs = `${burstStart.over}.${burstStart.ballInOver} to ${last.over}.${last.ballInOver}`;
         turningPoint = {
           title: `${ordinalWord(timeline[b].inn)} innings`,
           text: `Two wickets in ${b - a + 1} balls — ${first.outName} and ${last.outName} gone in a blink.`,
-          meta: `Detected: wicket cluster · overs ${first.over}.${first.ballInOver}–${last.over}.${last.ballInOver}`,
+          // The line above already says two wickets, so only a bigger burst adds a count.
+          meta:
+            burst > 2
+              ? `${burst} wickets in ${b - wicketIdx[start] + 1} balls · overs ${overs}`
+              : `Overs ${overs}`,
           ballIndex: b,
+          at: last.at,
         };
         break;
       }
@@ -598,8 +572,9 @@ export const matchStory = query({
       turningPoint = {
         title: `${ordinalWord(b.inn)} innings`,
         text: `A ${bigRuns}-run over off ${b.bowlerName} blew the match open.`,
-        meta: `Detected: biggest over of the match · over ${b.over + 1}`,
+        meta: `Biggest over of the match · over ${b.over + 1}`,
         ballIndex: bigIdx,
+        at: b.at,
       };
     }
 
@@ -657,6 +632,56 @@ export const matchStory = query({
           : "—",
         bestFiguresName: bestBowler?.name,
       },
+    };
+  },
+});
+
+/**
+ * Player of the Match for the share poster, off the saved summaries. The poster
+ * shows on the Scorecard tab, before anyone opens Story, so it cannot wait for
+ * `matchStory`. Uses the same points, and on a tie the player who entered the
+ * match first, as Story does. Null for a practice match: those have no summary.
+ */
+export const matchPotm = query({
+  args: {
+    token: v.optional(v.string()),
+    matchId: v.id("matches"),
+  },
+  handler: async (ctx, args) => {
+    const access = await loadMatchAccess(ctx, args.token, args.matchId);
+    if (!access || access.match.status !== "completed") return null;
+    const rows = await ctx.db
+      .query("playerMatchStats")
+      .withIndex("by_match", (q) => q.eq("matchId", args.matchId))
+      .collect();
+    const entered = (r: (typeof rows)[number]) =>
+      Math.min(
+        r.order.bat ?? Infinity,
+        r.order.bowl ?? Infinity,
+        r.order.catch ?? Infinity,
+      );
+    let best: (typeof rows)[number] | null = null;
+    for (const r of rows) {
+      const p = matchPoints(r);
+      if (p <= 0) continue;
+      if (
+        !best ||
+        p > matchPoints(best) ||
+        (p === matchPoints(best) && entered(r) < entered(best))
+      ) {
+        best = r;
+      }
+    }
+    if (!best) return null;
+    const user = await ctx.db.get(best.userId);
+    // A poster is a scoreboard: it shows every run, wicket and catch.
+    return {
+      name: user && "displayName" in user ? (user.displayName as string) : "Player",
+      line: potmLine(
+        best.real?.runs ?? (best.bat?.runs ?? 0) + (best.offJuniors?.runs ?? 0),
+        best.real?.wickets ?? (best.bowl?.wickets ?? 0) + (best.offJuniors?.wickets ?? 0),
+        best.real?.catches ?? best.catches + (best.offJuniors?.catches ?? 0),
+      ),
     };
   },
 });
