@@ -1429,6 +1429,22 @@ export const leaderboard = query({
 });
 
 /**
+ * True when a junior played on the other side. A common player is on both
+ * sides, so everyone else in that match is on the other side from them.
+ */
+function facedJunior(match: Doc<"matches">, userId: Id<"users">) {
+  const self = String(userId);
+  const juniors = new Set((match.juniorIds ?? []).map(String));
+  const onA = match.sideAPlayerIds.some((id) => String(id) === self);
+  const onB = match.sideBPlayerIds.some((id) => String(id) === self);
+  const others = [
+    ...(onB ? match.sideAPlayerIds : []),
+    ...(onA ? match.sideBPlayerIds : []),
+  ];
+  return others.some((id) => String(id) !== self && juniors.has(String(id)));
+}
+
+/**
  * The Roast's junior board: runs, wickets and catches a player took off
  * juniors, ranked by the base points those would have earned. Each stamp holds
  * the real numbers and the counted ones (`pts`), so the gap is the answer. A
@@ -1461,35 +1477,65 @@ export const juniorBoard = query({
     if (ground === null) return null;
 
     const { players } = await loadStampSet(ctx, orgId, window);
+    const stamps = players.filter(
+      (r) => r.pts && inWindow(r, { ...window, ground }),
+    );
+    const matchIds = Array.from(new Set(stamps.map((r) => r.matchId)));
+    const matchDocs = await Promise.all(matchIds.map((id) => ctx.db.get(id)));
+    const matches = new Map(matchIds.map((id, i) => [id, matchDocs[i]]));
+
     const totals = new Map<
       string,
-      { userId: Id<"users">; runs: number; wickets: number; catches: number }
+      {
+        userId: Id<"users">;
+        matches: number;
+        runs: number;
+        wickets: number;
+        catches: number;
+      }
     >();
-    for (const r of players) {
-      if (!r.pts || !inWindow(r, { ...window, ground })) continue;
-      const runs = (r.bat?.runs ?? 0) - r.pts.runs;
-      const wickets = (r.bowl?.wickets ?? 0) - r.pts.wickets;
-      const catches = r.catches - r.pts.catches;
-      if (runs === 0 && wickets === 0 && catches === 0) continue;
+    for (const r of stamps) {
+      const runs = (r.bat?.runs ?? 0) - (r.pts?.runs ?? 0);
+      const wickets = (r.bowl?.wickets ?? 0) - (r.pts?.wickets ?? 0);
+      const catches = r.catches - (r.pts?.catches ?? 0);
+      const tookFromJunior = runs > 0 || wickets > 0 || catches > 0;
+      const played = r.named || Boolean(r.bat) || Boolean(r.bowl);
+      const match = matches.get(r.matchId);
+      if (
+        !tookFromJunior &&
+        !(played && match && facedJunior(match, r.userId))
+      ) {
+        continue;
+      }
       const key = String(r.userId);
       const total = totals.get(key) ?? {
         userId: r.userId,
+        matches: 0,
         runs: 0,
         wickets: 0,
         catches: 0,
       };
+      total.matches += 1;
       total.runs += runs;
       total.wickets += wickets;
       total.catches += catches;
       totals.set(key, total);
     }
 
-    const names = await resolveNames(ctx, totals.keys());
-    const rows = Array.from(totals, ([key, t]) => ({
-      ...t,
-      displayName: names.get(key) ?? "Player",
-      pointsOffJuniors: basePoints(t.runs, t.wickets, t.catches),
-    })).sort(
+    const onBoard = Array.from(totals).filter(
+      ([, t]) => t.runs > 0 || t.wickets > 0 || t.catches > 0,
+    );
+    const names = await resolveNames(
+      ctx,
+      onBoard.map(([key]) => key),
+    );
+    const rows = onBoard
+      .map(([key, t]) => ({
+        ...t,
+        displayName: names.get(key) ?? "Player",
+        pointsOffJuniors: basePoints(t.runs, t.wickets, t.catches),
+      }))
+      .sort(
       (a, b) =>
         b.pointsOffJuniors - a.pointsOffJuniors ||
         b.runs - a.runs ||

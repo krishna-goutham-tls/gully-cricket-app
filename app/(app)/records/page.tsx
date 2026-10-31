@@ -165,6 +165,7 @@ function JuniorBoardSection({
       <div className="mt-2 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.06]">
         {board.rows.map((r, i) => {
           const detail = [
+            `${r.matches} ${r.matches === 1 ? "match" : "matches"}`,
             r.runs > 0 ? `${r.runs} ${r.runs === 1 ? "run" : "runs"}` : null,
             r.wickets > 0
               ? `${r.wickets} ${r.wickets === 1 ? "wicket" : "wickets"}`
@@ -191,7 +192,7 @@ function JuniorBoardSection({
                 >
                   {r.displayName}
                 </TruncText>
-                <p className="truncate text-[13px] leading-tight text-bg/70">
+                <p className="mt-0.5 text-[13px] leading-tight text-bg/70">
                   {detail}
                 </p>
               </div>
