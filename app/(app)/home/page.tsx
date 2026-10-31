@@ -6,11 +6,13 @@ import {
   type MatchRow,
 } from "@/components/home/HomeCards";
 import { SeasonStrip } from "@/components/home/SeasonStrip";
+import { InviteSheet } from "@/components/player/InviteSheet";
 import { PollCard } from "@/components/poll/PollCard";
 import { PollSheet } from "@/components/poll/PollSheet";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { AppHeader } from "@/components/shell/AppHeader";
 import { Button } from "@/components/ui/Button";
+import { WhatsAppIcon } from "@/components/ui/WhatsAppIcon";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
@@ -28,7 +30,7 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type PendingAction =
   | { kind: "end"; matchId: string; label: string }
@@ -76,7 +78,7 @@ function ExploreCard({
 }
 
 export default function HomePage() {
-  const { token, activeOrgId, isObserver } = useAuth();
+  const { token, activeOrgId, activeOrg, isAdmin, isObserver, isSandbox } = useAuth();
   const matches = useQuery(
     api.matches.list,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
@@ -92,6 +94,20 @@ export default function HomePage() {
   const [asking, setAsking] = useState(false);
   const abandonMatch = useMutation(api.matches.abandon);
   const removeMatch = useMutation(api.matches.remove);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const canInvite = isAdmin && !isSandbox;
+  const inviteUsed = useQuery(
+    api.orgs.inviteUsed,
+    canInvite && token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
+  );
+  // A new community arrives here with ?invite=1. Drop it, so a reload or a
+  // return to Home does not open the sheet again.
+  useEffect(() => {
+    if (!canInvite || !activeOrgId) return;
+    if (new URLSearchParams(window.location.search).get("invite") !== "1") return;
+    window.history.replaceState(null, "", "/home");
+    setInviteOpen(true);
+  }, [canInvite, activeOrgId]);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingAction | null>(null);
@@ -192,6 +208,20 @@ export default function HomePage() {
             Start match
           </Button>
         )}
+
+        {canInvite && inviteUsed === false ? (
+          <Button
+            type="button"
+            variant="secondary"
+            size="lg"
+            fullWidth
+            className="mt-3"
+            onClick={() => setInviteOpen(true)}
+          >
+            <WhatsAppIcon className="h-5 w-5" />
+            Invite players
+          </Button>
+        ) : null}
 
         {/* "Who's in?" — an open poll is a card with the answers on it; with
             none, just a quiet line to ask. Never an empty card. */}
@@ -334,6 +364,15 @@ export default function HomePage() {
         onConfirm={runPending}
         onCancel={() => setPending(null)}
       />
+
+      {inviteOpen && token && activeOrgId && activeOrg ? (
+        <InviteSheet
+          token={token}
+          orgId={activeOrgId}
+          orgName={activeOrg.orgName}
+          onClose={() => setInviteOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

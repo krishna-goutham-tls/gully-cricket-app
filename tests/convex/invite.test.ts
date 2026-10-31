@@ -138,6 +138,18 @@ describe("invite link", () => {
   });
 });
 
+describe("the invite button on Home", () => {
+  test("shows until someone joins by link, and reads as used to non-members", async () => {
+    const { t, admin, orgId, code } = await setup();
+    expect(await t.query(api.orgs.inviteUsed, { token: admin.token, orgId })).toBe(false);
+    const outsider = await person(t, "Out Sider");
+    expect(await t.query(api.orgs.inviteUsed, { token: outsider.token, orgId })).toBe(true);
+    expect(await t.query(api.orgs.inviteUsed, { orgId })).toBe(true);
+    await t.mutation(api.auth.signUp, { phone: newPhone(), pin: "1234", displayName: "First In", inviteCode: code });
+    expect(await t.query(api.orgs.inviteUsed, { token: admin.token, orgId })).toBe(true);
+  });
+});
+
 describe("Is this you?", () => {
   test("a name match shows, and no match shows nothing", async () => {
     const { t, admin, orgId, code } = await setup();

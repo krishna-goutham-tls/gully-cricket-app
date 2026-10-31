@@ -528,6 +528,23 @@ export const inviteNameMatches = query({
   },
 });
 
+/** Has anyone come in by link? Home stops showing the invite button once so. */
+export const inviteUsed = query({
+  args: { token: v.optional(v.string()), orgId: v.id("orgs") },
+  handler: async (ctx, args) => {
+    const members = await ctx.db
+      .query("orgMembers")
+      .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
+      .collect();
+    const user = await getUserBySessionToken(ctx, args.token);
+    const isMember = members.some(
+      (m) => m.userId === user?._id && m.status === "active",
+    );
+    if (!isMember) return true;
+    return members.some((m) => m.joinedByLinkAt !== undefined);
+  },
+});
+
 /** A signed-in person with the link becomes an active member. */
 export const joinByInvite = mutation({
   args: { token: v.string(), code: v.string() },

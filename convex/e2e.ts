@@ -39,3 +39,44 @@ export const forgetPhone = internalMutation({
     return { forgotten: true };
   },
 });
+
+/** Takes away a community a test made through the screens. */
+export const forgetOrg = internalMutation({
+  args: { orgId: v.id("orgs") },
+  handler: async (ctx, args) => {
+    if (process.env.E2E_ALLOWED !== "1") {
+      throw new Error("Test scripts do not run on this deployment");
+    }
+    const rows = await ctx.db
+      .query("orgMembers")
+      .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
+      .collect();
+    for (const r of rows) {
+      const user = await ctx.db.get(r.userId);
+      if (user?.preferredOrgId === args.orgId) {
+        await ctx.db.patch(r.userId, { preferredOrgId: undefined });
+      }
+      await ctx.db.delete(r._id);
+    }
+    await ctx.db.delete(args.orgId);
+    return { forgotten: true };
+  },
+});
+
+/** Lets a test see a community as if nobody has joined by link yet. */
+export const clearLinkMarks = internalMutation({
+  args: { orgId: v.id("orgs") },
+  handler: async (ctx, args) => {
+    if (process.env.E2E_ALLOWED !== "1") {
+      throw new Error("Test scripts do not run on this deployment");
+    }
+    const rows = await ctx.db
+      .query("orgMembers")
+      .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
+      .collect();
+    for (const r of rows) {
+      if (r.joinedByLinkAt) await ctx.db.patch(r._id, { joinedByLinkAt: undefined });
+    }
+    return { cleared: true };
+  },
+});
