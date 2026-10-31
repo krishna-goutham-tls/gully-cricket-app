@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { TruncText } from "@/components/ui/TruncText";
 import { SideChoice, type SideValue } from "@/components/match/SideChoice";
 import { cn } from "@/lib/utils";
 
@@ -34,6 +35,7 @@ export function SquadSheet({
   busyId,
   error,
   guestBusy,
+  poolReady,
   onAssign,
   onAddGuest,
   onDone,
@@ -46,6 +48,8 @@ export function SquadSheet({
   busyId: string | null;
   error: { userId: string | null; message: string } | null;
   guestBusy: boolean;
+  /** Add stays hidden until the full list is here, so no name is added twice. */
+  poolReady: boolean;
   onAssign: (userId: string, sides: Side[]) => Promise<boolean>;
   onAddGuest: (name: string) => Promise<void>;
   onDone: () => void;
@@ -55,6 +59,23 @@ export function SquadSheet({
   // A placed player leaves Not playing at once, so the tick sits on the sheet.
   const [saved, setSaved] = useState<string | null>(null);
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // The keyboard covers a fixed sheet on a phone. This lifts the sheet above it,
+  // so search, Add and Done stay in view.
+  const [keyboard, setKeyboard] = useState(0);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () =>
+      setKeyboard(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
+  }, []);
 
   useEffect(
     () => () => {
@@ -68,7 +89,7 @@ export function SquadSheet({
   const notPlaying = matching.filter((r) => r.sides.length === 0);
   const inMatch = matching.filter((r) => r.sides.length > 0);
   const exactName = rows.some((r) => r.displayName.toLowerCase() === q);
-  const canAdd = q.length >= 2 && !exactName;
+  const canAdd = poolReady && q.length >= 2 && !exactName;
   const showIn = inOpen || q.length > 0;
 
   async function assign(userId: string, sides: Side[]) {
@@ -103,20 +124,23 @@ export function SquadSheet({
     return (
       <div key={row.userId} className="py-1.5">
         <div className="flex items-center gap-2">
-          <p className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
-            {row.displayName}
-          </p>
           {canRemove ? (
             <button
               type="button"
               aria-label={`Take ${row.displayName} out of the match`}
               disabled={busyId !== null}
               onClick={() => void assign(row.userId, [])}
-              className="flex h-11 w-9 shrink-0 items-center justify-center text-faint active:text-danger disabled:opacity-40"
+              className="-ml-3 flex h-11 w-11 shrink-0 items-center justify-center text-faint active:text-danger disabled:opacity-40"
             >
               <X className="h-4 w-4" />
             </button>
           ) : null}
+          <TruncText
+            lines={2}
+            className="min-w-0 flex-1 text-[15px] font-semibold text-ink"
+          >
+            {row.displayName}
+          </TruncText>
           <SideChoice
             name={row.displayName}
             value={toValue(row.sides)}
@@ -133,8 +157,14 @@ export function SquadSheet({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-ink/30">
-      <div className="flex max-h-[85dvh] w-full flex-col rounded-t-3xl bg-surface shadow-2xl">
+    <div
+      className="fixed inset-0 z-50 flex items-end bg-ink/30"
+      style={{ paddingBottom: keyboard }}
+    >
+      <div
+        className="flex w-full flex-col rounded-t-3xl bg-surface shadow-2xl"
+        style={{ maxHeight: `calc(85dvh - ${keyboard}px)` }}
+      >
         <div className="shrink-0 space-y-2 px-5 pt-5">
           <div className="flex items-center justify-between gap-3">
             <p className="text-[15px] font-semibold text-ink">Players</p>
@@ -165,21 +195,17 @@ export function SquadSheet({
             aria-label="Search or add a name"
             autoCapitalize="words"
             enterKeyHint="done"
-            className="min-h-12 w-full rounded-2xl border border-line bg-bg px-3 text-[16px] outline-none focus:border-accent"
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
+              e.preventDefault();
+              if (canAdd && matching.length === 0) void onAddGuest(query.trim());
+              e.currentTarget.blur();
+            }}
+            className="min-h-12 w-full rounded-xl border border-line bg-bg px-3 text-[16px] outline-none focus:border-accent"
           />
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-3 pt-2">
-          {canAdd ? (
-            <Button
-              fullWidth
-              variant="secondary"
-              disabled={guestBusy}
-              onClick={() => void onAddGuest(query.trim())}
-            >
-              {guestBusy ? "Adding…" : `Add “${query.trim()}”`}
-            </Button>
-          ) : null}
           {error?.userId === null ? (
             <p className="mt-2 text-[13px] text-danger">{error.message}</p>
           ) : null}
@@ -219,6 +245,15 @@ export function SquadSheet({
               ) : null}
             </section>
           ) : null}
+          {canAdd ? <div className="mt-3">            <Button
+              fullWidth
+              variant="secondary"
+              disabled={guestBusy}
+              onClick={() => void onAddGuest(query.trim())}
+            >
+              {guestBusy ? "Adding…" : `Add “${query.trim()}”`}
+            </Button>
+</div> : null}
         </div>
 
         <div className="safe-bottom shrink-0 border-t border-line px-5 pt-3">

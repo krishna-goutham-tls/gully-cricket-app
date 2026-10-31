@@ -1264,6 +1264,7 @@ export default function ScorePage() {
           busyId={squadBusyId}
           error={squadError}
           guestBusy={guestBusy}
+          poolReady={pool !== undefined}
           onAssign={assignSides}
           onAddGuest={addGuestPlayer}
           onDone={() => setSheet(null)}

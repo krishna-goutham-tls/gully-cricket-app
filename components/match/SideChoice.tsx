@@ -46,7 +46,7 @@ export function SideChoice({
               if (!on) onChange(opt.value);
             }}
             className={cn(
-              "min-h-11 rounded-[10px] text-[13px] font-semibold transition disabled:opacity-40",
+              "min-h-11 rounded-lg text-[13px] font-semibold transition disabled:opacity-40",
               opt.value === "both" ? "w-14" : "w-11",
               on ? "bg-ink text-bg disabled:opacity-100" : "text-muted active:bg-bg",
             )}

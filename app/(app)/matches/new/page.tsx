@@ -28,6 +28,7 @@ import { balanceTeams } from "@/lib/autoTeams";
 import { cn, errorMessage } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { NumberField } from "@/components/ui/NumberField";
+import { TruncText } from "@/components/ui/TruncText";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -90,12 +91,16 @@ function NewMatchFlow() {
     api.matches.list,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
   );
-  const lastMatchId = recentMatches?.[0]?._id;
+  // A friendly starts from the last friendly: a tournament match has its own
+  // teams, and an abandoned match may be a mistake.
+  const lastMatchId = recentMatches?.find(
+    (m) => m.status !== "abandoned" && !m.tournamentId,
+  )?._id;
   const lastMatch = useQuery(
     api.matches.get,
     token && lastMatchId ? { token, matchId: lastMatchId } : "skip",
   );
-  // Player level for "Auto form teams" — the same all-round board the Players
+  // Player level for the team split — the same all-round board the Players
   // tab ranks on, so the teams it builds match what everyone can already see.
   const board = useQuery(
     api.stats.leaderboard,
@@ -154,7 +159,14 @@ function NewMatchFlow() {
     defaultsApplied.current = true;
     setFormat(lastMatch.format);
     setOvers(lastMatch.overs);
-    setOversPerPlayer(lastMatch.oversPerPlayer);
+    if (
+      lastMatch.format === "limited" &&
+      lastMatch.oversPerPlayer >= 2 &&
+      lastMatch.oversPerPlayer <= 20 &&
+      lastMatch.oversPerPlayer % 2 === 0
+    ) {
+      setOversPerPlayer(lastMatch.oversPerPlayer);
+    }
     setBattingMode(lastMatch.battingMode);
     if (lastMatch.lastBatsmanAlone !== undefined) {
       setLastBatsmanAlone(lastMatch.lastBatsmanAlone);
@@ -208,7 +220,8 @@ function NewMatchFlow() {
 
   const countA = teamA.length + common.length;
   const countB = teamB.length + common.length;
-  const ready = countA >= 2 && countB >= 2;
+  // Everyone on Both would be one team playing itself.
+  const ready = countA >= 2 && countB >= 2 && teamA.length + teamB.length > 0;
 
   // ── Step history ──
   // The steps are useState on one route, so a system back gesture would unmount
@@ -216,8 +229,15 @@ function NewMatchFlow() {
   // popstate walks the flow back instead of leaving it.
   const depthRef = useRef(0);
   const leavingRef = useRef(false);
+  const stepAt = useRef(0);
+  // Back and forward skip the buttons, so each step entry re-checks the teams.
+  const reconcileRef = useRef<() => boolean>(() => true);
 
   useEffect(() => {
+    // A reload keeps the browser's entries for this flow but not the draft.
+    depthRef.current =
+      (window.history.state as { boundaryDepth?: number } | null)
+        ?.boundaryDepth ?? 0;
     const onPop = (e: PopStateEvent) => {
       if (leavingRef.current) return;
       const state = e.state as {
@@ -225,13 +245,16 @@ function NewMatchFlow() {
         boundaryDepth?: number;
       } | null;
       depthRef.current = state?.boundaryDepth ?? 0;
-      setStep(state?.boundaryStep ?? "who");
+      const next = state?.boundaryStep ?? "who";
+      setTossOpen(false);
+      setStep(next !== "who" && !reconcileRef.current() ? "who" : next);
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
   function enterStep(next: Step) {
+    stepAt.current = Date.now();
     depthRef.current += 1;
     // Keep Next's own history state on the entry — only add our step marker.
     window.history.pushState(
@@ -266,6 +289,24 @@ function NewMatchFlow() {
       window.history.go(-depth);
     });
   }
+
+  // Openers must stay on the teams as they are now, whichever way the scorer
+  // came back to this screen.
+  useEffect(() => {
+    if (!battingSide) return;
+    const batting = rosterOf(battingSide);
+    const bowling = rosterOf(battingSide === "A" ? "B" : "A");
+    const valid =
+      !!striker &&
+      batting.includes(striker) &&
+      (solo ? true : !!nonStriker && batting.includes(nonStriker)) &&
+      !!bowler &&
+      bowling.includes(bowler) &&
+      bowler !== striker &&
+      bowler !== nonStriker;
+    if (!valid) fillOpeners(battingSide);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamA, teamB, common, battingSide, battingMode]);
 
   function toggleAvailable(userId: string) {
     setAvailable((list) =>
@@ -319,7 +360,8 @@ function NewMatchFlow() {
    * move the scorer made: someone who left drops out, and someone new joins the
    * smaller team.
    */
-  function goToTeams() {
+  function reconcileTeams(): boolean {
+    if (available.length === 0) return false;
     const here = new Set(available);
     const keptA = teamA.filter((id) => here.has(id));
     const keptB = teamB.filter((id) => here.has(id));
@@ -334,17 +376,33 @@ function NewMatchFlow() {
       nextB = split.teamB;
       nextCommon = split.common;
     } else {
-      for (const id of available) {
-        if (placed.has(id)) continue;
+      const newcomers = available.filter((id) => !placed.has(id));
+      for (const id of newcomers) {
         if (nextA.length <= nextB.length) nextA = [...nextA, id];
         else nextB = [...nextB, id];
+      }
+      // The odd player plays both, the same as on a fresh split.
+      const last = newcomers[newcomers.length - 1];
+      if (last && nextCommon.length === 0 && available.length % 2 === 1) {
+        nextA = nextA.filter((id) => id !== last);
+        nextB = nextB.filter((id) => id !== last);
+        nextCommon = [last];
       }
     }
     applyTeam("A", nextA);
     applyTeam("B", nextB);
     setCommon(nextCommon);
     setRowOrder([...nextA, ...nextCommon, ...nextB]);
-    enterStep("teams");
+    return true;
+  }
+  reconcileRef.current = reconcileTeams;
+
+  /** One tap, one step: a double tap must not fall through to the next screen. */
+  const tooSoon = () => Date.now() - stepAt.current < 400;
+
+  function goToTeams() {
+    if (tooSoon()) return;
+    if (reconcileTeams()) enterStep("teams");
   }
 
   function sideOf(id: string): SideValue {
@@ -378,10 +436,7 @@ function NewMatchFlow() {
   }
 
   function enterStart() {
-    setBattingSide(null);
-    setStriker(null);
-    setNonStriker(null);
-    setBowler(null);
+    if (tooSoon()) return;
     setOpenPick(null);
     enterStep("start");
   }
@@ -392,6 +447,11 @@ function NewMatchFlow() {
 
   /** Openers filled in, so a scorer only touches them to change them. */
   function pickBattingSide(side: Side) {
+    if (side === battingSide) return;
+    fillOpeners(side);
+  }
+
+  function fillOpeners(side: Side) {
     const batting = rosterOf(side);
     const first = batting[0] ?? null;
     const second = solo ? null : (batting[1] ?? null);
@@ -407,9 +467,15 @@ function NewMatchFlow() {
   }
 
   function reuseLastTeams() {
-    if (!lastMatch) return;
-    const sideA = lastMatch.sideAPlayers.map((p) => String(p.userId));
-    const sideB = lastMatch.sideBPlayers.map((p) => String(p.userId));
+    if (!lastMatch || !pool || tooSoon()) return;
+    // Someone who has left the community cannot play again.
+    const inCommunity = new Set(pool.map((p) => String(p.userId)));
+    const sideA = lastMatch.sideAPlayers
+      .map((p) => String(p.userId))
+      .filter((id) => inCommunity.has(id));
+    const sideB = lastMatch.sideBPlayers
+      .map((p) => String(p.userId))
+      .filter((id) => inCommunity.has(id));
     const inBoth = sideA.filter((id) => sideB.includes(id));
     const restA = sideA.filter((id) => !inBoth.includes(id));
     const restB = sideB.filter((id) => !inBoth.includes(id));
@@ -431,6 +497,7 @@ function NewMatchFlow() {
     setTeamA(restA);
     setTeamB(restB);
     setAvailable(Array.from(new Set([...sideA, ...sideB])));
+    setRowOrder([...restA, ...orderedCommon, ...restB]);
     // A name that was only ever the captain's is left blank so it follows a new
     // captain (the backend re-derives it); a typed-in name carries over as-is.
     // If it comes back blank, seed it from whoever actually leads the reused
@@ -563,7 +630,7 @@ function NewMatchFlow() {
       <div className="flex min-h-dvh flex-col bg-bg">
         {header}
         <main className="mx-auto w-full max-w-md flex-1 space-y-4 px-5 py-4 pb-32">
-          {lastMatch ? (
+          {lastMatch && pool ? (
             <button
               type="button"
               onClick={reuseLastTeams}
@@ -602,7 +669,11 @@ function NewMatchFlow() {
             disabled={!enough || !levelsReady}
             onClick={goToTeams}
           >
-            {enough ? `Next · ${available.length} playing` : "Pick at least 4"}
+            {!enough
+              ? "Pick at least 4"
+              : levelsReady
+                ? `Next · ${available.length} playing`
+                : "Loading…"}
           </Button>,
         )}
       </div>
@@ -661,16 +732,23 @@ function NewMatchFlow() {
                   <button
                     type="button"
                     disabled={!canLead}
-                    aria-label={`Make ${nameOf(id)} captain`}
+                    aria-label={
+                      isCaptain
+                        ? `${nameOf(id)}, captain`
+                        : `Make ${nameOf(id)} captain`
+                    }
                     onClick={() => makeCaptain(id)}
-                    className="flex min-h-11 min-w-0 flex-1 items-center gap-1.5 text-left"
+                    className="flex min-h-12 min-w-0 flex-1 items-center gap-1.5 text-left"
                   >
-                    <span className="truncate text-[15px] font-semibold text-ink">
+                    <TruncText
+                      lines={2}
+                      className="text-[15px] font-semibold text-ink"
+                    >
                       {nameOf(id)}
-                    </span>
+                    </TruncText>
                     {isCaptain ? (
                       <Crown
-                        aria-label="Captain"
+                        aria-hidden
                         className="h-4 w-4 shrink-0 text-accent-deep"
                       />
                     ) : null}
@@ -824,7 +902,11 @@ function NewMatchFlow() {
             <button
               type="button"
               aria-expanded={settingsOpen}
-              onClick={() => setSettingsOpen((v) => !v)}
+              onClick={() => {
+                // The scorer's own changes win over defaults that load late.
+                defaultsApplied.current = true;
+                setSettingsOpen((v) => !v);
+              }}
               className="flex min-h-11 w-full items-center gap-2 px-4 py-2.5 text-left"
             >
               <span className="min-w-0 flex-1 text-[13px] text-muted">
@@ -904,10 +986,7 @@ function NewMatchFlow() {
                       { value: "single", label: "One" },
                     ]}
                     value={battingMode}
-                    onChange={(v) => {
-                      setBattingMode(v);
-                      if (battingSide) setBattingSide(null);
-                    }}
+                    onChange={setBattingMode}
                   />
                 </SettingRow>
                 {!solo ? (
@@ -971,7 +1050,7 @@ function NewMatchFlow() {
                 aria-pressed={battingSide === side}
                 onClick={() => pickBattingSide(side)}
                 className={cn(
-                  "min-h-12 min-w-0 truncate rounded-2xl border px-3 text-[15px] font-semibold active:scale-[0.98]",
+                  "min-h-12 min-w-0 truncate rounded-xl border px-3 text-[15px] font-semibold active:scale-[0.98]",
                   battingSide === side
                     ? "border-ink bg-ink text-bg"
                     : "border-line text-ink",
@@ -1018,7 +1097,7 @@ function NewMatchFlow() {
                         aria-pressed={id === row.value}
                         onClick={() => chooseOpener(row.kind, id)}
                         className={cn(
-                          "min-h-11 rounded-full border px-4 text-[13px] font-semibold",
+                          "min-h-11 rounded-lg border px-4 text-[13px] font-semibold",
                           id === row.value
                             ? "border-ink bg-ink text-bg"
                             : "border-line text-ink active:bg-bg",
@@ -1045,7 +1124,9 @@ function NewMatchFlow() {
         >
           {busy
             ? "Starting…"
-            : battingSide && !bowler
+            : !ready
+              ? "Each team needs 2"
+              : battingSide && !bowler
               ? "No bowler left on the other team"
               : "Start scoring"}
         </Button>,
@@ -1063,7 +1144,7 @@ function SettingRow({
 }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <p className="text-[15px] font-medium text-ink">{label}</p>
+      <p className="text-[15px] font-semibold text-ink">{label}</p>
       {children}
     </div>
   );
@@ -1079,7 +1160,7 @@ function Choice<T extends string>({
   onChange: (next: T) => void;
 }) {
   return (
-    <div className="flex rounded-2xl border border-line p-1">
+    <div className="flex rounded-xl border border-line p-1">
       {options.map((opt) => (
         <button
           key={opt.value}
@@ -1088,8 +1169,8 @@ function Choice<T extends string>({
           onClick={() => onChange(opt.value)}
           className={
             value === opt.value
-              ? "min-h-11 rounded-xl bg-ink px-4 text-[13px] font-semibold text-bg"
-              : "min-h-11 rounded-xl px-4 text-[13px] font-semibold text-muted"
+              ? "min-h-11 rounded-lg bg-ink px-4 text-[13px] font-semibold text-bg"
+              : "min-h-11 rounded-lg px-4 text-[13px] font-semibold text-muted"
           }
         >
           {opt.label}
