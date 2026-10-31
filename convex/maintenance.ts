@@ -5,6 +5,7 @@ import { assertSeriesSides } from "./lib/tournamentLineup";
 import { buildRuleSnapshot } from "./lib/rules";
 import { legalBallToOverText } from "./lib/scoring";
 import { restampMatch } from "./lib/matchStats";
+import { cleanJuniorBoardTitle } from "./lib/features";
 
 const side = v.union(v.literal("A"), v.literal("B"));
 
@@ -499,5 +500,45 @@ export const markPractice = internalMutation({
       await restampMatch(ctx, matchId);
     }
     return out;
+  },
+});
+
+/**
+ * Ops: change how many matches a series is set for. The app has no edit
+ * screen for it after create; standings read `matchCount` for remaining /
+ * overrun only, so nothing else needs a rewrite.
+ */
+export const setTournamentMatchCount = internalMutation({
+  args: { tournamentId: v.id("tournaments"), matchCount: v.number() },
+  handler: async (ctx, { tournamentId, matchCount }) => {
+    if (!Number.isInteger(matchCount) || matchCount < 1 || matchCount > 50)
+      throw new Error("Match count must be a whole number from 1 to 50");
+    const t = await ctx.db.get(tournamentId);
+    if (!t) throw new Error("Tournament not found");
+    await ctx.db.patch(tournamentId, { matchCount });
+    return { name: t.name, from: t.matchCount, to: matchCount };
+  },
+});
+
+/**
+ * Ops: switch a community's junior board and set its title. The community
+ * admin screen replaces this when it ships.
+ */
+export const setJuniorBoard = internalMutation({
+  args: {
+    orgId: v.id("orgs"),
+    on: v.boolean(),
+    title: v.optional(v.string()),
+  },
+  handler: async (ctx, { orgId, on, title }) => {
+    const org = await ctx.db.get(orgId);
+    if (!org) throw new Error("Community not found");
+    await ctx.db.patch(orgId, {
+      features: { ...org.features, juniorBoard: on },
+      ...(title !== undefined
+        ? { juniorBoardTitle: cleanJuniorBoardTitle(title) }
+        : {}),
+    });
+    return { name: org.name, on };
   },
 });

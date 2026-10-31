@@ -16,6 +16,7 @@ import {
 import { homeGroundOf } from "./lib/grounds";
 import { Doc, Id } from "./_generated/dataModel";
 import { requireOrgViewer } from "./lib/session";
+import { DEFAULT_JUNIOR_BOARD_TITLE, isFeatureOn } from "./lib/features";
 import { legalBallToOverText } from "./lib/scoring";
 import { captainTeamLabel } from "./lib/teams";
 import { matchFormat } from "./schema";
@@ -1424,6 +1425,126 @@ export const leaderboard = query({
       return null;
     }
     return leaderboardFor(ctx, args, Date.now());
+  },
+});
+
+/**
+ * True when a junior played on the other side. A common player is on both
+ * sides, so everyone else in that match is on the other side from them.
+ */
+function facedJunior(match: Doc<"matches">, userId: Id<"users">) {
+  const self = String(userId);
+  const juniors = new Set((match.juniorIds ?? []).map(String));
+  const onA = match.sideAPlayerIds.some((id) => String(id) === self);
+  const onB = match.sideBPlayerIds.some((id) => String(id) === self);
+  const others = [
+    ...(onB ? match.sideAPlayerIds : []),
+    ...(onA ? match.sideBPlayerIds : []),
+  ];
+  return others.some((id) => String(id) !== self && juniors.has(String(id)));
+}
+
+/**
+ * The Roast's junior board: runs, wickets and catches a player took off
+ * juniors, ranked by the base points those would have earned. Each stamp holds
+ * the real numbers and the counted ones (`pts`), so the gap is the answer. A
+ * row stamped before the junior rule has no `pts` and adds nothing. Milestone
+ * bonuses stay out. Nothing here feeds any other board.
+ */
+export const juniorBoard = query({
+  args: {
+    token: v.optional(v.string()),
+    orgId: v.id("orgs"),
+    seasonId: v.optional(v.id("seasons")),
+    groundId: v.optional(v.id("grounds")),
+  },
+  handler: async (ctx, { token, orgId, seasonId, groundId }) => {
+    try {
+      await requireOrgViewer(ctx, token, orgId);
+    } catch {
+      return null;
+    }
+    const org = await ctx.db.get(orgId);
+    if (!org || !isFeatureOn(org, "juniorBoard")) return null;
+
+    let window: Window = {};
+    if (seasonId) {
+      const season = await seasonWindow(ctx, orgId, seasonId);
+      if (!season) return null;
+      window = season;
+    }
+    const ground = await groundFilterFor(ctx, orgId, groundId);
+    if (ground === null) return null;
+
+    const { players } = await loadStampSet(ctx, orgId, window);
+    const stamps = players.filter(
+      (r) => r.pts && inWindow(r, { ...window, ground }),
+    );
+    const matchIds = Array.from(new Set(stamps.map((r) => r.matchId)));
+    const matchDocs = await Promise.all(matchIds.map((id) => ctx.db.get(id)));
+    const matches = new Map(matchIds.map((id, i) => [id, matchDocs[i]]));
+
+    const totals = new Map<
+      string,
+      {
+        userId: Id<"users">;
+        matches: number;
+        runs: number;
+        wickets: number;
+        catches: number;
+      }
+    >();
+    for (const r of stamps) {
+      const runs = (r.bat?.runs ?? 0) - (r.pts?.runs ?? 0);
+      const wickets = (r.bowl?.wickets ?? 0) - (r.pts?.wickets ?? 0);
+      const catches = r.catches - (r.pts?.catches ?? 0);
+      const tookFromJunior = runs > 0 || wickets > 0 || catches > 0;
+      const played = r.named || Boolean(r.bat) || Boolean(r.bowl);
+      const match = matches.get(r.matchId);
+      if (
+        !tookFromJunior &&
+        !(played && match && facedJunior(match, r.userId))
+      ) {
+        continue;
+      }
+      const key = String(r.userId);
+      const total = totals.get(key) ?? {
+        userId: r.userId,
+        matches: 0,
+        runs: 0,
+        wickets: 0,
+        catches: 0,
+      };
+      total.matches += 1;
+      total.runs += runs;
+      total.wickets += wickets;
+      total.catches += catches;
+      totals.set(key, total);
+    }
+
+    const onBoard = Array.from(totals).filter(
+      ([, t]) => t.runs > 0 || t.wickets > 0 || t.catches > 0,
+    );
+    const names = await resolveNames(
+      ctx,
+      onBoard.map(([key]) => key),
+    );
+    const rows = onBoard
+      .map(([key, t]) => ({
+        ...t,
+        displayName: names.get(key) ?? "Player",
+        pointsOffJuniors: basePoints(t.runs, t.wickets, t.catches),
+      }))
+      .sort(
+      (a, b) =>
+        b.pointsOffJuniors - a.pointsOffJuniors ||
+        b.runs - a.runs ||
+        a.displayName.localeCompare(b.displayName),
+    );
+    return {
+      title: org.juniorBoardTitle ?? DEFAULT_JUNIOR_BOARD_TITLE,
+      rows,
+    };
   },
 });
 

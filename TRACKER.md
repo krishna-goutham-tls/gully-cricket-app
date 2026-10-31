@@ -40,5 +40,4 @@ Status checked against the code on 2026-10-11 only where it says "checked". The 
 
 ## Waiting on someone else
 - [ ] Sandbox check of the 2026-09-19 live-play fixes. Needs Krishna on a phone
-- [ ] Delete the leftover `CONVEX_DEPLOY_KEY` and `CONVEX_DEV_DEPLOY_KEY` from Netlify env (see `../context-system/STATE.md`)
 - [ ] iOS: plan only. `/privacy` and `/support` must stay live before any submission
