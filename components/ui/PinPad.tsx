@@ -10,11 +10,14 @@ export function PinPad({
   onChange,
   maxLength = 4,
   disabled,
+  reveal,
 }: {
   value: string;
   onChange: (next: string) => void;
   maxLength?: number;
   disabled?: boolean;
+  /** Shows the digits, for setting a new PIN with no second entry. */
+  reveal?: boolean;
 }) {
   function press(key: (typeof KEYS)[number]) {
     if (disabled) return;
@@ -30,17 +33,26 @@ export function PinPad({
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-center gap-3">
-        {Array.from({ length: maxLength }).map((_, i) => (
-          <span
-            key={i}
-            className={cn(
-              "h-3 w-3 rounded-full border transition",
-              i < value.length
-                ? "border-accent bg-accent"
-                : "border-line bg-transparent",
-            )}
-          />
-        ))}
+        {Array.from({ length: maxLength }).map((_, i) =>
+          reveal ? (
+            <span
+              key={i}
+              className="tabular flex h-11 w-9 items-center justify-center border-b-2 border-line text-2xl font-semibold text-ink"
+            >
+              {value[i] ?? ""}
+            </span>
+          ) : (
+            <span
+              key={i}
+              className={cn(
+                "h-3 w-3 rounded-full border transition",
+                i < value.length
+                  ? "border-accent bg-accent"
+                  : "border-line bg-transparent",
+              )}
+            />
+          ),
+        )}
       </div>
       <div className="grid grid-cols-3 gap-2.5">
         {KEYS.map((key, idx) => {

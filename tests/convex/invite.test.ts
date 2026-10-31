@@ -190,8 +190,20 @@ describe("Is this you?", () => {
     const farOrg = await community(t, otherAdmin, []);
     const far = await addedNoPhone(t, farOrg, otherAdmin, "Asha Far");
     await expect(sign(far, "Asha", code)).rejects.toThrow("Could not claim");
+    const boss = await addedNoPhone(t, orgId, admin, "Boss Added");
+    await t.mutation(api.orgs.setRoles, { token: admin.token, orgId, userId: boss, roles: ["admin", "player"] });
+    await expect(sign(boss, "Boss", code)).rejects.toThrow("Could not claim");
+    expect(await t.query(api.orgs.inviteNameMatches, { code, name: "Boss" })).toEqual([]);
+  });
+
+  test("a removed added player gets their stats back from the link", async () => {
+    const { t, admin, orgId, code } = await setup();
+    const asha = await addedNoPhone(t, orgId, admin, "Asha Rao");
     await t.mutation(api.orgs.removeMember, { token: admin.token, orgId, userId: asha });
-    await expect(sign(asha, "Asha", code)).rejects.toThrow("Could not claim");
+    expect(await t.query(api.orgs.inviteNameMatches, { code, name: "Asha" })).toHaveLength(1);
+    const res = await t.mutation(api.auth.signUp, { phone: newPhone(), pin: "1234", displayName: "Asha", inviteCode: code, claimUserId: asha });
+    expect(res.user._id).toBe(asha);
+    expect((await rowOf(t, orgId, asha))!.status).toBe("active");
   });
 });
 
@@ -268,13 +280,45 @@ describe("remove from community", () => {
     expect(await t.query(api.auth.listPinResets, { token: admin.token, orgId })).toEqual([]);
   });
 
-  test("an added player who was removed comes back when added again by phone", async () => {
-    const { t, admin, orgId } = await setup();
+  test("an admin brings a removed player back, and a player cannot", async () => {
+    const { t, admin, member, orgId } = await setup();
     const phone = newPhone();
     const { userId } = await t.mutation(api.players.addGuest, { token: admin.token, orgId, name: "Back Again", phone });
     await t.mutation(api.orgs.removeMember, { token: admin.token, orgId, userId });
+    await expect(
+      t.mutation(api.players.addGuest, { token: member.token, orgId, name: "Anything", phone }),
+    ).rejects.toThrow("already belongs");
+    expect((await rowOf(t, orgId, userId))!.status).toBe("removed");
     const res = await t.mutation(api.players.addGuest, { token: admin.token, orgId, name: "Anything", phone });
     expect(res.userId).toBe(userId);
     expect((await rowOf(t, orgId, userId))!.status).toBe("active");
+  });
+
+  test("adding a removed name with no phone gives the same player, for an admin only", async () => {
+    const { t, admin, member, orgId } = await setup();
+    const asha = await addedNoPhone(t, orgId, admin, "Asha Rao");
+    await t.mutation(api.orgs.removeMember, { token: admin.token, orgId, userId: asha });
+    const byMember = await t.mutation(api.players.addGuest, { token: member.token, orgId, name: "asha rao" });
+    expect(byMember.userId).not.toBe(asha);
+    await t.mutation(api.orgs.removeMember, { token: admin.token, orgId, userId: byMember.userId });
+    const byAdmin = await t.mutation(api.players.addGuest, { token: admin.token, orgId, name: "Asha Rao" });
+    expect([asha, byMember.userId]).toContain(byAdmin.userId);
+  });
+
+  test("a removed member who forgot their PIN can still ask, and a handed-out temp PIN survives", async () => {
+    const { t, admin, member, orgId } = await setup();
+    const phone = await t.run(async (ctx) => (await ctx.db.get(member.userId))!.phone!);
+    await t.mutation(api.auth.requestPinReset, { phone });
+    const [row] = await t.query(api.auth.listPinResets, { token: admin.token, orgId });
+    await t.mutation(api.auth.approvePinReset, { token: admin.token, resetId: row.resetId });
+    await t.mutation(api.orgs.removeMember, { token: admin.token, orgId, userId: member.userId });
+    const [kept] = await t.query(api.auth.listPinResets, { token: admin.token, orgId });
+    expect(kept.tempPin).toBeTruthy();
+
+    const other = await person(t, "Far Away");
+    const otherOrg = await community(t, admin, [other]);
+    const otherPhone = await t.run(async (ctx) => (await ctx.db.get(other.userId))!.phone!);
+    await t.mutation(api.orgs.removeMember, { token: admin.token, orgId: otherOrg, userId: other.userId });
+    await expect(t.mutation(api.auth.requestPinReset, { phone: otherPhone })).resolves.toMatchObject({ alreadyPending: false });
   });
 });

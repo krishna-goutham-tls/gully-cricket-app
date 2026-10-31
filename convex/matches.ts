@@ -450,7 +450,8 @@ export const setPlayerSides = mutation({
         q.eq("orgId", match.orgId).eq("userId", args.userId),
       )
       .unique();
-    if (!membership || membership.status !== "active") {
+    // A removed player can still be taken off a match, just not put on one.
+    if (wanted.size > 0 && (!membership || membership.status !== "active")) {
       throw new Error("That player is not in this org");
     }
 

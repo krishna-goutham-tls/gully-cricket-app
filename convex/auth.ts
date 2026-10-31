@@ -12,6 +12,7 @@ import { playerRole } from "./schema";
 import { resolvePlayerTags, sortTags } from "./lib/playerLabel";
 import { featuredSeasonForOrg } from "./lib/seasons";
 import {
+  isClaimableRow,
   isUnclaimedNoPhone,
   joinOrg,
   namesShareWord,
@@ -210,7 +211,12 @@ export const signUp = mutation({
         createdAt: now,
       });
 
-      return { token, user: publicUser(existing), claimed: false };
+      return {
+        token,
+        user: publicUser(existing),
+        claimed: false,
+        orgId: invite?._id,
+      };
     }
 
     const { hash, salt } = await hashPin(args.pin);
@@ -230,7 +236,7 @@ export const signUp = mutation({
           .unique());
       if (
         !target ||
-        member?.status !== "active" ||
+        !isClaimableRow(member) ||
         !isUnclaimedNoPhone(target) ||
         !namesShareWord(target.displayName, displayName)
       ) {
@@ -299,7 +305,12 @@ export const signUp = mutation({
     });
 
     const user = await ctx.db.get(userId);
-    return { token, user: publicUser(user!), claimed: !!claimed };
+    return {
+      token,
+      user: publicUser(user!),
+      claimed: !!claimed,
+      orgId: invite?._id,
+    };
   },
 });
 
@@ -410,14 +421,20 @@ export const requestPinReset = mutation({
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
     const active = memberships.filter((m) => m.status === "active");
-    if (active.length === 0) {
+    // Someone removed who forgot their PIN cannot use the link without it.
+    // Their last community decides whether to help.
+    const removed = memberships
+      .filter((m) => m.status === "removed")
+      .sort((a, b) => (b.decidedAt ?? 0) - (a.decidedAt ?? 0));
+    const preferred =
+      active.find((m) => m.orgId === user.preferredOrgId) ??
+      active[0] ??
+      removed[0];
+    if (!preferred) {
       throw new Error(
         "You are not in a community yet. Ask your community admin to add you.",
       );
     }
-
-    const preferred =
-      active.find((m) => m.orgId === user.preferredOrgId) ?? active[0];
 
     const existing = await ctx.db
       .query("pinResets")

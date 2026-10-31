@@ -12,6 +12,7 @@ import { requireCreateOrgAllowance } from "./access";
 import { deleteMatchCascade } from "./lib/matches";
 import { orgRole } from "./schema";
 import {
+  isClaimableRow,
   isUnclaimedNoPhone,
   joinOrg,
   namesShareWord,
@@ -512,11 +513,11 @@ export const inviteNameMatches = query({
     if (!org) return [];
     const members = await ctx.db
       .query("orgMembers")
-      .withIndex("by_org_status", (q) =>
-        q.eq("orgId", org._id).eq("status", "active"),
-      )
+      .withIndex("by_org", (q) => q.eq("orgId", org._id))
       .collect();
-    const users = await Promise.all(members.map((m) => ctx.db.get(m.userId)));
+    const users = await Promise.all(
+      members.filter(isClaimableRow).map((m) => ctx.db.get(m.userId)),
+    );
     return users
       .filter(
         (u): u is NonNullable<typeof u> =>
@@ -586,23 +587,21 @@ export const removeMember = mutation({
       await ctx.db.patch(args.userId, { preferredOrgId: undefined, updatedAt: now });
     }
 
-    // Their PIN requests must not sit on the admin's list.
-    for (const status of ["pending", "approved"] as const) {
-      const resets = await ctx.db
-        .query("pinResets")
-        .withIndex("by_user_status", (q) =>
-          q.eq("userId", args.userId).eq("status", status),
-        )
-        .collect();
-      for (const r of resets) {
-        if (r.orgId !== args.orgId) continue;
-        await ctx.db.patch(r._id, {
-          status: status === "pending" ? "rejected" : status,
-          decidedAt: now,
-          decidedBy: user._id,
-          tempPin: undefined,
-        });
-      }
+    // A waiting PIN request must not sit on the admin's list. A temp PIN already
+    // handed out stays, because the person needs it to sign in and rejoin.
+    const waiting = await ctx.db
+      .query("pinResets")
+      .withIndex("by_user_status", (q) =>
+        q.eq("userId", args.userId).eq("status", "pending"),
+      )
+      .collect();
+    for (const r of waiting) {
+      if (r.orgId !== args.orgId) continue;
+      await ctx.db.patch(r._id, {
+        status: "rejected",
+        decidedAt: now,
+        decidedBy: user._id,
+      });
     }
     return { ok: true };
   },

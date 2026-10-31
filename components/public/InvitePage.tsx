@@ -11,17 +11,17 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Logo } from "@/components/ui/Logo";
 import { PinPad } from "@/components/ui/PinPad";
-import { setLastPhone } from "@/lib/session";
+import { setActiveOrgId, setLastPhone } from "@/lib/session";
 import { errorMessage, sanitizePhoneInput } from "@/lib/utils";
 
-type Step = "phone" | "pin" | "name" | "isYou" | "newPin" | "confirmPin";
+type Step = "phone" | "pin" | "name" | "isYou" | "newPin";
 type Match = { userId: Id<"users">; displayName: string };
 
 const textLink =
   "flex min-h-11 w-full items-center justify-center text-[13px] text-muted underline-offset-4 hover:text-ink hover:underline";
 
 export function InvitePage({ code }: { code: string }) {
-  const { token, user, loading, setToken, selectOrg } = useAuth();
+  const { token, user, loading, setToken, selectOrg, refreshLocalOrg } = useAuth();
   const router = useRouter();
   const convex = useConvex();
   const info = useQuery(api.orgs.inviteInfo, {
@@ -36,7 +36,6 @@ export function InvitePage({ code }: { code: string }) {
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [pin, setPin] = useState("");
-  const [confirmPin, setConfirmPin] = useState("");
   const [matches, setMatches] = useState<Match[]>([]);
   const [claimUserId, setClaimUserId] = useState<Id<"users"> | null>(null);
   const [wrongPin, setWrongPin] = useState(false);
@@ -55,8 +54,13 @@ export function InvitePage({ code }: { code: string }) {
     }
   }
 
-  function enterApp(nextToken: string) {
+  function enterApp(nextToken: string, orgId: Id<"orgs"> | undefined) {
     setLastPhone(phone);
+    // A number stored from an earlier session must not outrank the new community.
+    if (orgId) {
+      setActiveOrgId(orgId);
+      refreshLocalOrg();
+    }
     setToken(nextToken);
     router.replace("/home");
   }
@@ -93,8 +97,8 @@ export function InvitePage({ code }: { code: string }) {
     run("Sign in failed", async () => {
       try {
         const res = await signIn({ phone, pin: nextPin });
-        await joinByInvite({ token: res.token, code });
-        enterApp(res.token);
+        const joined = await joinByInvite({ token: res.token, code });
+        enterApp(res.token, joined.orgId);
       } catch (e) {
         setPin("");
         setWrongPin(true);
@@ -112,9 +116,11 @@ export function InvitePage({ code }: { code: string }) {
           inviteCode: code,
           ...(claimUserId ? { claimUserId } : {}),
         });
-        enterApp(res.token);
+        enterApp(res.token, res.orgId);
       } catch (e) {
-        setConfirmPin("");
+        // A stale claim must not repeat on retry. Start again from the name.
+        setClaimUserId(null);
+        setStep("name");
         throw e;
       }
     });
@@ -140,8 +146,11 @@ export function InvitePage({ code }: { code: string }) {
   return (
     <main className="flex min-h-dvh flex-col justify-center px-5 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-[calc(var(--safe-top)+2rem)]">
       <div className="rise-in mx-auto w-full max-w-md">
-        <div className="mb-8 flex flex-col items-center text-center">
-          <Logo size={52} className="shadow-lift" />
+        <div className="mb-6 flex flex-col items-center text-center">
+          {/* The keypad needs the room on a small phone. */}
+          {step === "pin" || step === "newPin" ? null : (
+            <Logo size={52} className="shadow-lift" />
+          )}
           {info === undefined || loading ? (
             <div className="mt-5 h-8 w-48 animate-pulse rounded-xl bg-line/60" />
           ) : heading ? (
@@ -305,40 +314,27 @@ export function InvitePage({ code }: { code: string }) {
                 <p className="text-center text-[15px] font-semibold text-ink">
                   Set a 4-digit PIN
                 </p>
-                <PinPad
-                  value={pin}
-                  disabled={busy}
-                  onChange={(next) => {
-                    setPin(next);
-                    if (next.length === 4) {
-                      setConfirmPin("");
+                <PinPad reveal value={pin} disabled={busy} onChange={setPin} />
+                <div>
+                  <Button
+                    fullWidth
+                    disabled={busy || pin.length !== 4}
+                    onClick={() => void doSignUp()}
+                  >
+                    {busy ? "…" : "Join"}
+                  </Button>
+                  <button
+                    type="button"
+                    className={`${textLink} mt-2`}
+                    onClick={() => {
                       setError(null);
-                      setStep("confirmPin");
-                    }
-                  }}
-                />
-              </div>
-            ) : null}
-
-            {!signedIn && step === "confirmPin" ? (
-              <div className="space-y-5">
-                <p className="text-center text-[15px] font-semibold text-ink">
-                  Same PIN again
-                </p>
-                <PinPad
-                  value={confirmPin}
-                  disabled={busy}
-                  onChange={(next) => {
-                    setConfirmPin(next);
-                    if (next.length !== 4) return;
-                    if (next !== pin) {
-                      setError("PINs don’t match");
-                      setConfirmPin("");
-                      return;
-                    }
-                    void doSignUp();
-                  }}
-                />
+                      setClaimUserId(null);
+                      setStep("name");
+                    }}
+                  >
+                    Back
+                  </button>
+                </div>
               </div>
             ) : null}
 

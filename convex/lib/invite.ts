@@ -85,6 +85,19 @@ export function isUnclaimedNoPhone(user: Doc<"users">) {
   return (user.isGuest ?? false) && !user.phone && !user.pinHash;
 }
 
+/**
+ * A row someone may claim from the link. A removed one counts: with no phone,
+ * this is the only way back to their stats. An admin row never counts, because
+ * a claim would hand over admin.
+ */
+export function isClaimableRow(member: Doc<"orgMembers"> | null | undefined) {
+  return (
+    !!member &&
+    (member.status === "active" || member.status === "removed") &&
+    !member.roles.includes("admin")
+  );
+}
+
 /** Same rule as added players: two people with one name read as one person. */
 export async function uniqueNameInOrg(
   ctx: MutationCtx,

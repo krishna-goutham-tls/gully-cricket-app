@@ -7,6 +7,8 @@ import { api, client, convexRun, NAMES, ORG_B, PIN, phone } from "./lib/env.mjs"
 const PREFIX = phone("owner").slice(0, -2);
 const fresh = `${PREFIX}31`;
 const fresh2 = `${PREFIX}32`;
+// A removed added player stays claimable, so each test needs a name of its own.
+const uniqueWord = () => `Zq${Date.now().toString(36)}`;
 
 async function adminToken() {
   const res = await client().mutation(api.auth.signIn, {
@@ -36,18 +38,9 @@ async function noSidewaysScroll(page: Page) {
   expect(over).toBeLessThanOrEqual(1);
 }
 
-async function removeAddedNamed(name: string) {
-  const { token, orgId } = await adminToken();
-  const rows = await client().query(api.players.listOrgPlayers, { token, orgId });
-  for (const r of rows.filter((p: { displayName: string }) => p.displayName.startsWith(name))) {
-    await client().mutation(api.orgs.removeMember, { token, orgId, userId: r.userId });
-  }
-}
-
 test.beforeEach(async () => {
   convexRun("e2e:forgetPhone", { phone: fresh });
   convexRun("e2e:forgetPhone", { phone: fresh2 });
-  await removeAddedNamed("Zaheer");
 });
 
 test("a new player joins by link and lands on Home, and the admin sees New", async ({ page, browser }, info) => {
@@ -68,8 +61,9 @@ test("a new player joins by link and lands on Home, and the admin sees New", asy
   await page.getByRole("button", { name: "Next" }).click();
   await expect(page.getByText("Set a 4-digit PIN")).toBeVisible();
   await typePin(page);
-  await expect(page.getByText("Same PIN again")).toBeVisible();
-  await typePin(page);
+  await page.screenshot({ path: `${shots}/invite-pin.png` });
+  await expect(page.getByRole("button", { name: "Join" })).toBeInViewport();
+  await page.getByRole("button", { name: "Join" }).click();
   await page.waitForURL("**/home");
   await expect(page.getByText(ORG_B).first()).toBeVisible();
 
@@ -130,39 +124,41 @@ test("Is this you: Yes keeps the old player, No makes a new one", async ({ page,
   const { token, orgId } = await adminToken();
   const code = await inviteCode();
   const shots = `e2e/out/shots/${info.project.name}`;
-  const { userId } = await client().mutation(api.players.addGuest, { token, orgId, name: "Zaheer Added" });
+  const word = uniqueWord();
+  const { userId } = await client().mutation(api.players.addGuest, { token, orgId, name: `${word} Added` });
 
   await open(page, `/i/${code}`);
   await page.getByLabel("Phone number").fill(fresh);
   await page.getByRole("button", { name: "Join" }).click();
-  await page.getByLabel("Your name").fill("Zaheer K");
+  await page.getByLabel("Your name").fill(`${word} K`);
   await page.getByRole("button", { name: "Next" }).click();
   await expect(page.getByText("Is this you?")).toBeVisible();
-  await expect(page.getByText("Zaheer Added")).toBeVisible();
+  await expect(page.getByText(`${word} Added`)).toBeVisible();
   await page.screenshot({ path: `${shots}/invite-is-this-you.png` });
   await page.getByRole("button", { name: "Yes" }).click();
   await typePin(page);
-  await typePin(page);
+  await page.getByRole("button", { name: "Join" }).click();
   await page.waitForURL("**/home");
   const rows = await client().query(api.players.listOrgPlayers, { token, orgId });
-  expect(rows.find((p: { userId: string }) => p.userId === userId).displayName).toBe("Zaheer K");
+  expect(rows.find((p: { userId: string }) => p.userId === userId).displayName).toBe(`${word} K`);
 
-  // Number two says No to a second added player with a shared word.
-  await client().mutation(api.players.addGuest, { token, orgId, name: "Zaheer Other" });
+  // Number two says No to a second added player with a shared word. The claimed
+  // row has a phone now, so only the new added player shows.
+  await client().mutation(api.players.addGuest, { token, orgId, name: `${word} Other` });
   await context.clearCookies();
   await page.evaluate(() => localStorage.clear());
   await open(page, `/i/${code}`);
   await page.getByLabel("Phone number").fill(fresh2);
   await page.getByRole("button", { name: "Join" }).click();
-  await page.getByLabel("Your name").fill("Zaheer New");
+  await page.getByLabel("Your name").fill(`${word} New`);
   await page.getByRole("button", { name: "Next" }).click();
   await page.getByRole("button", { name: "No" }).click();
   await typePin(page);
-  await typePin(page);
+  await page.getByRole("button", { name: "Join" }).click();
   await page.waitForURL("**/home");
   const later = await client().query(api.players.listOrgPlayers, { token, orgId });
-  expect(later.filter((p: { displayName: string }) => p.displayName.startsWith("Zaheer"))).toHaveLength(3);
-  expect(later.find((p: { displayName: string }) => p.displayName === "Zaheer Other").isGuest).toBe(true);
+  expect(later.filter((p: { displayName: string }) => p.displayName.startsWith(word))).toHaveLength(3);
+  expect(later.find((p: { displayName: string }) => p.displayName === `${word} Other`).isGuest).toBe(true);
 });
 
 test("a bad code and an old code say the link stopped, with no form", async ({ page }) => {
@@ -182,7 +178,8 @@ test("a bad code and an old code say the link stopped, with no form", async ({ p
 test("admin: Invite players, the WhatsApp link, New link and Remove", async ({ page }, info) => {
   const shots = `e2e/out/shots/${info.project.name}`;
   const { token, orgId } = await adminToken();
-  await client().mutation(api.players.addGuest, { token, orgId, name: "Zaheer Remove" });
+  const gone = `${uniqueWord()} Remove`;
+  await client().mutation(api.players.addGuest, { token, orgId, name: gone });
   await loginAs(page, "otherOrganiser", ORG_B);
   await open(page, "/players");
   await page.getByRole("button", { name: "Invite players" }).click();
@@ -200,11 +197,17 @@ test("admin: Invite players, the WhatsApp link, New link and Remove", async ({ p
   await expect(send).not.toHaveAttribute("href", new RegExp(`%2Fi%2F${code}`));
   await page.getByRole("button", { name: "Close" }).click();
 
-  await page.getByRole("button", { name: "Remove Zaheer Remove" }).click();
+  await page.getByRole("button", { name: `Remove ${gone}` }).click();
   await expect(page.getByText("Their stats stay.")).toBeVisible();
   await page.screenshot({ path: `${shots}/remove-confirm.png` });
   await page.getByRole("button", { name: "Remove", exact: true }).click();
-  await expect(page.getByText("Zaheer Remove")).toHaveCount(0);
+  await expect(page.getByText(gone)).toHaveCount(0);
+
+  // Removed by mistake: adding the same name brings the same player back.
+  const { userId: back } = await client().mutation(api.players.addGuest, { token, orgId, name: gone });
+  const rows = await client().query(api.players.listOrgPlayers, { token, orgId });
+  expect(rows.filter((p: { displayName: string }) => p.displayName === gone)).toHaveLength(1);
+  expect(rows.find((p: { userId: string }) => p.userId === back)).toBeTruthy();
 });
 
 test("a player sees no invite button and no remove button", async ({ page }) => {
