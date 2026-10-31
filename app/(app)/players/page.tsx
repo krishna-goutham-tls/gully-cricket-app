@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Input } from "@/components/ui/Input";
+import { WhatsAppIcon } from "@/components/ui/WhatsAppIcon";
 import { InviteSheet } from "@/components/player/InviteSheet";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { api } from "@/convex/_generated/api";
@@ -298,6 +299,7 @@ export default function PlayersPage() {
 
         {isAdmin && !isSandbox ? (
           <Button type="button" fullWidth onClick={() => setInviteOpen(true)}>
+            <WhatsAppIcon className="h-5 w-5" />
             Invite players
           </Button>
         ) : null}

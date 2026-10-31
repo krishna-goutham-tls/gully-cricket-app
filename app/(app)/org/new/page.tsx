@@ -41,7 +41,8 @@ export default function NewOrgPage() {
       });
       setActiveOrgId(res.orgId);
       await selectOrg(res.orgId);
-      router.replace("/home");
+      // Getting players in is the first job, so Home opens the invite sheet.
+      router.replace("/home?invite=1");
     } catch (e) {
       setError(errorMessage(e, "Could not create community"));
       setBusy(false);

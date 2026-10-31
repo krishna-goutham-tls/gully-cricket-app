@@ -217,3 +217,69 @@ test("a player sees no invite button and no remove button", async ({ page }) => 
   await expect(page.getByRole("button", { name: "Invite players" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Remove / })).toHaveCount(0);
 });
+
+test("Home: an admin sees Invite players, a player does not, and it leaves after a join", async ({ page, browser }, info) => {
+  const shots = `e2e/out/shots/${info.project.name}`;
+  const { orgId } = await adminToken();
+  const code = await inviteCode();
+  // Nobody has come in by link: clear what earlier runs left.
+  convexRun("e2e:clearLinkMarks", { orgId });
+
+  await loginAs(page, "otherOrganiser", ORG_B);
+  await open(page, "/home");
+  const button = page.getByRole("button", { name: "Invite players" });
+  await expect(button).toBeInViewport();
+  await page.screenshot({ path: `${shots}/home-invite.png` });
+  await button.click();
+  await expect(page.getByRole("link", { name: "Send on WhatsApp" })).toBeVisible();
+  await page.getByRole("button", { name: "Close" }).click();
+
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const playerPage = await ctx.newPage();
+  await loginAs(playerPage, "player");
+  await open(playerPage, "/home");
+  await expect(playerPage.getByRole("link", { name: /Start match/ })).toBeVisible();
+  await expect(playerPage.getByRole("button", { name: "Invite players" })).toHaveCount(0);
+  await ctx.close();
+
+  await client().mutation(api.auth.signUp, {
+    phone: fresh,
+    pin: PIN,
+    displayName: "Link Player",
+    inviteCode: code,
+  });
+  await expect(button).toHaveCount(0);
+});
+
+test("a new community opens the invite sheet once", async ({ page }, info) => {
+  const shots = `e2e/out/shots/${info.project.name}`;
+  const name = `E2E New ${Date.now().toString(36)}`;
+  const { token } = await loginAs(page, "owner");
+  const before = await client().query(api.auth.bootstrap, { token });
+  for (const m of before.memberships.filter((x: { orgName: string }) => x.orgName.startsWith("E2E New"))) {
+    convexRun("e2e:forgetOrg", { orgId: m.orgId });
+  }
+  await open(page, "/org/new");
+  await page.getByLabel(/name/i).first().fill(name);
+  await page.getByRole("button", { name: /Create/ }).click();
+  await page.waitForURL("**/home");
+  const send = page.getByRole("link", { name: "Send on WhatsApp" });
+  await expect(send).toBeVisible();
+  await page.screenshot({ path: `${shots}/new-community-invite.png` });
+  expect(await send.getAttribute("href")).toContain(encodeURIComponent(name));
+  await page.getByRole("button", { name: "Close" }).click();
+
+  // Going away and back must not open it again. The login helper sets the old
+  // community on every full load, so this stays inside the app.
+  expect(page.url()).not.toContain("invite=1");
+  await page.getByRole("link", { name: "Players" }).click();
+  await page.waitForURL("**/players");
+  await page.getByRole("link", { name: "Home" }).click();
+  await page.waitForURL("**/home");
+  await expect(page.getByRole("button", { name: "Invite players" })).toBeVisible();
+  await expect(send).toHaveCount(0);
+
+  const boot = await client().query(api.auth.bootstrap, { token });
+  const made = boot.memberships.find((m: { orgName: string }) => m.orgName === name);
+  convexRun("e2e:forgetOrg", { orgId: made.orgId });
+});

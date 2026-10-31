@@ -6,6 +6,7 @@ import { Check, Copy, X } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { WhatsAppIcon } from "@/components/ui/WhatsAppIcon";
 import { errorMessage } from "@/lib/utils";
 
 /** Admin sends the community's invite link. The code is made on first open. */
@@ -124,8 +125,9 @@ export function InviteSheet({
                 href={`https://wa.me/?text=${encodeURIComponent(message)}`}
                 target="_blank"
                 rel="noreferrer"
-                className="flex min-h-12 w-full items-center justify-center rounded-xl bg-ink text-[15px] font-semibold text-bg active:scale-[0.98]"
+                className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-ink text-[15px] font-semibold text-bg active:scale-[0.98]"
               >
+                <WhatsAppIcon className="h-5 w-5" />
                 Send on WhatsApp
               </a>
               <button
