@@ -1,6 +1,6 @@
 import { MutationCtx } from "../_generated/server";
 import { Doc, Id } from "../_generated/dataModel";
-import { CATCH_POINTS, WICKET_POINTS, earnsPoints } from "./points";
+import { CATCH_POINTS, WICKET_POINTS, earnsPoints, matchPoints } from "./points";
 import type { Side } from "./contribution";
 import { tagsForUsers } from "./playerLabel";
 
@@ -31,7 +31,9 @@ import { tagsForUsers } from "./playerLabel";
  * Dismissals, ducks, drops, wides and runs and sixes conceded stay in, so a
  * junior keeps the credit. `bowl.counted` is the balls and runs without those
  * bowled to juniors, for good bowling records. Scorecards read the ball log, so
- * they keep every ball.
+ * they keep every ball. `real` on a player stamp, and `realRuns` and `realBalls`
+ * on a batting innings, hold every ball too, for screens that read like a
+ * scorecard without the ball log.
  *
  * The ground is stamped exactly as the match carries it. A match with no
  * groundId stamps none, and the boards read that as the community's Home
@@ -136,6 +138,8 @@ type Player = {
   drops: number;
   pts: PtsWork;
   offJuniors: { runs: number; wickets: number; catches: number };
+  real: { runs: number; ballsFaced: number; wickets: number; catches: number };
+  runOuts: number;
   reached: Map<string, number>;
   dismissalTypes: Map<string, number>;
   wicketTypes: Map<string, number>;
@@ -184,6 +188,8 @@ export function foldMatch(
         drops: 0,
         pts: { runs: 0, wickets: 0, catches: 0, innings: new Map() },
         offJuniors: { runs: 0, wickets: 0, catches: 0 },
+        real: { runs: 0, ballsFaced: 0, wickets: 0, catches: 0 },
+        runOuts: 0,
         reached: new Map(),
         dismissalTypes: new Map(),
         wicketTypes: new Map(),
@@ -382,6 +388,8 @@ export function foldMatch(
     }
     striker.contributed = true;
     const faced = b.isLegal || b.extrasType === "noball";
+    striker.real.runs += b.runsBat;
+    if (faced) striker.real.ballsFaced += 1;
     {
       const dk = `${innKey}:${String(b.strikerId)}`;
       const real = realInnings.get(dk) ?? { runs: 0, balls: 0 };
@@ -423,13 +431,11 @@ export function foldMatch(
       const o = (overBat.get(k) ?? 0) + b.runsBat;
       overBat.set(k, o);
       if (o > bat.bestOver) bat.bestOver = o;
-      const dk = `${innKey}:${String(b.strikerId)}`;
       if (b.isLegal && b.runsBat === 0) {
+        const dk = `${innKey}:${String(b.strikerId)}`;
         const n = (dotRunNow.get(dk) ?? 0) + 1;
         dotRunNow.set(dk, n);
         if (n > bat.dotRun) bat.dotRun = n;
-      } else if (b.runsBat > 0) {
-        dotRunNow.set(dk, 0);
       }
 
       // Every ball faced, by bowler — not just the ones that got them out.
@@ -444,7 +450,18 @@ export function foldMatch(
       }
     } else {
       striker.offJuniors.runs += b.runsBat;
+      // The balls and the dots stay, so a junior who took the wicket still
+      // shows in this head-to-head. The runs stay out.
+      const e = h2h(striker, striker.byBowler, b.bowlerId);
+      if (e) {
+        if (faced) e.balls += 1;
+        if (b.isLegal && b.runsBat === 0) e.dots += 1;
+        touch(e, b.sequence);
+      }
     }
+    // A dot off a junior neither extends a dot run nor ends it. Any scoring
+    // shot ends it.
+    if (b.runsBat > 0) dotRunNow.set(`${innKey}:${String(b.strikerId)}`, 0);
 
     if (b.isWicket && b.playerOutId) {
       const outP = get(b.playerOutId);
@@ -468,6 +485,7 @@ export function foldMatch(
       if (b.wicketType === "caught" && b.fielderId) {
         const f = get(b.fielderId);
         f.contributed = true;
+        f.real.catches += 1;
         if (earnsPoints(b.fielderId, b.playerOutId, juniors)) {
           if (f.order.catch === undefined) f.order.catch = tick++;
           f.catches += 1;
@@ -477,6 +495,14 @@ export function foldMatch(
         } else {
           f.offJuniors.catches += 1;
         }
+      }
+      // Mirrors the head-to-head below: nobody runs themselves out.
+      if (
+        b.wicketType === "runout" &&
+        b.fielderId &&
+        String(b.fielderId) !== String(b.playerOutId)
+      ) {
+        get(b.fielderId).runOuts += 1;
       }
       if (b.wicketType) bump(outP.dismissalTypes, b.wicketType);
       // A run-out is nobody's bowling, so it never counts towards the
@@ -503,16 +529,18 @@ export function foldMatch(
     const bowl = getBowl(b.bowlerId);
     bowler.contributed = true;
     bowl.runs += b.runsBat + b.extrasRuns;
-    if (b.runsBat + b.extrasRuns > 0)
-      markAt(b.bowlerId, "bowl.runs", b.createdAt);
-    if (b.isLegal) {
-      bowl.legalBalls += 1;
-      markAt(b.bowlerId, "bowl.legalBalls", b.createdAt);
-    }
+    if (b.isLegal) bowl.legalBalls += 1;
     const bowlCounts = earnsPoints(b.bowlerId, b.strikerId, juniors);
     if (bowlCounts) {
       bowl.counted.runs += b.runsBat + b.extrasRuns;
-      if (b.isLegal) bowl.counted.legalBalls += 1;
+      // The boards rank on counted numbers, so only those balls move a
+      // tie-break.
+      if (b.runsBat + b.extrasRuns > 0)
+        markAt(b.bowlerId, "bowl.runs", b.createdAt);
+      if (b.isLegal) {
+        bowl.counted.legalBalls += 1;
+        markAt(b.bowlerId, "bowl.legalBalls", b.createdAt);
+      }
     }
     if (bowlCounts && b.isLegal && b.runsBat + b.extrasRuns === 0) {
       bowl.dots += 1;
@@ -530,6 +558,7 @@ export function foldMatch(
     per.runs += b.runsBat + b.extrasRuns;
     if (b.isLegal) per.legalBalls += 1;
     const credited = b.isWicket && b.wicketType !== "runout";
+    if (credited) bowler.real.wickets += 1;
     const wicketCounts =
       credited && earnsPoints(b.bowlerId, b.playerOutId, juniors);
     {
@@ -620,7 +649,17 @@ export function foldMatch(
       contributed: p.contributed,
       order: p.order,
       bat: p.bat
-        ? { ...p.bat, innings: Array.from(p.bat.innings.values()) }
+        ? {
+            ...p.bat,
+            innings: Array.from(p.bat.innings.values()).map((inn) => {
+              const real = realInnings.get(`${String(inn.inningsId)}:${k}`);
+              return {
+                ...inn,
+                realRuns: real?.runs ?? 0,
+                realBalls: real?.balls ?? 0,
+              };
+            }),
+          }
         : undefined,
       bowl: p.bowl
         ? {
@@ -642,6 +681,8 @@ export function foldMatch(
         innings: Array.from(p.pts.innings.values()),
       },
       offJuniors: p.offJuniors,
+      real: p.real,
+      runOuts: p.runOuts,
       work: p.named
         ? {
             onA,
@@ -678,6 +719,21 @@ export function foldMatch(
     }
   }
 
+  // Player of the Match: the same points and tie rule as the boards, in stamp
+  // order. Ties share it. Nobody for a scoreless day. The match card is a
+  // scoreboard, so the values show every run and wicket.
+  let bestPoints = 0;
+  let topRows: PlayerStamp[] = [];
+  for (const r of playerRows) {
+    const points = matchPoints(r as Doc<"playerMatchStats">);
+    if (points > bestPoints) {
+      bestPoints = points;
+      topRows = [r];
+    } else if (points === bestPoints && points > 0) {
+      topRows.push(r);
+    }
+  }
+
   return {
     match: {
       ...base,
@@ -687,6 +743,12 @@ export function foldMatch(
       sideBName: match.sideBName,
       sideACaptainId: match.sideAPlayerIds[0],
       sideBCaptainId: match.sideBPlayerIds[0],
+      potm: topRows.map((r) => ({
+        userId: r.userId,
+        runs: (r.bat?.runs ?? 0) + (r.offJuniors?.runs ?? 0),
+        wickets: (r.bowl?.wickets ?? 0) + (r.offJuniors?.wickets ?? 0),
+        catches: r.catches + (r.offJuniors?.catches ?? 0),
+      })),
     },
     players: playerRows,
     matchups: matchupRows,
