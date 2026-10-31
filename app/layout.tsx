@@ -15,6 +15,9 @@ const sans = Poppins({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://gullycricket.space"),
+  ...(process.env.NEXT_PUBLIC_DEPLOY_ENV === "staging"
+    ? { robots: { index: false, follow: false } }
+    : {}),
   title: {
     default: "Gully Cricket — Score your match while you play",
     template: "%s — Gully Cricket",

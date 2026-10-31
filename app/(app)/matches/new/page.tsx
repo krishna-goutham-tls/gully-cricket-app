@@ -5,13 +5,14 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { CoinToss } from "@/components/match/CoinToss";
 import { PlayerMultiSelect } from "@/components/match/PlayerMultiSelect";
+import { SideChoice, type SideValue } from "@/components/match/SideChoice";
 import { usePlayableGrounds } from "@/components/ground/GroundChips";
 import {
   DEFAULT_TEST_MINUTES,
   MAX_TEST_MINUTES,
   MIN_TEST_MINUTES,
-  TEST_CLOCK_DAYS,
 } from "@/convex/lib/clock";
 import {
   getLastDurationMinutes,
@@ -27,31 +28,24 @@ import { balanceTeams } from "@/lib/autoTeams";
 import { cn, errorMessage } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { NumberField } from "@/components/ui/NumberField";
+import { TruncText } from "@/components/ui/TruncText";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
+  ChevronDown,
   Crown,
   History,
-  MapPin,
   Minus,
   Plus,
-  Scale,
-  Users,
+  X,
 } from "lucide-react";
 
-type Step = "who" | "draft";
+type Step = "who" | "teams" | "start";
 type Side = "A" | "B";
-type DraftTarget = Side | "common";
 
 function firstName(full: string) {
   return full.trim().split(/\s+/)[0] ?? full;
-}
-
-function matchTimeHint(minutes: number) {
-  const per = minutes / TEST_CLOCK_DAYS;
-  const n = Number.isInteger(per) ? String(per) : per.toFixed(1);
-  return `${TEST_CLOCK_DAYS} days · ${n} min each`;
 }
 
 function whenLabel(ts: number) {
@@ -89,7 +83,6 @@ function NewMatchFlow() {
   );
   const grounds = usePlayableGrounds();
   const [groundId, setGroundId] = useState<Id<"grounds"> | null>(null);
-  const [groundOpen, setGroundOpen] = useState(false);
   const chosenGround =
     grounds.find((g) => g._id === groundId) ??
     grounds.find((g) => g.isHome) ??
@@ -98,12 +91,16 @@ function NewMatchFlow() {
     api.matches.list,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
   );
-  const lastMatchId = recentMatches?.[0]?._id;
+  // A friendly starts from the last friendly: a tournament match has its own
+  // teams, and an abandoned match may be a mistake.
+  const lastMatchId = recentMatches?.find(
+    (m) => m.status !== "abandoned" && !m.tournamentId,
+  )?._id;
   const lastMatch = useQuery(
     api.matches.get,
     token && lastMatchId ? { token, matchId: lastMatchId } : "skip",
   );
-  // Player level for "Auto form teams" — the same all-round board the Players
+  // Player level for the team split — the same all-round board the Players
   // tab ranks on, so the teams it builds match what everyone can already see.
   const board = useQuery(
     api.stats.leaderboard,
@@ -112,6 +109,8 @@ function NewMatchFlow() {
       : "skip",
   );
   const createMatch = useMutation(api.matches.create);
+  const setBattingFirst = useMutation(api.scoring.setBattingFirst);
+  const startInnings = useMutation(api.scoring.startInnings);
   const addGuest = useMutation(api.players.addGuest);
 
   const [step, setStep] = useState<Step>("who");
@@ -121,7 +120,18 @@ function NewMatchFlow() {
   const [teamA, setTeamA] = useState<string[]>([]);
   const [teamB, setTeamB] = useState<string[]>([]);
   const [common, setCommon] = useState<string[]>([]);
-  const [activeTarget, setActiveTarget] = useState<DraftTarget>("A");
+  // Rows keep this order while the scorer moves players, so a row never jumps
+  // from under a thumb.
+  const [rowOrder, setRowOrder] = useState<string[]>([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [tossOpen, setTossOpen] = useState(false);
+  const [battingSide, setBattingSide] = useState<Side | null>(null);
+  const [striker, setStriker] = useState<string | null>(null);
+  const [nonStriker, setNonStriker] = useState<string | null>(null);
+  const [bowler, setBowler] = useState<string | null>(null);
+  const [openPick, setOpenPick] = useState<"striker" | "non" | "bowler" | null>(
+    null,
+  );
   const [format, setFormat] = useState<"limited" | "test">(() =>
     getLastFormat(),
   );
@@ -140,6 +150,40 @@ function NewMatchFlow() {
   const [error, setError] = useState<string | null>(null);
 
   const players = useMemo(() => pool ?? [], [pool]);
+
+  // The community's last match sets the defaults, so every phone starts the
+  // same. The values saved on this phone only cover a community's first match.
+  const defaultsApplied = useRef(false);
+  useEffect(() => {
+    if (defaultsApplied.current || !lastMatch) return;
+    defaultsApplied.current = true;
+    setFormat(lastMatch.format);
+    setOvers(lastMatch.overs);
+    if (
+      lastMatch.format === "limited" &&
+      lastMatch.oversPerPlayer >= 2 &&
+      lastMatch.oversPerPlayer <= 20 &&
+      lastMatch.oversPerPlayer % 2 === 0
+    ) {
+      setOversPerPlayer(lastMatch.oversPerPlayer);
+    }
+    setBattingMode(lastMatch.battingMode);
+    if (lastMatch.lastBatsmanAlone !== undefined) {
+      setLastBatsmanAlone(lastMatch.lastBatsmanAlone);
+    }
+    if (lastMatch.format === "test") {
+      const mins = lastMatch.clock
+        ? Math.round(lastMatch.clock.durationMs / 60000)
+        : DEFAULT_TEST_MINUTES;
+      setDurationMinutes(
+        Number.isInteger(mins) &&
+          mins >= MIN_TEST_MINUTES &&
+          mins <= MAX_TEST_MINUTES
+          ? mins
+          : DEFAULT_TEST_MINUTES,
+      );
+    }
+  }, [lastMatch]);
 
   // Applied once: after that the scorer owns the list, and a late answer on
   // the poll must not tick someone they just unticked.
@@ -173,51 +217,66 @@ function NewMatchFlow() {
   // everyone at zero and split the field alphabetically, which looks balanced
   // and isn't — so the button waits.
   const levelsReady = board !== undefined;
-  const hasForm = (board?.matchCount ?? 0) > 0;
 
-  const assigned = new Set([...teamA, ...teamB, ...common]);
-  const draftPool = available.filter((id) => !assigned.has(id));
   const countA = teamA.length + common.length;
   const countB = teamB.length + common.length;
-  const ready = countA >= 2 && countB >= 2;
+  // Everyone on Both would be one team playing itself.
+  const ready = countA >= 2 && countB >= 2 && teamA.length + teamB.length > 0;
 
   // ── Step history ──
   // The steps are useState on one route, so a system back gesture would unmount
   // the page and wipe the draft. Each step forward pushes a history entry and
   // popstate walks the flow back instead of leaving it.
-  const pushedRef = useRef(false);
+  const depthRef = useRef(0);
   const leavingRef = useRef(false);
+  const stepAt = useRef(0);
+  // Back and forward skip the buttons, so each step entry re-checks the teams.
+  const reconcileRef = useRef<() => boolean>(() => true);
 
   useEffect(() => {
+    // A reload keeps the browser's entries for this flow but not the draft.
+    depthRef.current =
+      (window.history.state as { boundaryDepth?: number } | null)
+        ?.boundaryDepth ?? 0;
     const onPop = (e: PopStateEvent) => {
       if (leavingRef.current) return;
-      const state = e.state as { boundaryStep?: Step } | null;
-      const next = state?.boundaryStep === "draft" ? "draft" : "who";
-      pushedRef.current = next === "draft";
-      setStep(next);
+      const state = e.state as {
+        boundaryStep?: Step;
+        boundaryDepth?: number;
+      } | null;
+      depthRef.current = state?.boundaryDepth ?? 0;
+      const next = state?.boundaryStep ?? "who";
+      setTossOpen(false);
+      setStep(next !== "who" && !reconcileRef.current() ? "who" : next);
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  function enterDraft() {
+  function enterStep(next: Step) {
+    stepAt.current = Date.now();
+    depthRef.current += 1;
     // Keep Next's own history state on the entry — only add our step marker.
     window.history.pushState(
-      { ...window.history.state, boundaryStep: "draft" },
+      {
+        ...window.history.state,
+        boundaryStep: next,
+        boundaryDepth: depthRef.current,
+      },
       "",
     );
-    pushedRef.current = true;
-    setStep("draft");
+    setStep(next);
   }
 
   function goBack() {
-    if (step === "draft") window.history.back();
+    if (step !== "who") window.history.back();
   }
 
-  /** Drop our step entry so back from the score pad leaves the create flow. */
-  async function dropStepEntry() {
-    if (!pushedRef.current) return;
-    pushedRef.current = false;
+  /** Drop our step entries so back from the score pad leaves the create flow. */
+  async function dropStepEntries() {
+    if (depthRef.current === 0) return;
+    const depth = depthRef.current;
+    depthRef.current = 0;
     leavingRef.current = true;
     await new Promise<void>((resolve) => {
       const timer = setTimeout(() => finish(), 300);
@@ -227,9 +286,27 @@ function NewMatchFlow() {
         resolve();
       }
       window.addEventListener("popstate", finish);
-      window.history.back();
+      window.history.go(-depth);
     });
   }
+
+  // Openers must stay on the teams as they are now, whichever way the scorer
+  // came back to this screen.
+  useEffect(() => {
+    if (!battingSide) return;
+    const batting = rosterOf(battingSide);
+    const bowling = rosterOf(battingSide === "A" ? "B" : "A");
+    const valid =
+      !!striker &&
+      batting.includes(striker) &&
+      (solo ? true : !!nonStriker && batting.includes(nonStriker)) &&
+      !!bowler &&
+      bowling.includes(bowler) &&
+      bowler !== striker &&
+      bowler !== nonStriker;
+    if (!valid) fillOpeners(battingSide);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamA, teamB, common, battingSide, battingMode]);
 
   function toggleAvailable(userId: string) {
     setAvailable((list) =>
@@ -278,70 +355,127 @@ function NewMatchFlow() {
     if (!name || name === autoTeamName(prev[0])) setName(autoTeamName(next[0]));
   }
 
-  function goToDraft() {
-    // A player dropped on the availability step must not linger in a roster
-    // built on an earlier pass through the draft.
+  /**
+   * Teams open already split by rank. Coming back after a change keeps every
+   * move the scorer made: someone who left drops out, and someone new joins the
+   * smaller team.
+   */
+  function reconcileTeams(): boolean {
+    if (available.length === 0) return false;
     const here = new Set(available);
+    const keptA = teamA.filter((id) => here.has(id));
+    const keptB = teamB.filter((id) => here.has(id));
+    const keptCommon = common.filter((id) => here.has(id));
+    const placed = new Set([...keptA, ...keptB, ...keptCommon]);
+    let nextA = keptA;
+    let nextB = keptB;
+    let nextCommon = keptCommon;
+    if (placed.size === 0) {
+      const split = balanceTeams(available, levelOf);
+      nextA = split.teamA;
+      nextB = split.teamB;
+      nextCommon = split.common;
+    } else {
+      const newcomers = available.filter((id) => !placed.has(id));
+      for (const id of newcomers) {
+        if (nextA.length <= nextB.length) nextA = [...nextA, id];
+        else nextB = [...nextB, id];
+      }
+      // The odd player plays both, the same as on a fresh split.
+      const last = newcomers[newcomers.length - 1];
+      if (last && nextCommon.length === 0 && available.length % 2 === 1) {
+        nextA = nextA.filter((id) => id !== last);
+        nextB = nextB.filter((id) => id !== last);
+        nextCommon = [last];
+      }
+    }
+    applyTeam("A", nextA);
+    applyTeam("B", nextB);
+    setCommon(nextCommon);
+    setRowOrder([...nextA, ...nextCommon, ...nextB]);
+    return true;
+  }
+  reconcileRef.current = reconcileTeams;
+
+  /** One tap, one step: a double tap must not fall through to the next screen. */
+  const tooSoon = () => Date.now() - stepAt.current < 400;
+
+  function goToTeams() {
+    if (tooSoon()) return;
+    if (reconcileTeams()) enterStep("teams");
+  }
+
+  function sideOf(id: string): SideValue {
+    if (common.includes(id)) return "both";
+    if (teamA.includes(id)) return "A";
+    if (teamB.includes(id)) return "B";
+    return null;
+  }
+
+  function moveTo(id: string, next: Exclude<SideValue, null>) {
     applyTeam(
       "A",
-      teamA.filter((id) => here.has(id)),
+      next === "A"
+        ? [...teamA.filter((x) => x !== id), id]
+        : teamA.filter((x) => x !== id),
     );
     applyTeam(
       "B",
-      teamB.filter((id) => here.has(id)),
+      next === "B"
+        ? [...teamB.filter((x) => x !== id), id]
+        : teamB.filter((x) => x !== id),
     );
-    setCommon((l) => l.filter((id) => here.has(id)));
-    enterDraft();
+    setCommon((l) =>
+      next === "both" ? [...l.filter((x) => x !== id), id] : l.filter((x) => x !== id),
+    );
   }
 
-  /**
-   * Build both sides from the leaderboard and drop the scorer on the draft
-   * screen. It fills the same state a hand draft would, so nothing is locked
-   * in — every player can still be moved, and the odd one out can be handed to
-   * a side instead of playing for both.
-   */
-  function autoFormTeams({ enter }: { enter: boolean }) {
-    const { teamA: a, teamB: b, common: c } = balanceTeams(available, levelOf);
-    applyTeam("A", a);
-    applyTeam("B", b);
-    setCommon(c);
-    setActiveTarget("A");
-    if (enter) enterDraft();
+  function makeCaptain(id: string) {
+    if (teamA.includes(id)) applyTeam("A", [id, ...teamA.filter((x) => x !== id)]);
+    if (teamB.includes(id)) applyTeam("B", [id, ...teamB.filter((x) => x !== id)]);
   }
 
-  function assign(userId: string) {
-    // The highlighted target is sticky — uneven sides are the norm in gully
-    // cricket, so it stays put until the scorer picks another card.
-    if (activeTarget === "A") applyTeam("A", [...teamA, userId]);
-    else if (activeTarget === "B") applyTeam("B", [...teamB, userId]);
-    else setCommon((l) => [...l, userId]);
+  function enterStart() {
+    if (tooSoon()) return;
+    setOpenPick(null);
+    enterStep("start");
   }
 
-  function unassign(userId: string) {
-    if (teamA.includes(userId)) {
-      applyTeam(
-        "A",
-        teamA.filter((id) => id !== userId),
-      );
-    }
-    if (teamB.includes(userId)) {
-      applyTeam(
-        "B",
-        teamB.filter((id) => id !== userId),
-      );
-    }
-    setCommon((l) => l.filter((id) => id !== userId));
+  const solo = battingMode === "single";
+  const rosterOf = (side: Side) =>
+    side === "A" ? [...teamA, ...common] : [...teamB, ...common];
+
+  /** Openers filled in, so a scorer only touches them to change them. */
+  function pickBattingSide(side: Side) {
+    if (side === battingSide) return;
+    fillOpeners(side);
   }
 
-  function makeCaptain(side: Side, userId: string) {
-    const team = side === "A" ? teamA : teamB;
-    applyTeam(side, [userId, ...team.filter((id) => id !== userId)]);
+  function fillOpeners(side: Side) {
+    const batting = rosterOf(side);
+    const first = batting[0] ?? null;
+    const second = solo ? null : (batting[1] ?? null);
+    setBattingSide(side);
+    setStriker(first);
+    setNonStriker(second);
+    setBowler(
+      rosterOf(side === "A" ? "B" : "A").find(
+        (id) => id !== first && id !== second,
+      ) ?? null,
+    );
+    setOpenPick(null);
   }
 
   function reuseLastTeams() {
-    if (!lastMatch) return;
-    const sideA = lastMatch.sideAPlayers.map((p) => String(p.userId));
-    const sideB = lastMatch.sideBPlayers.map((p) => String(p.userId));
+    if (!lastMatch || !pool || tooSoon()) return;
+    // Someone who has left the community cannot play again.
+    const inCommunity = new Set(pool.map((p) => String(p.userId)));
+    const sideA = lastMatch.sideAPlayers
+      .map((p) => String(p.userId))
+      .filter((id) => inCommunity.has(id));
+    const sideB = lastMatch.sideBPlayers
+      .map((p) => String(p.userId))
+      .filter((id) => inCommunity.has(id));
     const inBoth = sideA.filter((id) => sideB.includes(id));
     const restA = sideA.filter((id) => !inBoth.includes(id));
     const restB = sideB.filter((id) => !inBoth.includes(id));
@@ -363,6 +497,7 @@ function NewMatchFlow() {
     setTeamA(restA);
     setTeamB(restB);
     setAvailable(Array.from(new Set([...sideA, ...sideB])));
+    setRowOrder([...restA, ...orderedCommon, ...restB]);
     // A name that was only ever the captain's is left blank so it follows a new
     // captain (the backend re-derives it); a typed-in name carries over as-is.
     // If it comes back blank, seed it from whoever actually leads the reused
@@ -387,28 +522,11 @@ function NewMatchFlow() {
       carry(lastMatch.sideBName, lastMatch.sideBPlayers[0]) ||
         autoTeamName(nextCaptainB),
     );
-    setFormat(lastMatch.format);
-    setOvers(lastMatch.overs);
-    setOversPerPlayer(lastMatch.oversPerPlayer);
-    setBattingMode(lastMatch.battingMode);
-    if (lastMatch.format === "test") {
-      const mins = lastMatch.clock
-        ? Math.round(lastMatch.clock.durationMs / 60000)
-        : DEFAULT_TEST_MINUTES;
-      setDurationMinutes(
-        Number.isInteger(mins) &&
-          mins >= MIN_TEST_MINUTES &&
-          mins <= MAX_TEST_MINUTES
-          ? mins
-          : DEFAULT_TEST_MINUTES,
-      );
-    }
-    setActiveTarget("A");
-    enterDraft();
+    enterStart();
   }
 
   async function onStart() {
-    if (!token || !activeOrgId) return;
+    if (!token || !activeOrgId || !battingSide || !striker || !bowler) return;
     setBusy(true);
     setError(null);
     try {
@@ -444,7 +562,21 @@ function NewMatchFlow() {
             Math.max(MIN_TEST_MINUTES, durationMinutes),
           ),
         );
-      await dropStepEntry();
+      // The match exists now. If either call fails, the score page asks for what
+      // is still missing, so nothing is lost.
+      try {
+        await setBattingFirst({ token, matchId: res.matchId, side: battingSide });
+        await startInnings({
+          token,
+          matchId: res.matchId,
+          strikerId: striker as Id<"users">,
+          nonStrikerId: solo ? undefined : (nonStriker as Id<"users">),
+          openingBowlerId: bowler as Id<"users">,
+        });
+      } catch {
+        // Handled by the score page.
+      }
+      await dropStepEntries();
       router.replace(`/matches/${res.matchId}/score`);
     } catch (e) {
       leavingRef.current = false;
@@ -458,6 +590,7 @@ function NewMatchFlow() {
       {step === "who" ? (
         <Link
           href="/home"
+          aria-label="Back"
           className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted active:bg-ink/[0.04]"
         >
           <ArrowLeft className="h-5 w-5" />
@@ -465,6 +598,7 @@ function NewMatchFlow() {
       ) : (
         <button
           type="button"
+          aria-label="Back"
           onClick={goBack}
           className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted active:bg-ink/[0.04]"
         >
@@ -472,7 +606,7 @@ function NewMatchFlow() {
         </button>
       )}
       <h1 className="text-xl font-semibold tracking-tight text-ink">
-        {step === "who" ? "Who’s playing today?" : "Build the teams"}
+        {step === "who" ? "Who’s here?" : step === "teams" ? "Teams" : "Start"}
       </h1>
     </header>
   );
@@ -483,13 +617,20 @@ function NewMatchFlow() {
     </p>
   ) : null;
 
-  // ── Step 1: availability ──
+  const footer = (button: React.ReactNode) => (
+    <div className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 px-5 pt-3 backdrop-blur">
+      <div className="mx-auto max-w-md pb-3">{button}</div>
+    </div>
+  );
+
+  // ── Screen 1: who's here ──
   if (step === "who") {
+    const enough = available.length >= 4;
     return (
       <div className="flex min-h-dvh flex-col bg-bg">
         {header}
         <main className="mx-auto w-full max-w-md flex-1 space-y-4 px-5 py-4 pb-32">
-          {lastMatch ? (
+          {lastMatch && pool ? (
             <button
               type="button"
               onClick={reuseLastTeams}
@@ -502,21 +643,13 @@ function NewMatchFlow() {
                 </span>
                 <span className="block truncate text-[13px] text-muted">
                   {lastMatch.sideAName} vs {lastMatch.sideBName} ·{" "}
-                  {whenLabel(lastMatch.createdAt)} — tap to edit &amp; go
+                  {whenLabel(lastMatch.createdAt)}
                 </span>
               </span>
             </button>
           ) : null}
 
           <section className="rounded-2xl border border-line bg-surface p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-[15px] font-medium text-ink">
-                Tap everyone who’s here
-              </p>
-              <span className="tabular shrink-0 rounded-full bg-bg px-2.5 py-1 text-[11px] font-semibold text-muted">
-                {available.length}
-              </span>
-            </div>
             <PlayerMultiSelect
               players={players}
               selectedIds={available}
@@ -528,467 +661,521 @@ function NewMatchFlow() {
           </section>
           {errorBanner}
         </main>
-        <div className="safe-bottom fixed inset-x-0 bottom-0 border-t border-line bg-surface/95 px-5 pt-3 backdrop-blur">
-          <div className="mx-auto max-w-md space-y-2 pb-3">
-            <Button
-              type="button"
-              variant="secondary"
-              fullWidth
-              disabled={available.length < 4 || !levelsReady}
-              onClick={() => autoFormTeams({ enter: true })}
-            >
-              <Scale className="h-4 w-4 shrink-0 text-accent-deep" />
-              <span className="min-w-0 text-left">
-                <span className="block text-[15px] font-semibold text-ink">
-                  Auto form teams
-                </span>
-                <span className="block truncate text-[13px] font-normal text-muted">
-                  {!levelsReady
-                    ? "Reading the leaderboard…"
-                    : hasForm
-                      ? "Balanced by leaderboard rank"
-                      : "No stats yet — splits evenly"}
-                </span>
-              </span>
-            </Button>
-            <Button
-              type="button"
-              fullWidth
-              size="lg"
-              disabled={available.length < 4}
-              onClick={goToDraft}
-            >
-              {available.length < 4
-                ? "Pick at least 4 players"
-                : `Next — build the teams (${available.length} playing)`}
-            </Button>
-          </div>
-        </div>
+        {footer(
+          <Button
+            type="button"
+            fullWidth
+            size="lg"
+            disabled={!enough || !levelsReady}
+            onClick={goToTeams}
+          >
+            {!enough
+              ? "Pick at least 4"
+              : levelsReady
+                ? `Next · ${available.length} playing`
+                : "Loading…"}
+          </Button>,
+        )}
       </div>
     );
   }
 
-  // ── Step 2: draft + rules ──
-  return (
-    <div className="flex min-h-dvh flex-col bg-bg">
-      {header}
-      <main className="mx-auto w-full max-w-md flex-1 space-y-4 px-5 py-4 pb-32">
-        {draftPool.length > 0 ? (
-          <p className="text-[13px] text-muted">
-            Tap a player to add them to the highlighted team.
-          </p>
-        ) : null}
-        <button
-          type="button"
-          disabled={available.length < 4 || !levelsReady}
-          onClick={() => autoFormTeams({ enter: false })}
-          className="flex min-h-11 w-full items-center gap-2 rounded-2xl border border-line bg-surface px-4 text-left transition active:scale-[0.98] disabled:opacity-40"
-        >
-          <Scale className="h-4 w-4 shrink-0 text-accent-deep" />
-          <span className="min-w-0">
-            <span className="text-[15px] font-semibold text-ink">
-              Auto form teams
-            </span>
-            <span className="ml-1.5 text-[13px] text-muted">
-              {!levelsReady
-                ? "reading the leaderboard…"
-                : hasForm
-                  ? "· redraws both sides by rank"
-                  : "· no stats yet, splits evenly"}
-            </span>
-          </span>
-        </button>
-
-        <p className="text-[13px] text-muted">
-          First player on a side is its captain — tap{" "}
-          <Crown className="inline h-3.5 w-3.5 align-text-bottom text-faint" />{" "}
-          to change.
-        </p>
-
-        <div className="grid grid-cols-2 gap-2">
-          {(
-            [
-              {
-                side: "A" as const,
-                name: nameA,
-                setName: setNameA,
-                team: teamA,
-                count: countA,
-              },
-              {
-                side: "B" as const,
-                name: nameB,
-                setName: setNameB,
-                team: teamB,
-                count: countB,
-              },
-            ]
-          ).map(({ side, name, setName, team, count }) => (
-            <section
-              key={side}
-              onClick={() => setActiveTarget(side)}
-              className={cn(
-                "rounded-2xl border bg-surface p-3 transition",
-                activeTarget === side
-                  ? "border-accent ring-2 ring-accent/40"
-                  : "border-line",
-              )}
-            >
-              <div className="mb-2 flex min-h-11 items-center justify-between gap-1">
+  // ── Screen 2: teams, already split ──
+  if (step === "teams") {
+    const captainA = teamA[0] ?? common[0];
+    const captainB = teamB[0] ?? common[0];
+    const rows = [
+      ...rowOrder,
+      ...available.filter((id) => !rowOrder.includes(id)),
+    ].filter((id) => sideOf(id) !== null);
+    return (
+      <div className="flex min-h-dvh flex-col bg-bg">
+        {header}
+        <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-5 py-4 pb-32">
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                { side: "A", name: nameA, setName: setNameA, count: countA },
+                { side: "B", name: nameB, setName: setNameB, count: countB },
+              ] as const
+            ).map(({ side, name, setName, count }) => (
+              <label
+                key={side}
+                className="flex min-h-11 min-w-0 items-center gap-2 rounded-2xl border border-line bg-surface px-3"
+              >
+                <span className="shrink-0 text-[13px] font-semibold text-accent-deep">
+                  {side}
+                </span>
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder={`Team ${side}`}
                   maxLength={30}
+                  aria-label={`Team ${side} name`}
                   autoCapitalize="words"
                   enterKeyHint="done"
-                  className="min-w-0 flex-1 bg-transparent py-2 text-[15px] font-semibold text-ink outline-none placeholder:text-faint"
+                  className="min-w-0 flex-1 bg-transparent py-2 text-[16px] font-semibold text-ink outline-none placeholder:text-faint"
                 />
-                <span className="tabular shrink-0 rounded-full bg-bg px-2 py-0.5 text-[11px] font-semibold text-muted">
+                <span className="tabular shrink-0 text-[13px] font-semibold text-muted">
                   {count}
                 </span>
-              </div>
-              <div className="space-y-1">
-                {count === 0 ? (
-                  <p className="px-2.5 py-2 text-[11px] text-faint">
-                    Tap players to add
-                  </p>
-                ) : null}
-                {team.map((id, idx) => (
-                  <div
-                    key={id}
-                    className="flex items-center rounded-xl bg-bg pl-2.5"
+              </label>
+            ))}
+          </div>
+
+          <section className="divide-y divide-line rounded-2xl border border-line bg-surface">
+            {rows.map((id) => {
+              const isCaptain = id === captainA || id === captainB;
+              const canLead = !common.includes(id);
+              return (
+                <div key={id} className="flex items-center gap-2 px-3 py-1.5">
+                  <button
+                    type="button"
+                    disabled={!canLead}
+                    aria-label={
+                      isCaptain
+                        ? `${nameOf(id)}, captain`
+                        : `Make ${nameOf(id)} captain`
+                    }
+                    onClick={() => makeCaptain(id)}
+                    className="flex min-h-12 min-w-0 flex-1 items-center gap-1.5 text-left"
                   >
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        unassign(id);
-                      }}
-                      className="min-h-11 min-w-0 flex-1 truncate py-2 pr-1 text-left text-[13px] font-medium text-ink"
+                    <TruncText
+                      lines={2}
+                      className="text-[15px] font-semibold text-ink"
                     >
                       {nameOf(id)}
-                    </button>
-                    {idx === 0 ? (
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center text-[11px] font-bold text-accent-deep">
-                        C
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        aria-label={`Make ${nameOf(id)} captain`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          makeCaptain(side, id);
-                        }}
-                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-faint active:text-accent-deep"
-                      >
-                        <Crown className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-                {common.map((id) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      unassign(id);
-                    }}
-                    className="flex min-h-11 w-full items-center justify-between gap-1 rounded-xl bg-accent-soft px-2.5 py-2 text-left text-[13px] font-medium text-accent-deep"
-                  >
-                    <span className="truncate">{nameOf(id)}</span>
-                    <span className="shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[11px] font-bold text-ink">
-                      both
-                    </span>
+                    </TruncText>
+                    {isCaptain ? (
+                      <Crown
+                        aria-hidden
+                        className="h-4 w-4 shrink-0 text-accent-deep"
+                      />
+                    ) : null}
                   </button>
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setActiveTarget("common")}
-          className={cn(
-            "flex w-full items-center gap-2.5 rounded-2xl border px-4 py-3 text-left transition",
-            activeTarget === "common"
-              ? "border-accent bg-accent-soft ring-2 ring-accent/40"
-              : "border-dashed border-line bg-surface",
-          )}
-        >
-          <Users className="h-4 w-4 shrink-0 text-accent-deep" />
-          <span className="min-w-0">
-            <span className="block text-[15px] font-semibold text-ink">
-              Plays both sides
-            </span>
-            <span className="block text-[13px] text-muted">
-              Odd numbers? Add the common player here — they join both teams.
-            </span>
-          </span>
-        </button>
-
-        {draftPool.length > 0 ? (
-          <section className="rounded-2xl border border-line bg-surface p-4">
-            <p className="mb-2.5 text-[13px] font-medium text-muted">
-              Still to pick ({draftPool.length})
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {draftPool.map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => assign(id)}
-                  className="flex min-h-11 items-center rounded-full border border-line bg-bg px-4 text-[13px] font-medium text-ink active:scale-95 active:border-accent"
-                >
-                  {nameOf(id)}
-                </button>
-              ))}
-            </div>
+                  <SideChoice
+                    name={nameOf(id)}
+                    value={sideOf(id)}
+                    onChange={(next) => moveTo(id, next)}
+                  />
+                </div>
+              );
+            })}
           </section>
-        ) : null}
-
-        {/* Only a community with two or more grounds sees this, and the
-            default (Home, or the poll's ground) needs no tap at all. */}
-        {grounds.length >= 2 && chosenGround ? (
-          <div className="rounded-2xl border border-line bg-surface px-4 py-1">
-            <button
-              type="button"
-              aria-expanded={groundOpen}
-              onClick={() => setGroundOpen((v) => !v)}
-              className="flex min-h-11 w-full items-center gap-2 text-left"
-            >
-              <MapPin className="h-4 w-4 shrink-0 text-accent-deep" />
-              <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-ink">
-                At {chosenGround.name}
-              </span>
-              <span className="shrink-0 text-[13px] font-semibold text-muted">
-                {groundOpen ? "Done" : "Change"}
-              </span>
-            </button>
-            {groundOpen ? (
-              <div className="flex flex-wrap gap-2 pb-3 pt-1">
-                {grounds.map((g) => (
-                  <button
-                    key={g._id}
-                    type="button"
-                    aria-pressed={g._id === chosenGround._id}
-                    onClick={() => {
-                      setGroundId(g._id);
-                      setGroundOpen(false);
-                    }}
-                    className={cn(
-                      "min-h-11 rounded-lg border px-3 text-[13px] font-semibold",
-                      g._id === chosenGround._id
-                        ? "border-accent bg-accent-soft text-accent-deep"
-                        : "border-line text-muted active:bg-bg",
-                    )}
-                  >
-                    {g.name}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        <div className="rounded-2xl border border-line bg-surface p-4">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-[15px] font-medium text-ink">Format</p>
-            <div className="flex rounded-2xl border border-line p-1">
-              {(
-                [
-                  { id: "limited", label: "ODI" },
-                  { id: "test", label: "Test" },
-                ] as const
-              ).map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => {
-                    setFormat(opt.id);
-                    setOvers(getLastOvers(opt.id));
-                  }}
-                  className={
-                    format === opt.id
-                      ? "min-h-11 rounded-xl bg-ink px-4 text-[13px] font-semibold text-bg"
-                      : "min-h-11 rounded-xl px-4 text-[13px] font-semibold text-muted"
-                  }
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <p className="mt-2 text-[13px] leading-relaxed text-muted">
-            {format === "limited"
-              ? `${oversPerPlayer} over${oversPerPlayer === 1 ? "" : "s"} each to bat & bowl · common players ${oversPerPlayer / 2} a side.`
-              : "Two innings a side — follow-on and all. No over quotas."}
-          </p>
-        </div>
-
-        <div className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4">
-          <p className="text-[15px] font-medium text-ink">
-            {format === "test" ? "Innings ends after" : "Overs per innings"}
-          </p>
-          <NumberField
-            aria-label={
-              format === "test" ? "Innings ends after" : "Overs per innings"
-            }
-            value={overs}
-            min={1}
-            max={200}
-            onChange={setOvers}
-          />
-        </div>
-
-        {format === "test" ? (
-          <div className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4">
-            <div className="min-w-0">
-              <p className="text-[15px] font-medium text-ink">Match time</p>
-              <p className="mt-0.5 text-[13px] text-muted">
-                {matchTimeHint(durationMinutes)}
-              </p>
-            </div>
-            <NumberField
-              aria-label="Match time in minutes"
-              value={durationMinutes}
-              min={MIN_TEST_MINUTES}
-              max={MAX_TEST_MINUTES}
-              onChange={setDurationMinutes}
-            />
-          </div>
-        ) : null}
-
-        {format === "limited" ? (
-          <div className="rounded-2xl border border-line bg-surface p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[15px] font-medium text-ink">
-                  Overs per player
-                </p>
-                <p className="mt-0.5 text-[11px] text-muted">
-                  Bat &amp; bowl cap · common players get half.
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  aria-label="Fewer overs per player"
-                  onClick={() => setOversPerPlayer((o) => Math.max(2, o - 2))}
-                  className="flex h-11 w-11 items-center justify-center rounded-xl border border-line text-muted active:bg-bg"
-                >
-                  <Minus className="h-4 w-4" />
-                </button>
-                <span className="tabular w-8 text-center text-lg font-semibold text-ink">
-                  {oversPerPlayer}
-                </span>
-                <button
-                  type="button"
-                  aria-label="More overs per player"
-                  onClick={() => setOversPerPlayer((o) => Math.min(20, o + 2))}
-                  className="flex h-11 w-11 items-center justify-center rounded-xl border border-line text-muted active:bg-bg"
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        <div className="rounded-2xl border border-line bg-surface p-4">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-[15px] font-medium text-ink">Batters at a time</p>
-            <div className="flex rounded-2xl border border-line p-1">
-              {(
-                [
-                  { mode: "double", label: "Two" },
-                  { mode: "single", label: "One" },
-                ] as const
-              ).map((opt) => (
-                <button
-                  key={opt.mode}
-                  type="button"
-                  onClick={() => setBattingMode(opt.mode)}
-                  className={
-                    battingMode === opt.mode
-                      ? "min-h-11 rounded-xl bg-ink px-4 text-[13px] font-semibold text-bg"
-                      : "min-h-11 rounded-xl px-4 text-[13px] font-semibold text-muted"
-                  }
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          {battingMode === "single" ? (
-            <p className="mt-2 text-[13px] leading-relaxed text-muted">
-              One batter at the crease — no non-striker, batters come in one by
-              one and everyone gets to bat.
-            </p>
-          ) : null}
-        </div>
-
-        {/* Only meaningful with two batters — single mode is last-man by
-            definition, so the toggle hides rather than lying. */}
-        {battingMode === "double" ? (
-          <div className="rounded-2xl border border-line bg-surface p-4">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-[15px] font-medium text-ink">
-                Last man stands
-              </p>
-              <div className="flex rounded-2xl border border-line p-1">
-                {(
-                  [
-                    { value: true, label: "Yes" },
-                    { value: false, label: "No" },
-                  ] as const
-                ).map((opt) => (
-                  <button
-                    key={opt.label}
-                    type="button"
-                    onClick={() => setLastBatsmanAlone(opt.value)}
-                    className={
-                      lastBatsmanAlone === opt.value
-                        ? "min-h-11 rounded-xl bg-ink px-4 text-[13px] font-semibold text-bg"
-                        : "min-h-11 rounded-xl px-4 text-[13px] font-semibold text-muted"
-                    }
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <p className="mt-2 text-[13px] leading-relaxed text-muted">
-              {lastBatsmanAlone
-                ? "The last batter carries on alone until he's out."
-                : "Proper cricket — the innings ends when one batter is left."}
-            </p>
-          </div>
-        ) : null}
-
-        {errorBanner}
-      </main>
-
-      <div className="safe-bottom fixed inset-x-0 bottom-0 border-t border-line bg-surface/95 px-5 pt-3 backdrop-blur">
-        <div className="mx-auto max-w-md pb-3">
+          {errorBanner}
+        </main>
+        {footer(
           <Button
             type="button"
             fullWidth
             size="lg"
-            disabled={!ready || busy}
-            onClick={() => void onStart()}
+            disabled={!ready}
+            onClick={enterStart}
           >
-            {busy
-              ? "Starting…"
-              : ready
-                ? `Start match — ${countA} v ${countB}`
-                : "Each team needs at least 2"}
-          </Button>
-        </div>
+            {ready ? `Next · ${countA} v ${countB}` : "Each team needs 2"}
+          </Button>,
+        )}
       </div>
+    );
+  }
+
+  // ── Screen 3: start ──
+  const shownA = nameA || "Team A";
+  const shownB = nameB || "Team B";
+  if (tossOpen) {
+    return (
+      <div className="relative">
+        <button
+          type="button"
+          aria-label="Close toss"
+          onClick={() => setTossOpen(false)}
+          className="fixed right-3 top-[calc(var(--safe-top)+0.75rem)] z-50 flex h-11 w-11 items-center justify-center rounded-xl bg-surface text-muted shadow-card"
+        >
+          <X className="h-5 w-5" />
+        </button>
+        <CoinToss
+          sideA={{ name: shownA }}
+          sideB={{ name: shownB }}
+          busy={false}
+          error={null}
+          onPickBatting={(side) => {
+            pickBattingSide(side);
+            setTossOpen(false);
+          }}
+        />
+      </div>
+    );
+  }
+
+  const settingsLine = [
+    format === "test" ? "Test" : "ODI",
+    `${overs} overs`,
+    format === "test"
+      ? `${durationMinutes} min`
+      : `${oversPerPlayer} overs each`,
+    solo ? "1 batter" : "2 batters",
+    !solo && lastBatsmanAlone ? "Last man" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const battingIds = battingSide ? rosterOf(battingSide) : [];
+  const bowlingIds = battingSide
+    ? rosterOf(battingSide === "A" ? "B" : "A").filter(
+        (id) => id !== striker && id !== nonStriker,
+      )
+    : [];
+  const canStart =
+    ready && !!battingSide && !!striker && !!bowler && (solo || !!nonStriker);
+
+  function chooseOpener(kind: "striker" | "non" | "bowler", id: string) {
+    if (kind === "bowler") setBowler(id);
+    else {
+      const current = kind === "striker" ? striker : nonStriker;
+      const other = kind === "striker" ? nonStriker : striker;
+      // Picking the other opener swaps the two.
+      if (id === other) {
+        setStriker(kind === "striker" ? id : current);
+        setNonStriker(kind === "striker" ? current : id);
+      } else if (kind === "striker") setStriker(id);
+      else setNonStriker(id);
+      if (bowler === id) {
+        const nextBowler = rosterOf(battingSide === "A" ? "B" : "A").find(
+          (x) => x !== id && x !== other,
+        );
+        setBowler(nextBowler ?? null);
+      }
+    }
+    setOpenPick(null);
+  }
+
+  const openerRows = (
+    [
+      {
+        kind: "striker",
+        label: solo ? "Batter" : "Striker",
+        value: striker,
+        options: battingIds,
+      },
+      ...(solo
+        ? []
+        : [
+            {
+              kind: "non",
+              label: "Non-striker",
+              value: nonStriker,
+              options: battingIds,
+            },
+          ]),
+      {
+        kind: "bowler",
+        label: "Bowler",
+        value: bowler,
+        options: bowlingIds,
+      },
+    ] as Array<{
+      kind: "striker" | "non" | "bowler";
+      label: string;
+      value: string | null;
+      options: string[];
+    }>
+  );
+
+  return (
+    <div className="flex min-h-dvh flex-col bg-bg">
+      {header}
+      <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-5 py-4 pb-32">
+        <section className="divide-y divide-line rounded-2xl border border-line bg-surface">
+          <button
+            type="button"
+            onClick={goToTeams}
+            className="flex min-h-11 w-full items-center gap-2 px-4 py-2.5 text-left"
+          >
+            <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
+              {shownA} v {shownB}
+            </span>
+            <span className="shrink-0 text-[13px] font-semibold text-muted">
+              Change
+            </span>
+          </button>
+          <div>
+            <button
+              type="button"
+              aria-expanded={settingsOpen}
+              onClick={() => {
+                // The scorer's own changes win over defaults that load late.
+                defaultsApplied.current = true;
+                setSettingsOpen((v) => !v);
+              }}
+              className="flex min-h-11 w-full items-center gap-2 px-4 py-2.5 text-left"
+            >
+              <span className="min-w-0 flex-1 text-[13px] text-muted">
+                {settingsLine}
+              </span>
+              <span className="shrink-0 text-[13px] font-semibold text-muted">
+                {settingsOpen ? "Done" : "Change"}
+              </span>
+            </button>
+            {settingsOpen ? (
+              <div className="space-y-3 px-4 pb-4 pt-1">
+                <SettingRow label="Format">
+                  <Choice
+                    options={[
+                      { value: "limited", label: "ODI" },
+                      { value: "test", label: "Test" },
+                    ]}
+                    value={format}
+                    onChange={(v) => {
+                      setFormat(v);
+                      setOvers(getLastOvers(v));
+                    }}
+                  />
+                </SettingRow>
+                <SettingRow label="Overs">
+                  <NumberField
+                    aria-label="Overs per innings"
+                    value={overs}
+                    min={1}
+                    max={200}
+                    onChange={setOvers}
+                  />
+                </SettingRow>
+                {format === "test" ? (
+                  <SettingRow label="Minutes">
+                    <NumberField
+                      aria-label="Match time in minutes"
+                      value={durationMinutes}
+                      min={MIN_TEST_MINUTES}
+                      max={MAX_TEST_MINUTES}
+                      onChange={setDurationMinutes}
+                    />
+                  </SettingRow>
+                ) : (
+                  <SettingRow label="Overs each">
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        aria-label="Fewer overs each"
+                        onClick={() =>
+                          setOversPerPlayer((o) => Math.max(2, o - 2))
+                        }
+                        className="flex h-11 w-11 items-center justify-center rounded-xl border border-line text-muted active:bg-bg"
+                      >
+                        <Minus className="h-4 w-4" />
+                      </button>
+                      <span className="tabular w-8 text-center text-[15px] font-semibold text-ink">
+                        {oversPerPlayer}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label="More overs each"
+                        onClick={() =>
+                          setOversPerPlayer((o) => Math.min(20, o + 2))
+                        }
+                        className="flex h-11 w-11 items-center justify-center rounded-xl border border-line text-muted active:bg-bg"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </SettingRow>
+                )}
+                <SettingRow label="Batters">
+                  <Choice
+                    options={[
+                      { value: "double", label: "Two" },
+                      { value: "single", label: "One" },
+                    ]}
+                    value={battingMode}
+                    onChange={setBattingMode}
+                  />
+                </SettingRow>
+                {!solo ? (
+                  <SettingRow label="Last man">
+                    <Choice
+                      options={[
+                        { value: "yes", label: "Yes" },
+                        { value: "no", label: "No" },
+                      ]}
+                      value={lastBatsmanAlone ? "yes" : "no"}
+                      onChange={(v) => setLastBatsmanAlone(v === "yes")}
+                    />
+                  </SettingRow>
+                ) : null}
+                {grounds.length >= 2 && chosenGround ? (
+                  <div className="flex flex-wrap gap-2">
+                    {grounds.map((g) => (
+                      <button
+                        key={g._id}
+                        type="button"
+                        aria-pressed={g._id === chosenGround._id}
+                        onClick={() => setGroundId(g._id)}
+                        className={cn(
+                          "min-h-11 rounded-lg border px-3 text-[13px] font-semibold",
+                          g._id === chosenGround._id
+                            ? "border-accent bg-accent-soft text-accent-deep"
+                            : "border-line text-muted active:bg-bg",
+                        )}
+                      >
+                        {g.name}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-line bg-surface p-4">
+          <div className="mb-2.5 flex items-center justify-between gap-2">
+            <p className="text-[15px] font-semibold text-ink">Who bats first?</p>
+            <button
+              type="button"
+              onClick={() => setTossOpen(true)}
+              className="-my-2 min-h-11 px-2 text-[13px] font-semibold text-muted underline underline-offset-4"
+            >
+              Toss
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                { side: "A", name: shownA },
+                { side: "B", name: shownB },
+              ] as const
+            ).map(({ side, name }) => (
+              <button
+                key={side}
+                type="button"
+                aria-pressed={battingSide === side}
+                onClick={() => pickBattingSide(side)}
+                className={cn(
+                  "min-h-12 min-w-0 truncate rounded-xl border px-3 text-[15px] font-semibold active:scale-[0.98]",
+                  battingSide === side
+                    ? "border-ink bg-ink text-bg"
+                    : "border-line text-ink",
+                )}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {battingSide ? (
+          <section className="divide-y divide-line rounded-2xl border border-line bg-surface">
+            {openerRows.map((row) => (
+              <div key={row.kind}>
+                <button
+                  type="button"
+                  aria-expanded={openPick === row.kind}
+                  onClick={() =>
+                    setOpenPick(openPick === row.kind ? null : row.kind)
+                  }
+                  className="flex min-h-11 w-full items-center gap-2 px-4 py-2 text-left"
+                >
+                  <span className="w-24 shrink-0 text-[13px] text-muted">
+                    {row.label}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
+                    {row.value ? nameOf(row.value) : "—"}
+                  </span>
+                  <ChevronDown
+                    aria-hidden
+                    className={cn(
+                      "h-4 w-4 shrink-0 text-faint transition-transform",
+                      openPick === row.kind && "rotate-180",
+                    )}
+                  />
+                </button>
+                {openPick === row.kind ? (
+                  <div className="flex flex-wrap gap-2 px-4 pb-3">
+                    {row.options.map((id) => (
+                      <button
+                        key={id}
+                        type="button"
+                        aria-pressed={id === row.value}
+                        onClick={() => chooseOpener(row.kind, id)}
+                        className={cn(
+                          "min-h-11 rounded-lg border px-4 text-[13px] font-semibold",
+                          id === row.value
+                            ? "border-ink bg-ink text-bg"
+                            : "border-line text-ink active:bg-bg",
+                        )}
+                      >
+                        {nameOf(id)}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </section>
+        ) : null}
+        {errorBanner}
+      </main>
+      {footer(
+        <Button
+          type="button"
+          fullWidth
+          size="lg"
+          disabled={!canStart || busy}
+          onClick={() => void onStart()}
+        >
+          {busy
+            ? "Starting…"
+            : !ready
+              ? "Each team needs 2"
+              : battingSide && !bowler
+              ? "No bowler left on the other team"
+              : "Start scoring"}
+        </Button>,
+      )}
+    </div>
+  );
+}
+
+function SettingRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <p className="text-[15px] font-semibold text-ink">{label}</p>
+      {children}
+    </div>
+  );
+}
+
+function Choice<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: Array<{ value: T; label: string }>;
+  value: T;
+  onChange: (next: T) => void;
+}) {
+  return (
+    <div className="flex rounded-xl border border-line p-1">
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          aria-pressed={value === opt.value}
+          onClick={() => onChange(opt.value)}
+          className={
+            value === opt.value
+              ? "min-h-11 rounded-lg bg-ink px-4 text-[13px] font-semibold text-bg"
+              : "min-h-11 rounded-lg px-4 text-[13px] font-semibold text-muted"
+          }
+        >
+          {opt.label}
+        </button>
+      ))}
     </div>
   );
 }

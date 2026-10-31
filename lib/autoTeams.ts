@@ -1,10 +1,10 @@
 /**
- * Auto-formed teams — the logic behind "Auto form teams" on match create.
+ * Auto-formed teams — the split the Teams screen opens on when starting a match.
  *
  * Input is whoever is here today; output is two rosters plus (on an odd
  * turnout) the one common player who bats for both sides. Nothing here talks
  * to Convex: it takes a rating lookup and returns ids, so it can be reasoned
- * about — and corrected by hand on the draft screen — before a match exists.
+ * about — and corrected by hand on the Teams screen — before a match exists.
  */
 
 export type PlayerLevel = {

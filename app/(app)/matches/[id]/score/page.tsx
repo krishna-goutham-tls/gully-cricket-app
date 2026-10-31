@@ -4,6 +4,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { CoinToss } from "@/components/match/CoinToss";
+import { SquadSheet } from "@/components/match/SquadSheet";
 import { ConnectionChip } from "@/components/match/ConnectionChip";
 import {
   TestClockLine,
@@ -12,7 +13,6 @@ import {
   TestClockStatus,
 } from "@/components/match/TestClock";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { TruncText } from "@/components/ui/TruncText";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { buzzBall } from "@/lib/haptics";
@@ -203,7 +203,6 @@ export default function ScorePage() {
     userId: string | null;
     message: string;
   } | null>(null);
-  const [guestName, setGuestName] = useState("");
   const [guestBusy, setGuestBusy] = useState(false);
   const [confirmEndInnings, setConfirmEndInnings] = useState(false);
   // Absent-player guard: someone not in either squad who lands on the pad
@@ -281,7 +280,7 @@ export default function ScorePage() {
    * someone who has not played back out of the match.
    */
   async function assignSides(userId: string, sides: Array<"A" | "B">) {
-    if (!token || squadBusyId) return;
+    if (!token || squadBusyId) return false;
     setSquadError(null);
     setSquadBusyId(userId);
     try {
@@ -291,24 +290,25 @@ export default function ScorePage() {
         userId: userId as Id<"users">,
         sides,
       });
+      return true;
     } catch (e) {
       setSquadError({
         userId,
         message: errorMessage(e, "Could not update the squads"),
       });
+      return false;
     } finally {
       setSquadBusyId(null);
     }
   }
 
-  async function addGuestPlayer() {
-    const name = guestName.trim();
+  async function addGuestPlayer(typed: string) {
+    const name = typed.trim();
     if (!token || !activeOrgId || name.length < 2 || guestBusy) return;
     setSquadError(null);
     setGuestBusy(true);
     try {
       await addGuest({ token, orgId: activeOrgId, name });
-      setGuestName("");
     } catch (e) {
       setSquadError({
         userId: null,
@@ -1246,7 +1246,30 @@ export default function ScorePage() {
         </div>
       </div>
 
-      {activeSheet ? (
+      {activeSheet?.kind === "squad" ? (
+        <SquadSheet
+          rows={squadRows}
+          nameA={state.sideA.name}
+          nameB={state.sideB.name}
+          captainA={
+            state.sideA.players[0]
+              ? String(state.sideA.players[0].userId)
+              : undefined
+          }
+          captainB={
+            state.sideB.players[0]
+              ? String(state.sideB.players[0].userId)
+              : undefined
+          }
+          busyId={squadBusyId}
+          error={squadError}
+          guestBusy={guestBusy}
+          poolReady={pool !== undefined}
+          onAssign={assignSides}
+          onAddGuest={addGuestPlayer}
+          onDone={() => setSheet(null)}
+        />
+      ) : activeSheet ? (
         <div className="fixed inset-0 z-50 flex items-end bg-ink/30">
           <div className="max-h-[80dvh] w-full overflow-y-auto rounded-t-3xl bg-surface p-5 shadow-2xl safe-bottom">
             {activeSheet.kind === "extra" ? (
@@ -1758,102 +1781,6 @@ export default function ScorePage() {
               </>
             ) : null}
 
-            {activeSheet.kind === "squad" ? (
-              <>
-                <p className="text-[15px] font-semibold text-ink">Players</p>
-                <p className="mt-1 text-[13px] text-muted">
-                  Someone turned up late? Add them to a side. Anyone who
-                  hasn&apos;t batted, bowled or fielded yet can be moved or
-                  removed.
-                </p>
-
-                {(
-                  [
-                    {
-                      key: "in",
-                      label: "In this match",
-                      rows: squadRows.filter((r) => r.sides.length > 0),
-                    },
-                    {
-                      key: "out",
-                      label: "Not playing",
-                      rows: squadRows.filter((r) => r.sides.length === 0),
-                    },
-                  ] as const
-                ).map((group) =>
-                  group.rows.length === 0 ? null : (
-                    <div key={group.key} className="mt-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">
-                        {group.label}
-                      </p>
-                      <div className="mt-2 space-y-2">
-                        {group.rows.map((row) => (
-                          <SquadRow
-                            key={row.userId}
-                            name={row.displayName}
-                            sides={row.sides}
-                            nameA={state.sideA.name}
-                            nameB={state.sideB.name}
-                            // Index 0 of a side is its captain; the server
-                            // refuses to take them off it, so don't offer it.
-                            captainOf={
-                              [
-                                String(state.sideA.players[0]?.userId) ===
-                                row.userId
-                                  ? "A"
-                                  : null,
-                                String(state.sideB.players[0]?.userId) ===
-                                row.userId
-                                  ? "B"
-                                  : null,
-                              ].filter(Boolean) as Array<"A" | "B">
-                            }
-                            disabled={squadBusyId !== null}
-                            error={
-                              squadError?.userId === row.userId
-                                ? squadError.message
-                                : null
-                            }
-                            onAssign={(sides) => assignSides(row.userId, sides)}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  ),
-                )}
-
-                <div className="mt-4 flex gap-2">
-                  <input
-                    value={guestName}
-                    onChange={(e) => setGuestName(e.target.value)}
-                    placeholder="Add a guest by name"
-                    className="min-h-12 min-w-0 flex-1 rounded-2xl border border-line bg-bg px-3 text-[16px] text-ink outline-none placeholder:text-muted focus:border-ink"
-                  />
-                  <Button
-                    variant="ghost"
-                    disabled={guestBusy || guestName.trim().length < 2}
-                    onClick={addGuestPlayer}
-                  >
-                    Add
-                  </Button>
-                </div>
-
-                {squadError && squadError.userId === null ? (
-                  <p className="mt-3 text-[13px] text-danger">
-                    {squadError.message}
-                  </p>
-                ) : null}
-
-                <Button
-                  fullWidth
-                  variant="ghost"
-                  className="mt-4"
-                  onClick={() => setSheet(null)}
-                >
-                  Done
-                </Button>
-              </>
-            ) : null}
           </div>
         </div>
       ) : null}
@@ -1893,115 +1820,6 @@ function SquadEscapeHatch({ onOpen }: { onOpen: () => void }) {
     >
       Someone else here? Add a player
     </button>
-  );
-}
-
-/**
- * One player in the squad sheet: which side they are on, then only the moves
- * that change something, each named for what it does.
- */
-function SquadRow({
-  name,
-  sides,
-  nameA,
-  nameB,
-  captainOf,
-  disabled,
-  error,
-  onAssign,
-}: {
-  name: string;
-  sides: Array<"A" | "B">;
-  nameA: string;
-  nameB: string;
-  captainOf: Array<"A" | "B">;
-  disabled: boolean;
-  error: string | null;
-  onAssign: (sides: Array<"A" | "B">) => void;
-}) {
-  const onA = sides.includes("A");
-  const onB = sides.includes("B");
-  const canLeaveA = !captainOf.includes("A");
-  const canLeaveB = !captainOf.includes("B");
-  const nameOf = (s: "A" | "B") => (s === "A" ? nameA : nameB);
-
-  const where =
-    onA && onB
-      ? "Plays for both sides"
-      : onA || onB
-        ? `Plays for ${nameOf(onA ? "A" : "B")}`
-        : "Not playing";
-
-  type Move = {
-    key: string;
-    label: string;
-    sides: Array<"A" | "B">;
-    danger?: boolean;
-  };
-  const moves: Move[] = [];
-  if (!onA && !onB) {
-    moves.push(
-      { key: "A", label: `Add to ${nameA}`, sides: ["A"] },
-      { key: "B", label: `Add to ${nameB}`, sides: ["B"] },
-      { key: "AB", label: "Both sides", sides: ["A", "B"] },
-    );
-  } else if (onA && onB) {
-    if (canLeaveB) moves.push({ key: "A", label: `Only ${nameA}`, sides: ["A"] });
-    if (canLeaveA) moves.push({ key: "B", label: `Only ${nameB}`, sides: ["B"] });
-    if (canLeaveA && canLeaveB)
-      moves.push({ key: "none", label: "Remove", sides: [], danger: true });
-  } else {
-    const here: "A" | "B" = onA ? "A" : "B";
-    const other: "A" | "B" = onA ? "B" : "A";
-    const canLeave = here === "A" ? canLeaveA : canLeaveB;
-    moves.push({ key: "AB", label: "Both sides", sides: ["A", "B"] });
-    if (canLeave) {
-      moves.push(
-        { key: other, label: `Move to ${nameOf(other)}`, sides: [other] },
-        { key: "none", label: "Remove", sides: [], danger: true },
-      );
-    }
-  }
-
-  return (
-    <div className="rounded-2xl border border-line p-3">
-      <TruncText lines={2} className="text-[15px] font-semibold text-ink">
-        {name}
-      </TruncText>
-      <p
-        className={cn(
-          "mt-0.5 line-clamp-2 text-[13px] [overflow-wrap:anywhere]",
-          onA || onB ? "font-semibold text-accent-deep" : "text-muted",
-        )}
-      >
-        {where}
-        {captainOf.length > 0 ? " · captain" : ""}
-      </p>
-      {moves.length > 0 ? (
-        <div className="mt-2 grid grid-cols-3 gap-1.5">
-          {moves.map((m) => (
-            <button
-              key={m.key}
-              type="button"
-              disabled={disabled}
-              title={m.label}
-              onClick={() => onAssign(m.sides)}
-              className={cn(
-                "min-h-11 rounded-xl border px-2 py-2 text-[13px] font-semibold active:scale-[0.98] active:bg-bg disabled:cursor-not-allowed disabled:opacity-40",
-                m.danger
-                  ? "border-danger/20 text-danger"
-                  : "border-line text-ink",
-              )}
-            >
-              <span className="line-clamp-2 [overflow-wrap:anywhere]">
-                {m.label}
-              </span>
-            </button>
-          ))}
-        </div>
-      ) : null}
-      {error ? <p className="mt-2 text-[13px] text-danger">{error}</p> : null}
-    </div>
   );
 }
 
