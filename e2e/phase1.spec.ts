@@ -62,8 +62,10 @@ test("the Bowling card on a profile adds up", async ({ page }, info) => {
   await expect(page.locator("main").first()).toBeVisible();
   await page.waitForTimeout(800);
   // The card adds up: 13 conceded off 1.0 over is 13.0 an over.
-  await expect(page.getByText("13.0", { exact: true })).toBeVisible();
-  await expect(page.getByText("1.0", { exact: true })).toBeVisible();
+  const tile = (label: string) => page.getByText(label, { exact: true }).last().locator("..");
+  await expect(tile("Economy")).toContainText("13.0");
+  await expect(tile("Overs")).toContainText("1.0");
+  await expect(tile("Conceded")).toContainText("13");
   await page.screenshot({ path: `e2e/out/shots/${info.project.name}-player-bowling.png`, fullPage: true });
   expect(errors).toEqual([]);
 });
