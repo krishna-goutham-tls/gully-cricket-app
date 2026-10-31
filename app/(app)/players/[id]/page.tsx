@@ -427,7 +427,7 @@ function BowlingCard({
   log: LogRow[];
   vs: Profile["vsBatters"];
 }) {
-  const dotPct = b.countedBalls > 0 ? (b.dots / b.countedBalls) * 100 : 0;
+  const dotPct = b.legalBalls > 0 ? (b.dots / b.legalBalls) * 100 : 0;
   return (
     <div>
       <div className="flex items-baseline justify-between gap-2">
@@ -462,8 +462,8 @@ function BowlingCard({
         {/* "Spells" was this same innings count under another name; it now sits
             beside the wickets, so showing it twice would only re-open the
             question of which innings number is which. */}
-        <StatTile label="Overs" value={b.countedOversText} />
-        <StatTile label="Conceded" value={String(b.countedRuns)} hint="runs" />
+        <StatTile label="Overs" value={b.oversText} />
+        <StatTile label="Conceded" value={String(b.runs)} hint="runs" />
       </div>
 
       <div className="mt-4">
@@ -486,7 +486,7 @@ function BowlingCard({
         <Meter
           label="Dot balls"
           pct={dotPct}
-          caption={`${b.dots} of ${b.countedBalls} deliveries cost nothing`}
+          caption={`${b.dots} of ${b.legalBalls} deliveries cost nothing`}
         />
         <ModeLine title="Wickets" modes={b.wicketTypes} />
       </div>
@@ -501,8 +501,8 @@ function BowlingCard({
 }
 
 function FieldingCard({ f }: { f: Profile["fielding"] }) {
-  const chances = f.realCatches + f.drops;
-  const heldPct = chances > 0 ? (f.realCatches / chances) * 100 : 0;
+  const chances = f.catches + f.drops;
+  const heldPct = chances > 0 ? (f.catches / chances) * 100 : 0;
   return (
     <div>
       <p className="text-[28px] font-semibold leading-none text-ink">
@@ -521,7 +521,7 @@ function FieldingCard({ f }: { f: Profile["fielding"] }) {
           <Meter
             label="Catches held"
             pct={heldPct}
-            caption={`${f.realCatches} of ${chances} chances taken`}
+            caption={`${f.catches} of ${chances} chances taken`}
           />
         </div>
       ) : null}
@@ -651,7 +651,7 @@ export default function PlayerDetailPage() {
   const disciplines: Discipline[] = [
     ...(stats.batting ? (["bat"] as const) : []),
     ...(stats.bowling ? (["bowl"] as const) : []),
-    ...(f.realCatches + f.drops + f.runOuts > 0 ? (["field"] as const) : []),
+    ...(f.catches + f.drops + f.runOuts > 0 ? (["field"] as const) : []),
   ];
   const activeDiscipline =
     discipline && disciplines.includes(discipline)

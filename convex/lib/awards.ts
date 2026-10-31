@@ -74,10 +74,8 @@ export type Winner<T> = {
   tiedWith: Named[];
 };
 
-type LadderRow = Pick<Contender, "userId" | "turnoutMatches" | "at">;
-
 /** Latest of the counters that feed a measure: when its final value was set. */
-function reachedAt(row: LadderRow, counters: string[]): number | undefined {
+function reachedAt(row: Contender, counters: string[]): number | undefined {
   let latest: number | undefined;
   for (const c of counters) {
     const at = row.at.get(c);
@@ -96,7 +94,7 @@ function reachedAt(row: LadderRow, counters: string[]): number | undefined {
  * on a different name each time the query runs. Names are deliberately not in
  * here — "wins because his name starts with A" is not a tie-break.
  */
-function ladder(a: LadderRow, b: LadderRow, counters: string[]): number {
+function ladder(a: Contender, b: Contender, counters: string[]): number {
   if (a.turnoutMatches !== b.turnoutMatches)
     return a.turnoutMatches - b.turnoutMatches;
   const atA = reachedAt(a, counters);
@@ -139,63 +137,6 @@ export function pickWinner<T extends Contender>(
       displayName: r.displayName,
     })),
   };
-}
-
-/**
- * The bar for a rate award: four overs and three innings. Same numbers as
- * components/leaderboard/records.ts, which this file must not import.
- */
-export const AWARD_MIN_BALLS = 24;
-export const AWARD_MIN_INNINGS = 3;
-
-/** The counters behind economy, for rung (c). */
-export const ECONOMY_COUNTERS = ["bowl.runs", "bowl.legalBalls"];
-
-type EconomyRow = {
-  userId: Id<"users">;
-  innings: number;
-  countedBalls: number;
-  countedEconomy: number;
-  /** When the counted economy last moved. Rung (c) on a screen. */
-  economyAt?: number;
-};
-
-/** Balls bowled to juniors do not help a bowler reach the bar. */
-export function economyQualifies(r: EconomyRow): boolean {
-  return r.countedBalls >= AWARD_MIN_BALLS && r.innings >= AWARD_MIN_INNINGS;
-}
-
-/**
- * Economy order for the screens, using the same pool and ladder as the saved
- * award. Rows that miss the bar come last, and a bowler with no counted balls
- * comes last of all, because their 0.0 is not a rate.
- */
-export function rankEconomy<T extends EconomyRow>(
-  rows: T[],
-  turnout: Array<{ userId: Id<"users">; matches: number }>,
-): T[] {
-  const matches = new Map(turnout.map((t) => [String(t.userId), t.matches]));
-  const contender = (r: T): LadderRow => ({
-    userId: r.userId,
-    turnoutMatches: matches.get(String(r.userId)) ?? 0,
-    at: new Map(r.economyAt ? [[ECONOMY_COUNTERS[0], r.economyAt]] : []),
-  });
-  return rows.slice().sort(
-    (a, b) =>
-      Number(economyQualifies(b)) - Number(economyQualifies(a)) ||
-      Number(b.countedBalls > 0) - Number(a.countedBalls > 0) ||
-      a.countedEconomy - b.countedEconomy ||
-      ladder(contender(a), contender(b), ECONOMY_COUNTERS),
-  );
-}
-
-/** The Best economy winner a screen shows. Null when nobody clears the bar. */
-export function bestEconomyRow<T extends EconomyRow>(
-  rows: T[],
-  turnout: Array<{ userId: Id<"users">; matches: number }>,
-): T | null {
-  const top = rankEconomy(rows, turnout)[0];
-  return top && economyQualifies(top) ? top : null;
 }
 
 /** One regular's whole window, raw. The shelf reads every award off this. */
@@ -309,33 +250,6 @@ const SHELF: ShelfSpec[] = [
 export const SHELF_KINDS: ShelfAwardKind[] = SHELF.map((s) => s.kind);
 
 const SHELF_KIND_SET = new Set<string>(SHELF_KINDS);
-
-/**
- * The order a saved award list keeps: the six caps, then the shelf. Season
- * pages and profile trophies print awards in saved order, so a kind that
- * returns goes back to its own place, not to the end.
- */
-const AWARD_KIND_ORDER: SeasonAwardKind[] = [
-  "pots",
-  "orange_cap",
-  "purple_cap",
-  "most_sixes",
-  "highest_sr",
-  "best_economy",
-  ...SHELF_KINDS,
-];
-
-/**
- * Every kind a season keeps on a recompute. A season saved before `awardKinds`
- * existed has only its saved kinds, so it gains no brand-new kind.
- */
-export function seasonAwardKinds(
-  saved: SeasonAwardKind[],
-  remembered: string[] | undefined,
-): SeasonAwardKind[] {
-  const kinds = new Set<string>(["pots", ...saved, ...(remembered ?? [])]);
-  return AWARD_KIND_ORDER.filter((kind) => kinds.has(kind));
-}
 
 export function isShelfKind(kind: string): kind is ShelfAwardKind {
   return SHELF_KIND_SET.has(kind);

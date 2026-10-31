@@ -189,24 +189,7 @@ export const list = query({
           wickets: number;
           catches: number;
         }> = [];
-        const savedPotm =
-          m.status === "completed"
-            ? (
-                await ctx.db
-                  .query("matchStats")
-                  .withIndex("by_match", (q) => q.eq("matchId", m._id))
-                  .first()
-              )?.potm
-            : undefined;
-        if (savedPotm) {
-          potm = await Promise.all(
-            savedPotm.map(async (r) => ({
-              ...r,
-              name: (await captainName(r.userId)) ?? "Player",
-            })),
-          );
-        } else if (m.status === "completed") {
-          // A row stamped before `potm` was saved. Remove after the backfill.
+        if (m.status === "completed") {
           const stamps = await ctx.db
             .query("playerMatchStats")
             .withIndex("by_match", (q) => q.eq("matchId", m._id))

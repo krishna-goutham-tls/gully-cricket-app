@@ -11,7 +11,6 @@ import {
 } from "@/components/leaderboard/records";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { bestEconomyRow } from "@/convex/lib/awards";
 import { groupByDay } from "@/lib/dates";
 import {
   type SeasonAwardKind,
@@ -168,12 +167,16 @@ export default function SeasonPage() {
         name: sr.displayName,
         display: sr.strikeRate.toFixed(1),
       });
-    const econ = bestEconomyRow(board.bowling, board.turnout);
+    const econPool = board.bowling.filter(
+      (r) =>
+        r.legalBalls >= RECORD_MIN_BALLS && r.innings >= RECORD_MIN_INNINGS,
+    );
+    const econ = [...econPool].sort((a, b) => a.economy - b.economy)[0];
     if (econ)
       out.push({
         kind: "best_economy",
         name: econ.displayName,
-        display: econ.countedEconomy.toFixed(1),
+        display: econ.economy.toFixed(1),
       });
     return out;
   }, [board]);

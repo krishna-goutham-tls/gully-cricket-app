@@ -1,7 +1,6 @@
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import type { FunctionReturnType } from "convex/server";
-import { bestEconomyRow } from "@/convex/lib/awards";
 
 type Board = NonNullable<FunctionReturnType<typeof api.stats.leaderboard>>;
 
@@ -272,9 +271,15 @@ export function buildRecords(
   push(
     bowling,
     "Best economy",
-    // The same winner as the saved award, so this one keeps the award's bar in
-    // a season view too.
-    bestEconomyRow(board.bowling, board.turnout),
+    bestBy(
+      bowl.filter((r) => r.countedBalls >= minBalls),
+      (r) => r.countedEconomy,
+      {
+        better: (a, b) => a < b,
+        keepZero: true,
+        tieBreak: tieHonourBowl,
+      },
+    ),
     (r) => r.countedEconomy.toFixed(1),
   );
   push(bowling, "Most dots", bestBy(bowl, (r) => r.dots, { tieBreak: tieHonourBowl }), (r) => count(r.dots));

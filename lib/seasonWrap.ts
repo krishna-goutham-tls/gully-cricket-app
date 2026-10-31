@@ -7,7 +7,6 @@ import {
 import type { StampedAwardKind } from "@/lib/trophies";
 import type { SeasonShareData } from "@/components/share/ShareCard";
 import { api } from "@/convex/_generated/api";
-import { bestEconomyRow } from "@/convex/lib/awards";
 import type { FunctionReturnType } from "convex/server";
 
 type Board = NonNullable<FunctionReturnType<typeof api.stats.leaderboard>>;
@@ -83,12 +82,17 @@ export function liveAwardsFromBoard(board: Board): NamedAward[] {
       displayName: sr.displayName,
       display: sr.strikeRate.toFixed(1),
     });
-  const econ = bestEconomyRow(board.bowling, board.turnout);
+  const econ = [...board.bowling]
+    .filter(
+      (r) =>
+        r.legalBalls >= RECORD_MIN_BALLS && r.innings >= RECORD_MIN_INNINGS,
+    )
+    .sort((a, b) => a.economy - b.economy)[0];
   if (econ)
     out.push({
       kind: "best_economy",
       displayName: econ.displayName,
-      display: econ.countedEconomy.toFixed(1),
+      display: econ.economy.toFixed(1),
     });
   return out;
 }

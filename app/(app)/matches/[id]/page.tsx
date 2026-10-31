@@ -92,24 +92,18 @@ export default function MatchDetailPage() {
     api.scoring.scorecard,
     token ? { token, matchId } : "skip",
   );
-  const [view, setView] = useState<"scorecard" | "story">("scorecard");
-  // Story loads on the first tap of its tab, then stays loaded.
-  const [storyOpened, setStoryOpened] = useState(false);
-  const isCompleted = card?.status === "completed";
+  // The story only exists for completed matches; the query returns null for
+  // anything else, so gating on card.status just avoids a wasted round trip.
   const story = useQuery(
     api.story.matchStory,
-    token && isCompleted && storyOpened ? { token, matchId } : "skip",
-  );
-  // The share poster shows on the Scorecard tab, so it cannot wait for Story.
-  const savedPotm = useQuery(
-    api.story.matchPotm,
-    token && isCompleted ? { token, matchId } : "skip",
+    token && card?.status === "completed" ? { token, matchId } : "skip",
   );
   // Null for a one-ground community — every game there is at the same place.
   const ground = useQuery(
     api.grounds.ofMatch,
     token ? { token, matchId } : "skip",
   );
+  const [view, setView] = useState<"story" | "scorecard">("story");
 
   if (card === undefined) {
     return (
@@ -136,11 +130,7 @@ export default function MatchDetailPage() {
   const order: Array<"A" | "B"> =
     card.innings[0]?.battingSide === "B" ? ["B", "A"] : ["A", "B"];
 
-  // A practice match has no saved summary, so its poster gains the line from Story.
   const potmBadge = story?.badges.find((b) => b.key === "potm");
-  const potm =
-    savedPotm ??
-    (potmBadge ? { name: potmBadge.playerName, line: potmBadge.stat } : null);
   const shareData: MatchShareData = {
     kind: "match",
     teamA: { name: card.sideA.name, score: shareScore(card, "A") },
@@ -148,7 +138,9 @@ export default function MatchDetailPage() {
     winner: card.winnerSide ?? null,
     resultText: card.resultText ?? null,
     format: card.format ?? "limited",
-    potm,
+    potm: potmBadge
+      ? { name: potmBadge.playerName, line: potmBadge.stat }
+      : null,
   };
 
   return (
@@ -285,19 +277,16 @@ export default function MatchDetailPage() {
           </div>
         ) : null}
 
-        {/* Completed matches open on the scorecard, with the story one tap
-            away. Live matches have no tabs. */}
-        {completed && card.innings.length > 0 ? (
+        {/* Completed matches open on the story — the "what happened" page —
+            with the full scorecard one tap away. */}
+        {story ? (
           <div className="mx-auto mb-3 max-w-md px-4">
             <div className="flex gap-1.5 rounded-2xl border border-line bg-surface p-1">
-              {(["scorecard", "story"] as const).map((tab) => (
+              {(["story", "scorecard"] as const).map((tab) => (
                 <button
                   key={tab}
                   type="button"
-                  onClick={() => {
-                    setView(tab);
-                    if (tab === "story") setStoryOpened(true);
-                  }}
+                  onClick={() => setView(tab)}
                   aria-current={view === tab}
                   className={cn(
                     "flex min-h-11 flex-1 items-center justify-center rounded-xl px-2 text-[13px] font-semibold capitalize transition",
@@ -313,17 +302,9 @@ export default function MatchDetailPage() {
           </div>
         ) : null}
 
-        {completed && view === "story" ? (
+        {story && view === "story" ? (
           <div className="mx-auto max-w-md px-4">
-            {story === undefined ? (
-              <div className="flex justify-center py-12">
-                <div className="h-8 w-8 animate-spin rounded-full border-2 border-line border-t-accent" />
-              </div>
-            ) : story === null ? (
-              <EmptyState title="No story for this match" />
-            ) : (
-              <MatchStory story={story} />
-            )}
+            <MatchStory story={story} />
           </div>
         ) : card.innings.length === 0 ? (
           <div className="px-4">

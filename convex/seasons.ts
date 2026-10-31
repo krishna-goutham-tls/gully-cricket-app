@@ -11,17 +11,16 @@ import { requireOrgAdmin, requireOrgViewer } from "./lib/session";
 import { seasonsForOrg } from "./lib/seasons";
 import { loadRegularsBoard } from "./stats";
 import {
-  AWARD_MIN_BALLS,
-  AWARD_MIN_INNINGS,
-  ECONOMY_COUNTERS,
   awardsFromShelf,
-  economyQualifies,
   pickWinner,
-  seasonAwardKinds,
   type Contender,
   type SeasonAward,
   type SeasonAwardKind,
 } from "./lib/awards";
+
+/** Same bars as components/leaderboard/records.ts — do not import from UI. */
+const RECORD_MIN_BALLS = 24;
+const RECORD_MIN_INNINGS = 3;
 
 export type { SeasonAward, SeasonAwardKind };
 
@@ -90,8 +89,8 @@ export function awardsFromBoard(board: Board): SeasonAward[] {
 
   const srPool = board.batting.filter(
     (r) =>
-      r.balls >= AWARD_MIN_BALLS &&
-      r.innings >= AWARD_MIN_INNINGS &&
+      r.balls >= RECORD_MIN_BALLS &&
+      r.innings >= RECORD_MIN_INNINGS &&
       r.balls > 0,
   );
   // A rate is settled by the last ball that fed it, either side of the ratio.
@@ -100,11 +99,14 @@ export function awardsFromBoard(board: Board): SeasonAward[] {
   });
   if (sr) out.push(award("highest_sr", sr, sr.value.toFixed(1)));
 
-  const econPool = board.bowling.filter(economyQualifies);
+  const econPool = board.bowling.filter(
+    (r) =>
+      r.countedBalls >= RECORD_MIN_BALLS && r.innings >= RECORD_MIN_INNINGS,
+  );
   const econ = pickWinner(econPool, (r) => r.countedEconomy, {
     better: (a, b) => a < b,
     keepZero: true,
-    counters: ECONOMY_COUNTERS,
+    counters: ["bowl.runs", "bowl.legalBalls"],
   });
   if (econ) out.push(award("best_economy", econ, econ.value.toFixed(1)));
 
@@ -296,7 +298,6 @@ export const end = mutation({
       endedAt,
       endedBy: user._id,
       awards,
-      awardKinds: awards.map((a) => a.kind),
     });
     return active._id;
   },
@@ -306,8 +307,7 @@ export const end = mutation({
  * After a change to what counts (LOG 2026-09-25, 2026-10-31): redo the saved
  * awards of every ended season from the restamped board. A season keeps the
  * kinds it saved, so one that ended before the trophy shelf keeps its six.
- * `awardKinds` remembers a kind with no winner today, so it returns when it
- * has one again. `dryRun` returns what would change without writing. Run after
+ * `dryRun` returns what would change without writing. Run after
  * `stats:backfillStamps`.
  *   npx convex run seasons:recomputeSeriesAwards '{"orgId":"…","dryRun":true}'
  */
@@ -334,13 +334,13 @@ export const recomputeSeriesAwards = internalMutation({
       });
       const fresh = new Map(awardsFromBoard(board).map((a) => [a.kind, a]));
       const saved = season.awards ?? [];
-      const kinds = seasonAwardKinds(
-        saved.map((a) => a.kind),
-        season.awardKinds,
-      );
+      const kinds = new Set<SeasonAwardKind>([
+        "pots",
+        ...saved.map((a) => a.kind),
+      ]);
       const next: SeasonAward[] = [];
       let changed = false;
-      for (const kind of kinds) {
+      for (const kind of Array.from(kinds)) {
         const before = saved.find((a) => a.kind === kind) ?? null;
         const after = fresh.get(kind) ?? null;
         if (after) next.push(after);
@@ -353,9 +353,7 @@ export const recomputeSeriesAwards = internalMutation({
         changed = true;
         changes.push({ seasonId: season._id, kind, before, after });
       }
-      if (changed && !dryRun) {
-        await ctx.db.patch(season._id, { awards: next, awardKinds: kinds });
-      }
+      if (changed && !dryRun) await ctx.db.patch(season._id, { awards: next });
     }
     return { seasonsChecked: ended.length, changed: changes.length, changes };
   },
