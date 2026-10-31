@@ -16,6 +16,7 @@ import {
 import { homeGroundOf } from "./lib/grounds";
 import { Doc, Id } from "./_generated/dataModel";
 import { requireOrgViewer } from "./lib/session";
+import { DEFAULT_JUNIOR_BOARD_TITLE, isFeatureOn } from "./lib/features";
 import { legalBallToOverText } from "./lib/scoring";
 import { captainTeamLabel } from "./lib/teams";
 import { matchFormat } from "./schema";
@@ -1424,6 +1425,80 @@ export const leaderboard = query({
       return null;
     }
     return leaderboardFor(ctx, args, Date.now());
+  },
+});
+
+/**
+ * The Roast's junior board: runs, wickets and catches a player took off
+ * juniors, ranked by the base points those would have earned. Each stamp holds
+ * the real numbers and the counted ones (`pts`), so the gap is the answer. A
+ * row stamped before the junior rule has no `pts` and adds nothing. Milestone
+ * bonuses stay out. Nothing here feeds any other board.
+ */
+export const juniorBoard = query({
+  args: {
+    token: v.optional(v.string()),
+    orgId: v.id("orgs"),
+    seasonId: v.optional(v.id("seasons")),
+    groundId: v.optional(v.id("grounds")),
+  },
+  handler: async (ctx, { token, orgId, seasonId, groundId }) => {
+    try {
+      await requireOrgViewer(ctx, token, orgId);
+    } catch {
+      return null;
+    }
+    const org = await ctx.db.get(orgId);
+    if (!org || !isFeatureOn(org, "juniorBoard")) return null;
+
+    let window: Window = {};
+    if (seasonId) {
+      const season = await seasonWindow(ctx, orgId, seasonId);
+      if (!season) return null;
+      window = season;
+    }
+    const ground = await groundFilterFor(ctx, orgId, groundId);
+    if (ground === null) return null;
+
+    const { players } = await loadStampSet(ctx, orgId, window);
+    const totals = new Map<
+      string,
+      { userId: Id<"users">; runs: number; wickets: number; catches: number }
+    >();
+    for (const r of players) {
+      if (!r.pts || !inWindow(r, { ...window, ground })) continue;
+      const runs = (r.bat?.runs ?? 0) - r.pts.runs;
+      const wickets = (r.bowl?.wickets ?? 0) - r.pts.wickets;
+      const catches = r.catches - r.pts.catches;
+      if (runs === 0 && wickets === 0 && catches === 0) continue;
+      const key = String(r.userId);
+      const total = totals.get(key) ?? {
+        userId: r.userId,
+        runs: 0,
+        wickets: 0,
+        catches: 0,
+      };
+      total.runs += runs;
+      total.wickets += wickets;
+      total.catches += catches;
+      totals.set(key, total);
+    }
+
+    const names = await resolveNames(ctx, totals.keys());
+    const rows = Array.from(totals, ([key, t]) => ({
+      ...t,
+      displayName: names.get(key) ?? "Player",
+      pointsOffJuniors: basePoints(t.runs, t.wickets, t.catches),
+    })).sort(
+      (a, b) =>
+        b.pointsOffJuniors - a.pointsOffJuniors ||
+        b.runs - a.runs ||
+        a.displayName.localeCompare(b.displayName),
+    );
+    return {
+      title: org.juniorBoardTitle ?? DEFAULT_JUNIOR_BOARD_TITLE,
+      rows,
+    };
   },
 });
 

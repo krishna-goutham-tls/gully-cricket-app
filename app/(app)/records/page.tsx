@@ -17,10 +17,12 @@ import {
 import { MilestoneRaces } from "@/components/leaderboard/MilestoneRaces";
 import { AppHeader } from "@/components/shell/AppHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { TruncText } from "@/components/ui/TruncText";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -148,6 +150,67 @@ function RecordRows({
   );
 }
 
+/** The Roast's ranked board of points off juniors. Higher is worse. */
+function JuniorBoardSection({
+  board,
+}: {
+  board: FunctionReturnType<typeof api.stats.juniorBoard>;
+}) {
+  if (!board || board.rows.length === 0) return null;
+  return (
+    <section>
+      <h2 className="px-1 text-[13px] font-semibold uppercase tracking-wide text-bg/70">
+        {board.title}
+      </h2>
+      <div className="mt-2 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.06]">
+        {board.rows.map((r, i) => {
+          const detail = [
+            r.runs > 0 ? `${r.runs} ${r.runs === 1 ? "run" : "runs"}` : null,
+            r.wickets > 0
+              ? `${r.wickets} ${r.wickets === 1 ? "wicket" : "wickets"}`
+              : null,
+            r.catches > 0
+              ? `${r.catches} ${r.catches === 1 ? "catch" : "catches"}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · ");
+          return (
+            <Link
+              key={r.userId}
+              href={`/players/${r.userId}`}
+              className="flex min-h-12 items-center gap-3 border-b border-white/10 px-3.5 py-3 last:border-b-0 active:bg-white/10"
+            >
+              <span className="tabular flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-[13px] font-semibold text-bg">
+                {i + 1}
+              </span>
+              <div className="min-w-0 flex-1">
+                <TruncText
+                  lines={2}
+                  className="text-[15px] font-semibold leading-tight text-bg"
+                >
+                  {r.displayName}
+                </TruncText>
+                <p className="truncate text-[13px] leading-tight text-bg/70">
+                  {detail}
+                </p>
+              </div>
+              <p className="shrink-0 text-right text-bg">
+                <span className="tabular text-2xl font-semibold leading-none">
+                  {r.pointsOffJuniors}
+                </span>
+                <span className="ml-1 text-[13px] font-semibold text-bg/70">
+                  pts
+                </span>
+              </p>
+            </Link>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 /**
  * Two tabs over one scope: Honours on paper, The Roast on ink. Each tab is
  * the record book for that tone, split by discipline. Scope works like
@@ -209,6 +272,18 @@ export default function RecordsPage() {
   );
   const shown = groups.filter((g) => g.tone === tab);
   const onInk = tab === "roast";
+  const juniorBoard = useQuery(
+    api.stats.juniorBoard,
+    ready && onInk
+      ? {
+          token: token!,
+          orgId: activeOrgId!,
+          ...(selectedSeason ? { seasonId: selectedSeason._id } : {}),
+          ...(ground ? { groundId: ground._id } : {}),
+        }
+      : "skip",
+  );
+  const hasJuniorBoard = onInk && (juniorBoard?.rows.length ?? 0) > 0;
 
   const tabs = (
     <div className="flex rounded-xl border border-line bg-surface p-1">
@@ -311,11 +386,14 @@ export default function RecordsPage() {
                 onChange={setGroundPick}
               />
             ) : null}
+            {hasJuniorBoard ? (
+              <JuniorBoardSection board={juniorBoard ?? null} />
+            ) : null}
             {shown.length > 0 ? (
               shown.map((g) => (
                 <RecordSection key={g.title} group={g} onInk={onInk} />
               ))
-            ) : (
+            ) : hasJuniorBoard ? null : (
               <EmptyState
                 title={onInk ? "Nobody to roast yet" : "No records yet"}
                 body="Records build up as matches finish."

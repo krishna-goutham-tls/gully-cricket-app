@@ -214,6 +214,10 @@ export default defineSchema({
      */
     isSandbox: v.optional(v.boolean()),
     sandboxForOrgId: v.optional(v.id("orgs")),
+    /** Features this community has set. Read via convex/lib/features.ts. */
+    features: v.optional(v.record(v.string(), v.boolean())),
+    /** This community's own name for the junior board in The Roast. */
+    juniorBoardTitle: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index("by_discoverable", ["isDiscoverable"])

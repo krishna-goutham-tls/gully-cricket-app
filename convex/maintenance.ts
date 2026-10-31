@@ -5,6 +5,7 @@ import { assertSeriesSides } from "./lib/tournamentLineup";
 import { buildRuleSnapshot } from "./lib/rules";
 import { legalBallToOverText } from "./lib/scoring";
 import { restampMatch } from "./lib/matchStats";
+import { cleanJuniorBoardTitle } from "./lib/features";
 
 const side = v.union(v.literal("A"), v.literal("B"));
 
@@ -516,5 +517,28 @@ export const setTournamentMatchCount = internalMutation({
     if (!t) throw new Error("Tournament not found");
     await ctx.db.patch(tournamentId, { matchCount });
     return { name: t.name, from: t.matchCount, to: matchCount };
+  },
+});
+
+/**
+ * Ops: switch a community's junior board and set its title. The community
+ * admin screen replaces this when it ships.
+ */
+export const setJuniorBoard = internalMutation({
+  args: {
+    orgId: v.id("orgs"),
+    on: v.boolean(),
+    title: v.optional(v.string()),
+  },
+  handler: async (ctx, { orgId, on, title }) => {
+    const org = await ctx.db.get(orgId);
+    if (!org) throw new Error("Community not found");
+    await ctx.db.patch(orgId, {
+      features: { ...org.features, juniorBoard: on },
+      ...(title !== undefined
+        ? { juniorBoardTitle: cleanJuniorBoardTitle(title) }
+        : {}),
+    });
+    return { name: org.name, on };
   },
 });

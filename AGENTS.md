@@ -110,6 +110,21 @@ values are NOT interchangeable. **Netlify does not push Convex.** A push to
    `stats:checkStamps` — empty `mismatches` is a pass — before merging to `main`.
    Until the backfill runs, boards on prod read empty. The first stamp of a
    match also freezes its juniors (`matches.juniorIds`) from today's tags.
+9. **Krishna does not run CLI.** Never ask him to run a deploy, query or key
+   command. His "ship" in the session is the go-ahead; the agent does the rest.
+10. **Schema changes only add.** New fields go in as `v.optional`. To remove or
+    rename a field or table: deploy the new shape beside the old, migrate the
+    data, then remove the old one in a later deploy. Convex refuses a deploy
+    whose schema existing prod documents fail; treat that as a stop, not a
+    thing to force.
+11. **Prod release order:** dev push + typecheck + lint + build pass → Convex
+    prod deploy → rule 8 backfill and check → merge `staging` → `main` → after
+    Netlify finishes, load the public pages (landing, a public live link) and
+    confirm they render. Logged-in screens stay "not browser-verified"; name
+    what Krishna should eyeball.
+12. **Rollback:** revert the commit on `dev`, redeploy Convex prod from it, and
+    ship the revert through the same PR path. Never delete prod data to undo a
+    release.
 
 Netlify `NEXT_PUBLIC_CONVEX_URL` is set in `netlify.toml` to the prod deployment
 so the live bundle talks to `dusty-jellyfish-63`. Do not set
