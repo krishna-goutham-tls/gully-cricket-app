@@ -71,6 +71,22 @@ export const addGuest = mutation({
         .withIndex("by_phone", (q) => q.eq("phone", normalized))
         .unique();
       if (existing) {
+        // A removed player comes back with their history, not as a dead end.
+        const old = await ctx.db
+          .query("orgMembers")
+          .withIndex("by_org_user", (q) =>
+            q.eq("orgId", args.orgId).eq("userId", existing._id),
+          )
+          .unique();
+        if (old && old.status !== "active" && old.status !== "pending") {
+          await ctx.db.patch(old._id, {
+            status: "active",
+            roles: ["player"],
+            decidedAt: Date.now(),
+            decidedBy: user._id,
+          });
+          return { userId: existing._id, displayName: existing.displayName };
+        }
         throw new Error(
           `This number already belongs to ${existing.displayName}. Pick them from the list instead.`,
         );
@@ -140,6 +156,7 @@ export const listOrgPlayers = query({
           ),
           isAdmin: m.roles.includes("admin"),
           photoUrl: u.photoUrl,
+          joinedByLinkAt: m.joinedByLinkAt,
         };
       }),
     );

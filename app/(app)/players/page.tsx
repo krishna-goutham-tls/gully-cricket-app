@@ -3,7 +3,9 @@
 import { AppHeader } from "@/components/shell/AppHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Input } from "@/components/ui/Input";
+import { InviteSheet } from "@/components/player/InviteSheet";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { api } from "@/convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
@@ -16,7 +18,9 @@ import {
 import type { PlayerTag } from "@/lib/playerLabel";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ChevronRight, Plus, X } from "lucide-react";
+import { ChevronRight, Plus, UserMinus, X } from "lucide-react";
+
+const NEW_TAG_MS = 7 * 24 * 60 * 60 * 1000;
 
 function initials(name: string) {
   return name
@@ -28,7 +32,12 @@ function initials(name: string) {
 }
 
 export default function PlayersPage() {
-  const { token, activeOrgId, isAdmin } = useAuth();
+  const { token, activeOrgId, activeOrg, isAdmin, isSandbox, user } = useAuth();
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [removing, setRemoving] = useState<{
+    userId: Id<"users">;
+    displayName: string;
+  } | null>(null);
   const [search, setSearch] = useState("");
   const [guestOpen, setGuestOpen] = useState(false);
   const [guestName, setGuestName] = useState("");
@@ -63,6 +72,7 @@ export default function PlayersPage() {
   const rejectMember = useMutation(api.orgs.rejectMember);
   const approvePinReset = useMutation(api.auth.approvePinReset);
   const rejectPinReset = useMutation(api.auth.rejectPinReset);
+  const removeMember = useMutation(api.orgs.removeMember);
 
   const joinRequests = useMemo(
     () => (pending ?? []).filter((r): r is NonNullable<typeof r> => !!r),
@@ -143,6 +153,20 @@ export default function PlayersPage() {
     } catch (e) {
       setError(errorMessage(e, "Could not add guest"));
     } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmRemove() {
+    if (!token || !activeOrgId || !removing) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await removeMember({ token, orgId: activeOrgId, userId: removing.userId });
+    } catch (e) {
+      setError(errorMessage(e, "Could not remove that player"));
+    } finally {
+      setRemoving(null);
       setBusy(false);
     }
   }
@@ -272,6 +296,12 @@ export default function PlayersPage() {
           </section>
         ) : null}
 
+        {isAdmin && !isSandbox ? (
+          <Button type="button" fullWidth onClick={() => setInviteOpen(true)}>
+            Invite players
+          </Button>
+        ) : null}
+
         <div className="flex gap-2">
           <div className="relative w-full">
             <input
@@ -377,21 +407,28 @@ export default function PlayersPage() {
                       {initials(p.displayName)}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span
-                          className="truncate text-[15px] font-semibold text-ink"
-                          title={p.displayName}
-                        >
-                          {p.displayName}
-                        </span>
+                      <span
+                        className="block truncate text-[15px] font-semibold text-ink"
+                        title={p.displayName}
+                      >
+                        {p.displayName}
+                      </span>
+                      <span className="mt-0.5 flex min-w-0 items-center gap-1.5">
                         {p.isAdmin ? (
                           <span className="shrink-0 rounded-full bg-ink/[0.06] px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
                             Admin
                           </span>
                         ) : null}
-                      </span>
-                      <span className="tabular mt-0.5 block truncate text-[13px] text-muted">
-                        {summary.get(String(p.userId)) ?? "Yet to play"}
+                        {isAdmin &&
+                        p.joinedByLinkAt &&
+                        Date.now() - p.joinedByLinkAt < NEW_TAG_MS ? (
+                          <span className="shrink-0 rounded-full bg-accent-soft px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-accent-deep">
+                            New
+                          </span>
+                        ) : null}
+                        <span className="tabular min-w-0 truncate text-[13px] text-muted">
+                          {summary.get(String(p.userId)) ?? "Yet to play"}
+                        </span>
                       </span>
                     </span>
                   </Link>
@@ -404,19 +441,55 @@ export default function PlayersPage() {
                   ) : (
                     <PlayerTagList tags={p.playerTags} />
                   )}
-                  <Link
-                    href={`/players/${p.userId}`}
-                    aria-label={`Open ${p.displayName}`}
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-faint active:bg-ink/[0.04]"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Link>
+                  {isAdmin && !isSandbox && p.userId !== user?._id ? (
+                    <button
+                      type="button"
+                      aria-label={`Remove ${p.displayName}`}
+                      onClick={() =>
+                        setRemoving({
+                          userId: p.userId,
+                          displayName: p.displayName,
+                        })
+                      }
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-faint active:bg-ink/[0.04]"
+                    >
+                      <UserMinus className="h-4 w-4" />
+                    </button>
+                  ) : (
+                    <Link
+                      href={`/players/${p.userId}`}
+                      aria-label={`Open ${p.displayName}`}
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-faint active:bg-ink/[0.04]"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Link>
+                  )}
                 </div>
               ))}
             </div>
           </>
         )}
       </main>
+
+      {inviteOpen && token && activeOrgId && activeOrg ? (
+        <InviteSheet
+          token={token}
+          orgId={activeOrgId}
+          orgName={activeOrg.orgName}
+          onClose={() => setInviteOpen(false)}
+        />
+      ) : null}
+
+      <ConfirmDialog
+        open={removing !== null}
+        title={`Remove ${removing?.displayName ?? ""} from community?`}
+        description="Their stats stay."
+        confirmLabel="Remove"
+        danger
+        busy={busy}
+        onConfirm={() => void confirmRemove()}
+        onCancel={() => setRemoving(null)}
+      />
     </div>
   );
 }

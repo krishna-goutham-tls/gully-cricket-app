@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, MutationCtx, query } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
 import {
   getUserBySessionToken,
   requireActiveMembership,
@@ -10,6 +11,15 @@ import { maskPhone } from "./lib/phone";
 import { requireCreateOrgAllowance } from "./access";
 import { deleteMatchCascade } from "./lib/matches";
 import { orgRole } from "./schema";
+import {
+  isUnclaimedNoPhone,
+  joinOrg,
+  namesShareWord,
+  newInviteCode,
+  orgByInviteCode,
+} from "./lib/invite";
+
+const INVITE_STOPPED = "This link has stopped working. Ask your organiser for the new one.";
 
 export const create = mutation({
   args: {
@@ -133,10 +143,17 @@ export const enterSandbox = mutation({
       .query("orgMembers")
       .withIndex("by_org", (q) => q.eq("orgId", sandbox!._id))
       .collect();
-    const already = new Set(existing.map((m) => String(m.userId)));
+    const already = new Map(existing.map((m) => [String(m.userId), m]));
 
     for (const m of realMembers) {
-      if (already.has(String(m.userId))) continue;
+      const row = already.get(String(m.userId));
+      if (row) {
+        // Someone who was removed and came back by link gets the sandbox back.
+        if (row.status !== "active") {
+          await ctx.db.patch(row._id, { status: "active", decidedAt: now });
+        }
+        continue;
+      }
       await ctx.db.insert("orgMembers", {
         orgId: sandbox._id,
         userId: m.userId,
@@ -427,6 +444,167 @@ export const setRoles = mutation({
 
     await ctx.db.patch(membership._id, { roles });
     return { ok: true, roles };
+  },
+});
+
+async function requireRealOrgAdmin(
+  ctx: MutationCtx,
+  token: string,
+  orgId: Id<"orgs">,
+) {
+  const { user } = await requireOrgAdmin(ctx, token, orgId);
+  const org = await ctx.db.get(orgId);
+  if (!org) throw new Error("Community not found");
+  if (org.isSandbox) throw new Error("Not in the sandbox");
+  return { user, org };
+}
+
+/** The community's invite code. Made the first time an admin asks. */
+export const getInvite = mutation({
+  args: { token: v.string(), orgId: v.id("orgs") },
+  handler: async (ctx, args) => {
+    const { org } = await requireRealOrgAdmin(ctx, args.token, args.orgId);
+    if (org.inviteCode) return { code: org.inviteCode };
+    const code = await newInviteCode(ctx);
+    await ctx.db.patch(org._id, { inviteCode: code });
+    return { code };
+  },
+});
+
+/** Stops the old link. People who joined stay. */
+export const resetInvite = mutation({
+  args: { token: v.string(), orgId: v.id("orgs") },
+  handler: async (ctx, args) => {
+    const { org } = await requireRealOrgAdmin(ctx, args.token, args.orgId);
+    const code = await newInviteCode(ctx);
+    await ctx.db.patch(org._id, { inviteCode: code });
+    return { code };
+  },
+});
+
+/** Public. A code in, the community name out. */
+export const inviteInfo = query({
+  args: { code: v.string(), token: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const org = await orgByInviteCode(ctx, args.code);
+    if (!org) return null;
+    const user = await getUserBySessionToken(ctx, args.token);
+    const membership = user
+      ? await ctx.db
+          .query("orgMembers")
+          .withIndex("by_org_user", (q) =>
+            q.eq("orgId", org._id).eq("userId", user._id),
+          )
+          .unique()
+      : null;
+    return { name: org.name, alreadyMember: membership?.status === "active" };
+  },
+});
+
+/**
+ * Added players with no phone whose name shares a word with the typed name.
+ * A person who is one of them keeps their stats instead of starting again.
+ */
+export const inviteNameMatches = query({
+  args: { code: v.string(), name: v.string() },
+  handler: async (ctx, args) => {
+    const org = await orgByInviteCode(ctx, args.code);
+    if (!org) return [];
+    const members = await ctx.db
+      .query("orgMembers")
+      .withIndex("by_org_status", (q) =>
+        q.eq("orgId", org._id).eq("status", "active"),
+      )
+      .collect();
+    const users = await Promise.all(members.map((m) => ctx.db.get(m.userId)));
+    return users
+      .filter(
+        (u): u is NonNullable<typeof u> =>
+          !!u && isUnclaimedNoPhone(u) && namesShareWord(u.displayName, args.name),
+      )
+      .slice(0, 3)
+      .map((u) => ({ userId: u._id, displayName: u.displayName }));
+  },
+});
+
+/** A signed-in person with the link becomes an active member. */
+export const joinByInvite = mutation({
+  args: { token: v.string(), code: v.string() },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx, args.token);
+    const org = await orgByInviteCode(ctx, args.code);
+    if (!org) throw new Error(INVITE_STOPPED);
+    const { alreadyMember } = await joinOrg(ctx, org, user._id);
+    return { orgId: org._id, alreadyMember };
+  },
+});
+
+/**
+ * Takes a person out of the community and its sandbox. Their match history
+ * stays, and the link lets them back in as a player.
+ */
+export const removeMember = mutation({
+  args: { token: v.string(), orgId: v.id("orgs"), userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const { user } = await requireRealOrgAdmin(ctx, args.token, args.orgId);
+    if (args.userId === user._id) throw new Error("You can't remove yourself");
+
+    const membership = await ctx.db
+      .query("orgMembers")
+      .withIndex("by_org_user", (q) =>
+        q.eq("orgId", args.orgId).eq("userId", args.userId),
+      )
+      .unique();
+    if (!membership || membership.status !== "active") {
+      throw new Error("Member not found");
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(membership._id, {
+      status: "removed",
+      decidedAt: now,
+      decidedBy: user._id,
+      joinedByLinkAt: undefined,
+    });
+
+    const sandbox = await ctx.db
+      .query("orgs")
+      .withIndex("by_sandbox_for", (q) => q.eq("sandboxForOrgId", args.orgId))
+      .first();
+    if (sandbox) {
+      const row = await ctx.db
+        .query("orgMembers")
+        .withIndex("by_org_user", (q) =>
+          q.eq("orgId", sandbox._id).eq("userId", args.userId),
+        )
+        .unique();
+      if (row) await ctx.db.patch(row._id, { status: "removed", decidedAt: now });
+    }
+
+    const target = await ctx.db.get(args.userId);
+    if (target?.preferredOrgId === args.orgId) {
+      await ctx.db.patch(args.userId, { preferredOrgId: undefined, updatedAt: now });
+    }
+
+    // Their PIN requests must not sit on the admin's list.
+    for (const status of ["pending", "approved"] as const) {
+      const resets = await ctx.db
+        .query("pinResets")
+        .withIndex("by_user_status", (q) =>
+          q.eq("userId", args.userId).eq("status", status),
+        )
+        .collect();
+      for (const r of resets) {
+        if (r.orgId !== args.orgId) continue;
+        await ctx.db.patch(r._id, {
+          status: status === "pending" ? "rejected" : status,
+          decidedAt: now,
+          decidedBy: user._id,
+          tempPin: undefined,
+        });
+      }
+    }
+    return { ok: true };
   },
 });
 

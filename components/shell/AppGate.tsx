@@ -12,7 +12,8 @@ import { useEffect } from "react";
 // /gully-rules and /release-notes are public reading pages — nested slugs
 // stay open too. Only "/" and "/login" bounce signed-in users.
 // /m/[id] and /p/[id] are the no-login match and poll pages people share on
-// WhatsApp (app/(public)) — anyone with the link reads them.
+// WhatsApp (app/(public)) — anyone with the link reads them. /i/[code] is the
+// invite link, open so a new player can join from it.
 const OPEN_PATHS = [
   "/",
   "/login",
@@ -22,6 +23,7 @@ const OPEN_PATHS = [
   "/release-notes",
   "/m",
   "/p",
+  "/i",
 ];
 
 function isOpenPath(pathname: string) {
