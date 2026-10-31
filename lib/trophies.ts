@@ -195,7 +195,7 @@ export function computeTrophies(stats: Profile): Trophy[] {
     }
   }
 
-  if (bowl && bowl.economy < 5 && bowl.legalBalls >= 36) {
+  if (bowl && bowl.economy < 5 && bowl.countedBalls >= 36) {
     trophies.push({
       id: "miser",
       icon: "Lock",

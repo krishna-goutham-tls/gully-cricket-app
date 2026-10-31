@@ -82,7 +82,14 @@ type BatAgg = {
   dotRun: number;
   quotaHits: number;
   /** Every innings in match order — duck streaks and the slowest knock. */
-  inningsSeq: Array<{ runs: number; balls: number; outs: number }>;
+  inningsSeq: Array<{
+    runs: number;
+    balls: number;
+    outs: number;
+    /** Every ball, juniors included. A duck and Slowest are facts of the innings. */
+    realRuns: number;
+    realBalls: number;
+  }>;
 };
 
 type BowlAgg = {
@@ -126,6 +133,9 @@ type FocusMatch = {
   match: Doc<"matches">;
   bat: Map<string, { runs: number; balls: number; out: boolean }>;
   bowl: Map<string, { wickets: number; runs: number; legalBalls: number }>;
+  /** The same match as the scorecard has it, for the log. `bat` and `bowl` are counted. */
+  logBat: Array<{ runs: number; balls: number; out: boolean }>;
+  logBowl: Array<{ wickets: number; runs: number; legalBalls: number }>;
   /** All-round base points this player made for each side, and the side totals. */
   work?: {
     pointsA: number;
@@ -441,7 +451,13 @@ function aggregateStamps(
         agg.innings.add(innKey);
         agg.scoreThisInnings.set(innKey, inn.runs);
         agg.ballsThisInnings.set(innKey, inn.balls);
-        agg.inningsSeq.push({ runs: inn.runs, balls: inn.balls, outs: inn.outs });
+        agg.inningsSeq.push({
+          runs: inn.runs,
+          balls: inn.balls,
+          outs: inn.outs,
+          realRuns: inn.realRuns ?? inn.runs,
+          realBalls: inn.realBalls ?? inn.balls,
+        });
         if (inn.runs > agg.bestScore) agg.bestScore = inn.runs;
       }
     }
@@ -578,6 +594,41 @@ function addPoints(
 }
 
 /**
+ * One stamp as the match card reads it, for the profile log: every ball,
+ * juniors included. Old rows have no real fields and read as they did.
+ *
+ * Two things the stamp cannot say exactly, so this works them out from the
+ * match total in `real`:
+ * - An innings only off juniors, not out, has no batting row. It reads as one
+ *   more innings, so two of those in one Test show as one.
+ * - Wickets off juniors have no per-innings count. They go on the last spell,
+ *   so a player with two spells in a match has the right total, and the split
+ *   between the spells can be wrong.
+ */
+function scorecardRows(r: Doc<"playerMatchStats">) {
+  const logBat = (r.bat?.innings ?? []).map((i) => ({
+    runs: i.realRuns ?? i.runs,
+    balls: i.realBalls ?? i.balls,
+    out: i.outs > 0,
+  }));
+  if (r.real) {
+    const runs = r.real.runs - logBat.reduce((t, i) => t + i.runs, 0);
+    const balls = r.real.ballsFaced - logBat.reduce((t, i) => t + i.balls, 0);
+    if (runs > 0 || balls > 0) logBat.push({ runs, balls, out: false });
+  }
+  const logBowl = (r.bowl?.innings ?? []).map((i) => ({
+    wickets: i.wickets,
+    runs: i.runs,
+    legalBalls: i.legalBalls,
+  }));
+  if (r.real && logBowl.length > 0) {
+    logBowl[logBowl.length - 1].wickets +=
+      r.real.wickets - logBowl.reduce((t, i) => t + i.wickets, 0);
+  }
+  return { logBat, logBowl };
+}
+
+/**
  * One player's match-by-match log and head-to-heads, from their own stamps.
  * The only per-match reads here are that player's: their match-ups rows and
  * the match docs their log prints.
@@ -615,6 +666,7 @@ async function stampFocus(
           { wickets: i.wickets, runs: i.runs, legalBalls: i.legalBalls },
         ]),
       ),
+      ...scorecardRows(r),
       work: r.work
         ? {
             pointsA: r.work.pointsA,
@@ -771,20 +823,20 @@ function battingStreaks(seq: BatAgg["inningsSeq"]) {
   let run = 0;
   let slowest: { runs: number; balls: number } | null = null;
   for (const inn of seq) {
-    if (inn.outs > 0 && inn.runs === 0) {
+    if (inn.outs > 0 && inn.realRuns === 0) {
       run += 1;
       duckStreak = Math.max(duckStreak, run);
     } else {
       run = 0;
     }
-    if (inn.balls < SLOWEST_MIN_BALLS) continue;
+    if (inn.realBalls < SLOWEST_MIN_BALLS) continue;
+    const pace = inn.realRuns / inn.realBalls;
     if (
       !slowest ||
-      inn.runs / inn.balls < slowest.runs / slowest.balls ||
-      (inn.runs / inn.balls === slowest.runs / slowest.balls &&
-        inn.balls > slowest.balls)
+      pace < slowest.runs / slowest.balls ||
+      (pace === slowest.runs / slowest.balls && inn.realBalls > slowest.balls)
     ) {
-      slowest = { runs: inn.runs, balls: inn.balls };
+      slowest = { runs: inn.realRuns, balls: inn.realBalls };
     }
   }
   return { duckStreak, slowest };
@@ -1533,8 +1585,11 @@ export const juniorBoard = query({
       totals.set(key, total);
     }
 
+    const tags = await tagsForUsers(ctx, orgId, totals.keys());
     const onBoard = Array.from(totals).filter(
-      ([, t]) => t.runs > 0 || t.wickets > 0 || t.catches > 0,
+      ([key, t]) =>
+        isBoardRegular(tags.get(key) ?? []) &&
+        (t.runs > 0 || t.wickets > 0 || t.catches > 0),
     );
     const names = await resolveNames(
       ctx,
@@ -1713,18 +1768,14 @@ async function playerStatsFor(
     formats[r.format] += 1;
   }
 
-  // Run-outs are stamped on the batter who was out, under the fielder who
-  // ended it, so they are read off everyone's match-ups.
   let runOuts = 0;
-  for (const r of await ctx.db
-    .query("playerMatchups")
-    .withIndex("by_org_user_date", (q) => q.eq("orgId", args.orgId))
-    .collect()) {
-    if (!inWindow(r, filter)) continue;
-    for (const f of r.byFielder) {
-      if (String(f.userId) !== key) continue;
-      for (const t of f.types) if (t.type === "runout") runOuts += t.count;
-    }
+  // Catches as the scorecard has them, for Held %. A drop is a drop against
+  // anyone, so a catch off a junior counts as a chance taken.
+  let realCatches = 0;
+  for (const r of set.players) {
+    if (String(r.userId) !== key || !inWindow(r, filter)) continue;
+    runOuts += r.runOuts ?? 0;
+    realCatches += r.catches + (r.offJuniors?.catches ?? 0);
   }
 
   // Rank against the default Leaders board (regulars only), so "#3 of 14"
@@ -1892,9 +1943,10 @@ async function playerStatsFor(
               }),
             )
           : null,
-        // Innings order within the match, so a Test reads "34 & 12*".
-        bat: Array.from(fm.bat.values()),
-        bowl: Array.from(fm.bowl.values()).map((s) => ({
+        // A scorecard, so it can read higher than the career numbers. Innings
+        // order within the match, so a Test reads "34 & 12*".
+        bat: fm.logBat,
+        bowl: fm.logBowl.map((s) => ({
           ...s,
           oversText: legalBallToOverText(s.legalBalls, 6),
         })),
@@ -1902,8 +1954,9 @@ async function playerStatsFor(
     }),
   );
 
-  const scores = log
-    .flatMap((r) => r.bat)
+  // The 30s and 50s on the career line, so counted, unlike the log.
+  const scores = focusMatches
+    .flatMap((fm) => Array.from(fm.bat.values()))
     .filter((b) => b.balls > 0 || b.out);
 
   let wins = 0;
@@ -1964,6 +2017,7 @@ async function playerStatsFor(
     formats,
     fielding: {
       catches: snap.catches.get(key) ?? 0,
+      realCatches,
       drops: snap.drops.get(key) ?? 0,
       runOuts,
     },
@@ -2030,12 +2084,17 @@ async function playerStatsFor(
           runs: bowl.runs,
           dots: bowl.dots,
           innings: bowl.innings.size,
+          countedBalls: bowl.countedBalls,
+          // Good records, so balls and runs to juniors stay out, as they do
+          // for the wickets beside them.
           economy:
-            bowl.legalBalls > 0 ? bowl.runs / (bowl.legalBalls / 6) : 0,
-          average: bowl.wickets > 0 ? bowl.runs / bowl.wickets : null,
+            bowl.countedBalls > 0
+              ? bowl.countedRuns / (bowl.countedBalls / 6)
+              : 0,
+          average: bowl.wickets > 0 ? bowl.countedRuns / bowl.wickets : null,
           /** Balls per wicket — the wicket-taker vs container axis. */
           strikeRate:
-            bowl.wickets > 0 ? bowl.legalBalls / bowl.wickets : null,
+            bowl.wickets > 0 ? bowl.countedBalls / bowl.wickets : null,
           best: best ? `${best.wickets}/${best.runs}` : null,
           ...haulCounts(bowl.perInnings.values()),
           wicketTypes: counts(focus.wicketTypes),
@@ -2204,9 +2263,9 @@ export const backfillStamps = internalMutation({
 });
 
 /**
- * After a backfill: every completed match that is not practice has a stamp
- * and a frozen junior list, and nothing else is stamped. Empty `mismatches`
- * is a pass.
+ * After a backfill: every completed match that is not practice has a current
+ * stamp and a frozen junior list, and nothing else is stamped. Empty
+ * `mismatches` is a pass.
  */
 export const checkStamps = internalQuery({
   args: { orgId: v.id("orgs") },
@@ -2232,9 +2291,14 @@ export const checkStamps = internalQuery({
       if (!m.juniorIds)
         mismatches.push(`match ${m._id}: completed with no junior list`);
     }
-    for (const m of stamped)
+    for (const m of stamped) {
       if (!completedIds.has(String(m.matchId)))
         mismatches.push(`match ${m.matchId}: stamped but not completed`);
+      // One restamp writes `potm`, `real`, `runOuts` and the real innings fields
+      // together, so this one field shows the backfill reached the match.
+      if (m.potm === undefined)
+        mismatches.push(`match ${m.matchId}: stamped before the current fold`);
+    }
     return { matchesCompleted: completed.length, mismatches };
   },
 });
