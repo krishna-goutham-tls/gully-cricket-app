@@ -12,7 +12,7 @@ export default defineConfig({
   timeout: 45_000,
   expect: { timeout: 12_000 },
   fullyParallel: false,
-  workers: 2,
+  workers: 1,
   reporter: [["list"]],
   use: { baseURL, trace: "retain-on-failure", screenshot: "only-on-failure" },
   projects: [

@@ -333,6 +333,7 @@ export const get = query({
         ? match.ruleSnapshot.maxBallsPerBatsman / 6
         : 2,
       battingMode: match.ruleSnapshot.battingModeDefault,
+      lastBatsmanAlone: match.ruleSnapshot.lastBatsmanAlone,
       clock: publicMatchClock(match.clock),
       resultText: match.resultText,
       winnerSide: match.winnerSide,
