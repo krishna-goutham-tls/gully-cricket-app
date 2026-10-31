@@ -13,6 +13,11 @@ import { ShareButton } from "@/components/share/ShareButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import {
+  countedRunsConceded,
+  economyQualifies,
+  rankEconomy,
+} from "@/convex/lib/awards";
 import { PLAYER_TAG_COPY, type PlayerTag } from "@/lib/playerLabel";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
@@ -209,7 +214,10 @@ const MEASURES: Measure[] = [
         userId: r.userId,
         displayName: r.displayName,
         value: r.wickets,
-        meta: `${inns(r.innings)} · ${r.oversText} ov · econ ${r.economy.toFixed(1)}`,
+        meta:
+          r.countedBalls > 0
+            ? `${inns(r.innings)} · ${r.countedOversText} ov · econ ${r.countedEconomy.toFixed(1)}`
+            : inns(r.innings),
         qualified: r.qualified,
         prevRank: r.prevRank,
       })),
@@ -247,18 +255,14 @@ const MEASURES: Measure[] = [
     cutLabel: RATE_CUT,
     shareTitle: "Best economy",
     rows: (d) =>
-      rank(
-        d.bowling.map((r) => ({
-          userId: r.userId,
-          displayName: r.displayName,
-          value: r.economy,
-          display: r.economy.toFixed(2),
-          meta: `${r.oversText} ov · ${r.runs} conceded · ${inns(r.innings)}`,
-          qualified: bowlRated(r),
-        })),
-        (r) => r.value,
-        true,
-      ),
+      rankEconomy(d.bowling, d.turnout).map((r) => ({
+        userId: r.userId,
+        displayName: r.displayName,
+        value: r.countedEconomy,
+        display: r.countedBalls > 0 ? r.countedEconomy.toFixed(2) : "—",
+        meta: `${r.countedOversText} ov · ${countedRunsConceded(r)} conceded · ${inns(r.innings)}`,
+        qualified: economyQualifies(r),
+      })),
   },
   {
     key: "points",
