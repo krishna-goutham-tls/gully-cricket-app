@@ -502,6 +502,17 @@ export default defineSchema({
     /** Index 0 of each side — resolves "Team A" to "Team {captain}". */
     sideACaptainId: v.optional(v.id("users")),
     sideBCaptainId: v.optional(v.id("users")),
+    /** Player of the Match, saved with the summary so the match list need not work it out. */
+    potm: v.optional(
+      v.array(
+        v.object({
+          userId: v.id("users"),
+          runs: v.number(),
+          wickets: v.number(),
+          catches: v.number(),
+        }),
+      ),
+    ),
   })
     .index("by_org_date", ["orgId", "date"])
     .index("by_match", ["matchId"]),
@@ -549,6 +560,9 @@ export default defineSchema({
             runs: v.number(),
             balls: v.number(),
             outs: v.number(),
+            /** Every ball of the innings, juniors included. Read as `runs` and `balls` if absent. */
+            realRuns: v.optional(v.number()),
+            realBalls: v.optional(v.number()),
           }),
         ),
       }),
@@ -611,6 +625,17 @@ export default defineSchema({
     offJuniors: v.optional(
       v.object({ runs: v.number(), wickets: v.number(), catches: v.number() }),
     ),
+    /** Every ball of the match, juniors included, as a scorecard counts it. */
+    real: v.optional(
+      v.object({
+        runs: v.number(),
+        ballsFaced: v.number(),
+        wickets: v.number(),
+        catches: v.number(),
+      }),
+    ),
+    /** Run-outs this player made as the fielder. */
+    runOuts: v.optional(v.number()),
     /** Named players only: the all-round points behind win credit and share. */
     work: v.optional(
       v.object({
@@ -689,6 +714,8 @@ export default defineSchema({
     endedAt: v.optional(v.number()),
     createdBy: v.id("users"),
     endedBy: v.optional(v.id("users")),
+    /** Every award kind this season has had, so a kind with no winner today can return. */
+    awardKinds: v.optional(v.array(v.string())),
     awards: v.optional(
       v.array(
         v.object({
