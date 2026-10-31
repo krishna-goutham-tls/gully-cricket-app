@@ -602,6 +602,8 @@ export default defineSchema({
             /** Every wicket in this spell, juniors included. */
             realWickets: v.optional(v.number()),
             runs: v.number(),
+            /** `runs` without runs off juniors, for Best figures. */
+            countedRuns: v.optional(v.number()),
             legalBalls: v.number(),
           }),
         ),

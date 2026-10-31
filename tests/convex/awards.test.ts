@@ -7,6 +7,7 @@ import {
   rankEconomy,
   seasonAwardKinds,
 } from "../../convex/lib/awards";
+import { buildRecords } from "../../components/leaderboard/records";
 import { awardsFromBoard } from "../../convex/seasons";
 import { loadRegularsBoard } from "../../convex/stats";
 import { api, community, newTest, person, playMatch, type Person, type T } from "./fixtures";
@@ -55,6 +56,36 @@ async function juniorSpellLeague(t: T) {
 }
 
 describe("D2: one economy winner", () => {
+  test("an exact tie names the same bowler on every screen and on the saved award", async () => {
+    const t = newTest();
+    const a1 = await person(t, "First Id");
+    const a2 = await person(t, "Filler A");
+    const b1 = await person(t, "Later Id");
+    const b2 = await person(t, "Filler B");
+    const orgId = await community(t, a1, [a2, b1, b2]);
+    // b1 bowls first in every match, so b1 reaches the total first. a1 has the lower id.
+    for (let i = 0; i < 4; i += 1) {
+      await playMatch(
+        t,
+        a1,
+        orgId,
+        [a1, a2],
+        [b1, b2],
+        { striker: a1, other: a2, bowler: b1, balls: balls([2, 0, 0, 0, 0, 0]) },
+        { striker: b1, other: b2, bowler: a1, balls: balls([2, 0, 0, 0, 0, 0]) },
+      );
+    }
+    const board = await t.query(api.stats.leaderboard, { token: a1.token, orgId });
+    const saved = await t.run(async (ctx) =>
+      awardsFromBoard(await loadRegularsBoard(ctx, orgId)).find((a) => a.kind === "best_economy"),
+    );
+    expect(String(saved!.userId)).toBe(String(b1.userId));
+    expect(String(bestEconomyRow(board!.bowling, board!.turnout)!.userId)).toBe(String(b1.userId));
+    const records = buildRecords(board!, { season: true }).flatMap((g) => g.items ?? []);
+    const best = records.find((r) => r.label === "Best economy");
+    expect(String(best!.holderId)).toBe(String(b1.userId));
+  });
+
   test("a cheap spell against juniors wins on no screen and on no saved award", async () => {
     const t = newTest();
     const { orgId, steady, cheap } = await juniorSpellLeague(t);

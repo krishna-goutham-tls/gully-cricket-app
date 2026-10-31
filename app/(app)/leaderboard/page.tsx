@@ -98,7 +98,7 @@ const RATE_CUT = `Under ${RECORD_MIN_BALLS} balls or ${RECORD_MIN_INNINGS} innin
 const batRated = (r: BatRow) =>
   r.balls >= RECORD_MIN_BALLS && r.innings >= RECORD_MIN_INNINGS;
 const bowlRated = (r: BowlRow) =>
-  r.legalBalls >= RECORD_MIN_BALLS && r.innings >= RECORD_MIN_INNINGS;
+  r.countedBalls >= RECORD_MIN_BALLS && r.innings >= RECORD_MIN_INNINGS;
 
 /** Qualified rows first, then the measure, so the cut line stays one block. */
 function rank<T extends { qualified: boolean }>(
@@ -233,13 +233,13 @@ const MEASURES: Measure[] = [
         // Runs per wicket is undefined without a wicket, and unlike batting
         // there is no sensible fallback — wicketless bowlers sit below the cut.
         const ranked = bowlRated(r) && r.wickets > 0;
-        const avg = r.wickets > 0 ? r.runs / r.wickets : 0;
+        const avg = r.wickets > 0 ? r.countedRuns / r.wickets : 0;
         return {
           userId: r.userId,
           displayName: r.displayName,
           value: ranked ? avg : 0,
           display: ranked ? avg.toFixed(1) : "—",
-          meta: `${r.wickets} wkts · ${r.runs} conceded · ${inns(r.innings)}`,
+          meta: `${r.wickets} wkts · ${r.countedRuns} conceded · ${inns(r.innings)}`,
           qualified: ranked,
         };
       });

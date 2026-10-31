@@ -450,9 +450,6 @@ function aggregateStamps(
       agg.facedDucks += s.facedDucks;
       for (const inn of s.innings) {
         const innKey = String(inn.inningsId);
-        agg.innings.add(innKey);
-        agg.scoreThisInnings.set(innKey, inn.runs);
-        agg.ballsThisInnings.set(innKey, inn.balls);
         agg.inningsSeq.push({
           runs: inn.runs,
           balls: inn.balls,
@@ -460,6 +457,17 @@ function aggregateStamps(
           realRuns: inn.realRuns ?? inn.runs,
           realBalls: inn.realBalls ?? inn.balls,
         });
+        // An innings only off juniors is real for the log and the streaks. It
+        // does not count toward the innings on a board or a career line.
+        const onlyOffJuniors =
+          inn.runs === 0 &&
+          inn.balls === 0 &&
+          inn.outs === 0 &&
+          ((inn.realRuns ?? 0) > 0 || (inn.realBalls ?? 0) > 0);
+        if (onlyOffJuniors) continue;
+        agg.innings.add(innKey);
+        agg.scoreThisInnings.set(innKey, inn.runs);
+        agg.ballsThisInnings.set(innKey, inn.balls);
         if (inn.runs > agg.bestScore) agg.bestScore = inn.runs;
       }
     }
@@ -513,7 +521,10 @@ function aggregateStamps(
       for (const inn of s.innings) {
         const innKey = String(inn.inningsId);
         agg.innings.add(innKey);
-        agg.perInnings.set(innKey, { wickets: inn.wickets, runs: inn.runs });
+        agg.perInnings.set(innKey, {
+          wickets: inn.wickets,
+          runs: inn.countedRuns ?? inn.runs,
+        });
       }
       if (s.wickets > 0) agg.wicketsByMatch.set(matchKey, s.wickets);
     }
@@ -567,6 +578,12 @@ function aggregateStamps(
     }
   }
 
+  // Someone who only batted off juniors has no counted batting. Their rows stay
+  // on the stamp for the log, and they stay off the batting boards.
+  for (const [key, agg] of Array.from(snap.batting)) {
+    if (agg.innings.size === 0) snap.batting.delete(key);
+  }
+
   return snap;
 }
 
@@ -598,10 +615,6 @@ function addPoints(
 /**
  * One stamp as the match card reads it, for the profile log: every ball,
  * juniors included. Old rows have no real fields and read as they did.
- *
- * An innings only off juniors, not out, has no batting row, so this works it
- * out from the match total in `real`. It reads as one more innings, so two of
- * those in one Test show as one.
  */
 function scorecardRows(r: Doc<"playerMatchStats">) {
   const logBat = (r.bat?.innings ?? []).map((i) => ({
@@ -609,11 +622,6 @@ function scorecardRows(r: Doc<"playerMatchStats">) {
     balls: i.realBalls ?? i.balls,
     out: i.outs > 0,
   }));
-  if (r.real) {
-    const runs = r.real.runs - logBat.reduce((t, i) => t + i.runs, 0);
-    const balls = r.real.ballsFaced - logBat.reduce((t, i) => t + i.balls, 0);
-    if (runs > 0 || balls > 0) logBat.push({ runs, balls, out: false });
-  }
   const logBowl = (r.bowl?.innings ?? []).map((i) => ({
     wickets: i.realWickets ?? i.wickets,
     runs: i.runs,
@@ -1418,7 +1426,7 @@ async function leaderboardFor(
       includeExtras,
     ),
     bowling: boardFilter(
-      stampTags(buildBowlingRows(snap.bowling, names), tags),
+      stampTags(buildBowlingRows(snap.bowling, names, snap.reachedAt), tags),
       includeExtras,
     ),
     turnout: boardFilter(

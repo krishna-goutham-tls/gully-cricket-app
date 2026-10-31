@@ -115,6 +115,7 @@ type BowlWork = {
       inningsId: Id<"innings">;
       wickets: number;
       realWickets: number;
+      countedRuns: number;
       runs: number;
       legalBalls: number;
     }
@@ -402,6 +403,11 @@ export function foldMatch(
       realInnings.set(dk, real);
       if (b.isLegal) legalFaced.set(dk, (legalFaced.get(dk) ?? 0) + 1);
     }
+    // Every innings batted has a row, so one only off juniors still breaks a
+    // run of ducks and keeps its place in the log. Its counted numbers stay 0.
+    if (!runsCount && (faced || b.runsBat > 0)) {
+      batInnings(getBat(b.strikerId), b.inningsId);
+    }
     if (runsCount) {
       const bat = getBat(b.strikerId);
       const inn = batInnings(bat, b.inningsId);
@@ -561,9 +567,11 @@ export function foldMatch(
       wickets: 0,
       realWickets: 0,
       runs: 0,
+      countedRuns: 0,
       legalBalls: 0,
     };
     per.runs += b.runsBat + b.extrasRuns;
+    if (bowlCounts) per.countedRuns += b.runsBat + b.extrasRuns;
     if (b.isLegal) per.legalBalls += 1;
     const credited = b.isWicket && b.wicketType !== "runout";
     if (credited) {

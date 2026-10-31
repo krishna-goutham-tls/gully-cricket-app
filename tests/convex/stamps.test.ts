@@ -219,6 +219,22 @@ describe("batting off juniors", () => {
     expect(stats.matchups.batting.easiest).toBeNull();
   });
 
+  test("D1: an innings only off juniors breaks a run of ducks and counts no innings", async () => {
+    const t = newTest();
+    const { a1, a2, b1, j, orgId } = await setup(t);
+    const chase = quietChase({ b1, j, a2 });
+    const duck = { striker: a1, other: a2, bowler: b1, balls: [...balls(0, 0, 0, 0, 0), { out: a1.userId }] };
+    await playMatch(t, a1, orgId, [a1, a2], [b1, j], duck, chase);
+    await playMatch(t, a1, orgId, [a1, a2], [b1, j], { striker: a1, other: a2, bowler: j, balls: balls(6, 6, 6, 6, 6, 6) }, chase);
+    await playMatch(t, a1, orgId, [a1, a2], [b1, j], duck, chase);
+    const board = await t.query(api.stats.leaderboard, { token: a1.token, orgId });
+    const mine = row(board!.batting, a1)!;
+    expect(mine.duckStreak).toBe(1);
+    expect(mine.innings).toBe(2);
+    const stats = await profile(t, a1, orgId, a1);
+    expect(stats.log.flatMap((r) => r.bat).map((i) => i.runs).sort()).toEqual([0, 0, 36]);
+  });
+
   test("D4: a scoring shot off a junior ends a dot run", async () => {
     const t = newTest();
     const { a1, a2, b1, j, orgId } = await setup(t);
@@ -260,11 +276,12 @@ describe("batting off juniors", () => {
     const bat = row(folded.players, a1)!.bat!;
     expect(bat.dotRun).toBe(2);
     expect(bat.dots).toBe(2);
-    // Taking a shot off a junior must not make a batting row on its own.
+    // A shot off a junior makes a row for the log, with no counted numbers.
     const onlyJunior = await foldBalls(t, matchId, [j], [
       { striker: a1, bowler: j, runsBat: 4, at: 1 },
     ]);
-    expect(row(onlyJunior.players, a1)!.bat).toBeUndefined();
+    expect(row(onlyJunior.players, a1)!.bat).toMatchObject({ runs: 0, balls: 0 });
+    expect(row(onlyJunior.players, a1)!.bat!.innings[0]).toMatchObject({ runs: 0, realRuns: 4 });
   });
 
   test("D5: the log reads like the match card and career numbers stay counted", async () => {
@@ -349,6 +366,23 @@ describe("bowling at juniors", () => {
     const stats = await profile(t, a1, orgId, a1);
     expect(stats.log[0].bowl[0].wickets).toBe(2);
     expect(stats.bowling!.wickets).toBe(1);
+  });
+
+  test("Best figures leave out runs off juniors, as the Conceded beside them does", async () => {
+    const t = newTest();
+    const { a1, a2, b1, j, orgId } = await setup(t);
+    await playMatch(
+      t,
+      a1,
+      orgId,
+      [a1, a2],
+      [b1, j],
+      { striker: a1, other: a2, bowler: b1, balls: balls(6, 6, 6, 6, 6, 6) },
+      { striker: j, other: b1, bowler: a1, balls: [...balls(4, 4, 4, 4, 4), { out: b1.userId }] },
+    );
+    const stats = await profile(t, a1, orgId, a1);
+    expect(stats.bowling).toMatchObject({ best: "1/0", countedRuns: 0 });
+    expect(stats.log[0].bowl[0]).toMatchObject({ wickets: 1, runs: 20 });
   });
 
   test("D6: Miser needs a counted economy on counted balls", () => {
