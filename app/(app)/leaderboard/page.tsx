@@ -13,6 +13,10 @@ import { ShareButton } from "@/components/share/ShareButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import {
+  economyQualifies,
+  rankEconomy,
+} from "@/convex/lib/awards";
 import { PLAYER_TAG_COPY, type PlayerTag } from "@/lib/playerLabel";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
@@ -94,7 +98,7 @@ const RATE_CUT = `Under ${RECORD_MIN_BALLS} balls or ${RECORD_MIN_INNINGS} innin
 const batRated = (r: BatRow) =>
   r.balls >= RECORD_MIN_BALLS && r.innings >= RECORD_MIN_INNINGS;
 const bowlRated = (r: BowlRow) =>
-  r.legalBalls >= RECORD_MIN_BALLS && r.innings >= RECORD_MIN_INNINGS;
+  r.countedBalls >= RECORD_MIN_BALLS && r.innings >= RECORD_MIN_INNINGS;
 
 /** Qualified rows first, then the measure, so the cut line stays one block. */
 function rank<T extends { qualified: boolean }>(
@@ -209,7 +213,10 @@ const MEASURES: Measure[] = [
         userId: r.userId,
         displayName: r.displayName,
         value: r.wickets,
-        meta: `${inns(r.innings)} · ${r.oversText} ov · econ ${r.economy.toFixed(1)}`,
+        meta:
+          r.countedBalls > 0
+            ? `${inns(r.innings)} · ${r.countedOversText} ov · econ ${r.countedEconomy.toFixed(1)}`
+            : inns(r.innings),
         qualified: r.qualified,
         prevRank: r.prevRank,
       })),
@@ -226,13 +233,13 @@ const MEASURES: Measure[] = [
         // Runs per wicket is undefined without a wicket, and unlike batting
         // there is no sensible fallback — wicketless bowlers sit below the cut.
         const ranked = bowlRated(r) && r.wickets > 0;
-        const avg = r.wickets > 0 ? r.runs / r.wickets : 0;
+        const avg = r.wickets > 0 ? r.countedRuns / r.wickets : 0;
         return {
           userId: r.userId,
           displayName: r.displayName,
           value: ranked ? avg : 0,
           display: ranked ? avg.toFixed(1) : "—",
-          meta: `${r.wickets} wkts · ${r.runs} conceded · ${inns(r.innings)}`,
+          meta: `${r.wickets} wkts · ${r.countedRuns} conceded · ${inns(r.innings)}`,
           qualified: ranked,
         };
       });
@@ -247,18 +254,14 @@ const MEASURES: Measure[] = [
     cutLabel: RATE_CUT,
     shareTitle: "Best economy",
     rows: (d) =>
-      rank(
-        d.bowling.map((r) => ({
-          userId: r.userId,
-          displayName: r.displayName,
-          value: r.economy,
-          display: r.economy.toFixed(2),
-          meta: `${r.oversText} ov · ${r.runs} conceded · ${inns(r.innings)}`,
-          qualified: bowlRated(r),
-        })),
-        (r) => r.value,
-        true,
-      ),
+      rankEconomy(d.bowling, d.turnout).map((r) => ({
+        userId: r.userId,
+        displayName: r.displayName,
+        value: r.countedEconomy,
+        display: r.countedBalls > 0 ? r.countedEconomy.toFixed(2) : "—",
+        meta: `${r.countedOversText} ov · ${r.countedRuns} conceded · ${inns(r.innings)}`,
+        qualified: economyQualifies(r),
+      })),
   },
   {
     key: "points",
