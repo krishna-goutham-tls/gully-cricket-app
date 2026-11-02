@@ -23,7 +23,7 @@ import { cn, errorMessage } from "@/lib/utils";
 const ROLES = ["batsman", "bowler", "all-rounder", "keeper"] as const;
 
 export default function ProfilePage() {
-  const { token, user, logout, isAdmin } = useAuth();
+  const { token, user, logout, isAdmin, isSandbox } = useAuth();
   const [groundsOpen, setGroundsOpen] = useState(false);
   const updateProfile = useMutation(api.auth.updateProfile);
   const changePin = useMutation(api.auth.changePin);
@@ -243,6 +243,17 @@ export default function ProfilePage() {
             </div>
           ) : null}
 
+          {/* Community — admins of a real community only. */}
+          {isAdmin && !isSandbox ? (
+            <Link
+              href="/community"
+              className="flex min-h-12 w-full items-center justify-between border-t border-line px-4 text-[15px] font-semibold text-ink active:bg-bg"
+            >
+              Community
+              <ChevronRight className="h-4 w-4 text-faint" />
+            </Link>
+          ) : null}
+
           {/* Grounds — admins only, collapsed like the rest. */}
           {isAdmin ? (
             <>
@@ -321,7 +332,7 @@ function Row({
  * fifth slot.
  */
 function RecordsRow() {
-  const { activeOrgId } = useAuth();
+  const { activeOrgId, features } = useAuth();
 
   if (!activeOrgId) return null;
 
@@ -338,7 +349,7 @@ function RecordsRow() {
           Records
         </span>
         <span className="block text-[13px] text-muted">
-          Honours and roasts
+          {features.roast ? "Honours and roasts" : "Honours"}
         </span>
       </span>
       <ChevronRight className="h-5 w-5 shrink-0 text-faint" />

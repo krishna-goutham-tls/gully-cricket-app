@@ -12,10 +12,18 @@ import { deleteMatchCascade } from "./lib/matches";
 import { captainTeamLabel } from "./lib/teams";
 import { assertSeriesSides } from "./lib/tournamentLineup";
 import { battingMode, matchFormat, side } from "./schema";
+import { orgFeatureOn } from "./lib/features";
 
 type Side = "A" | "B";
 
 const MAX_TOURNAMENTS = 40;
+
+const SERIES_OFF = "Series is off for this community";
+
+/** New series work stops when an admin turns Series off. Old series stay readable. */
+async function assertSeriesOn(ctx: MutationCtx, orgId: Id<"orgs">) {
+  if (!(await orgFeatureOn(ctx, orgId, "series"))) throw new Error(SERIES_OFF);
+}
 
 function cleanName(raw: string, fallback: string) {
   const n = raw.trim();
@@ -82,6 +90,7 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const { user } = await requireActiveMembership(ctx, args.token, args.orgId);
+    await assertSeriesOn(ctx, args.orgId);
 
     const name = args.name.trim();
     if (name.length < 2) throw new Error("Tournament name is too short");
@@ -333,6 +342,7 @@ export const startMatch = mutation({
     const t = await ctx.db.get(args.tournamentId);
     if (!t) throw new Error("Tournament not found");
     const { user } = await requireActiveMembership(ctx, args.token, t.orgId);
+    await assertSeriesOn(ctx, t.orgId);
     if (t.status === "complete") {
       throw new Error("This tournament is over");
     }
@@ -472,6 +482,7 @@ export const linkMatch = mutation({
     const t = await ctx.db.get(args.tournamentId);
     if (!t) throw new Error("Tournament not found");
     await requireOrgAdmin(ctx, args.token, t.orgId);
+    await assertSeriesOn(ctx, t.orgId);
     if (t.status === "complete") {
       throw new Error("This tournament is over");
     }

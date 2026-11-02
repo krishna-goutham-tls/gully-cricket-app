@@ -59,7 +59,7 @@ function inSeason(
 export default function SeasonPage() {
   const { id } = useParams<{ id: string }>();
   const seasonId = id as Id<"seasons">;
-  const { token, activeOrgId } = useAuth();
+  const { token, activeOrgId, features } = useAuth();
   const season = useQuery(
     api.seasons.get,
     token && activeOrgId ? { token, orgId: activeOrgId, seasonId } : "skip",
@@ -70,7 +70,7 @@ export default function SeasonPage() {
   );
   const tournaments = useQuery(
     api.tournaments.list,
-    token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
+    token && activeOrgId && features.series ? { token, orgId: activeOrgId } : "skip",
   );
   const board = useQuery(
     api.stats.leaderboard,
@@ -99,7 +99,7 @@ export default function SeasonPage() {
   }, [matches, season]);
 
   const series = useMemo(() => {
-    if (!tournaments) return [];
+    if (!tournaments || !features.series) return [];
     const ids = new Set(
       seasonMatches
         .map((m) => m.tournamentId)
@@ -111,7 +111,7 @@ export default function SeasonPage() {
         t.status === "active" ||
         ids.has(String(t._id)),
     );
-  }, [tournaments, seasonMatches]);
+  }, [tournaments, seasonMatches, features.series]);
 
   const { days, doneCount } = useMemo(() => {
     const done = seasonMatches.filter(

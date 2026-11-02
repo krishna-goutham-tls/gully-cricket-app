@@ -36,7 +36,7 @@ const items: Array<{
 
 export function BottomNav() {
   const pathname = usePathname();
-  const { token, activeOrgId } = useAuth();
+  const { token, activeOrgId, features } = useAuth();
   // Runs on every screen: two indexed reads, and zeroes for non-admins.
   const pending = useQuery(
     api.players.pendingApprovals,
@@ -51,7 +51,9 @@ export function BottomNav() {
   return (
     <nav className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 backdrop-blur-md">
       <div className="mx-auto flex max-w-md items-stretch justify-around px-1 pb-1 pt-1.5">
-        {items.map((item) => {
+        {items
+          .filter((item) => item.href !== "/tournaments" || features.series)
+          .map((item) => {
           const active =
             pathname === item.href || pathname.startsWith(`${item.href}/`);
           const Icon = item.icon;

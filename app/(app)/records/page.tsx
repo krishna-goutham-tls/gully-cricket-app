@@ -218,8 +218,11 @@ function JuniorBoardSection({
  * Leaders — the live season when one is running, else All time.
  */
 export default function RecordsPage() {
-  const { token, activeOrgId } = useAuth();
-  const [tab, setTab] = useState<Tab>("honour");
+  const { token, activeOrgId, features } = useAuth();
+  const [picked, setTab] = useState<Tab>("honour");
+  // The Roast can go off while someone is on its tab. They land on Honours.
+  const tab: Tab = picked === "roast" && !features.roast ? "honour" : picked;
+  const visibleTabs = TABS.filter((t) => t !== "roast" || features.roast);
   const [scope, setScope] = useState<Scope | null>(null);
 
   const seasons = useQuery(
@@ -288,7 +291,7 @@ export default function RecordsPage() {
 
   const tabs = (
     <div className="flex rounded-xl border border-line bg-surface p-1">
-      {TABS.map((t) => (
+      {visibleTabs.map((t) => (
         <button
           key={t}
           type="button"

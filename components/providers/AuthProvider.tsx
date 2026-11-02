@@ -24,6 +24,7 @@ import {
   setSessionToken,
 } from "@/lib/session";
 import { Id } from "@/convex/_generated/dataModel";
+import { FEATURE_DEFAULTS, type Features } from "@/convex/lib/features";
 
 type User = {
   _id: Id<"users"> | string;
@@ -58,6 +59,8 @@ type Membership = {
     status: "active" | "complete";
   } | null;
   seasonCount?: number;
+  /** What the community has switched on. Absent on older auth caches. */
+  features?: Partial<Features>;
 };
 
 type Bootstrap = { user: User; memberships: Membership[] } | null;
@@ -75,6 +78,8 @@ type AuthContextValue = {
   isObserver: boolean;
   /** Active org is a throwaway sandbox — nothing scored here counts. */
   isSandbox: boolean;
+  /** The active community's switches, defaults filled in. */
+  features: Features;
   loading: boolean;
   setToken: (token: string) => void;
   logout: () => Promise<void>;
@@ -255,6 +260,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isObserver = activeOrg?.isObserver === true;
   const isAdmin = !isObserver && (activeOrg?.roles.includes("admin") ?? false);
   const isSandbox = activeOrg?.isSandbox ?? false;
+  const features = useMemo<Features>(
+    () => ({ ...FEATURE_DEFAULTS, ...activeOrg?.features }),
+    [activeOrg?.features],
+  );
 
   // Only block render on a true cold start: token present, no cache, live
   // result not yet in. Warm visits paint instantly from cache.
@@ -271,6 +280,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAdmin,
     isObserver,
     isSandbox,
+    features,
     loading,
     setToken,
     logout,

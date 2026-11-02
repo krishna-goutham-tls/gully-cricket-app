@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { featureOrg, resolveFeatures } from "./lib/features";
 import { mutation, query } from "./_generated/server";
 import { Doc } from "./_generated/dataModel";
 import { hashPin, hashToken, randomToken, verifyPin } from "./lib/crypto";
@@ -71,6 +72,8 @@ export const bootstrap = query({
           const featured = await featuredSeasonForOrg(ctx, org._id);
           return {
             membershipId: m._id as typeof m._id | undefined,
+            // What the community has switched on. A sandbox follows its parent.
+            features: resolveFeatures(await featureOrg(ctx, org)),
             orgId: org._id,
             orgName: org.name,
             location: org.location,
@@ -108,6 +111,7 @@ export const bootstrap = query({
         const featured = await featuredSeasonForOrg(ctx, org._id);
         rows.push({
           membershipId: undefined,
+          features: resolveFeatures(org),
           orgId: org._id,
           orgName: org.name,
           location: org.location,

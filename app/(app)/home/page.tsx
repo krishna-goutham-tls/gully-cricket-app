@@ -78,14 +78,15 @@ function ExploreCard({
 }
 
 export default function HomePage() {
-  const { token, activeOrgId, activeOrg, isAdmin, isObserver, isSandbox } = useAuth();
+  const { token, activeOrgId, activeOrg, isAdmin, isObserver, isSandbox, features } =
+    useAuth();
   const matches = useQuery(
     api.matches.list,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
   );
   const tournaments = useQuery(
     api.tournaments.list,
-    token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
+    token && activeOrgId && features.series ? { token, orgId: activeOrgId } : "skip",
   );
   const polls = useQuery(
     api.polls.current,
@@ -174,7 +175,9 @@ export default function HomePage() {
     };
   }, [matches]);
 
-  const series = (tournaments ?? []).find((t) => t.status === "active") ?? null;
+  const series = features.series
+    ? ((tournaments ?? []).find((t) => t.status === "active") ?? null)
+    : null;
 
   const cardProps = (m: MatchRow) => ({
     match: m,
@@ -261,7 +264,7 @@ export default function HomePage() {
             href="/records"
             icon={<Medal className="h-4 w-4" strokeWidth={2.2} />}
             title="Records"
-            meta="Honours & roasts"
+            meta={features.roast ? "Honours & roasts" : "Honours"}
           />
         </div>
 

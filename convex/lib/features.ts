@@ -1,4 +1,5 @@
 import type { Doc } from "../_generated/dataModel";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 
 /**
  * What a community has switched on. `orgs.features` stores only the keys a
@@ -6,6 +7,10 @@ import type { Doc } from "../_generated/dataModel";
  * through `isFeatureOn`, never from the org row.
  */
 export const FEATURE_DEFAULTS = {
+  /** The Series tab, the Home series card and new series. */
+  series: true,
+  /** The Roast tab, roast cards, roast lines in Story, the Nemesis card. */
+  roast: true,
   /** A Roast board of the points regulars did not earn against juniors. */
   juniorBoard: false,
 } as const;
@@ -17,6 +22,46 @@ export function isFeatureOn(
   key: FeatureKey,
 ): boolean {
   return org?.features?.[key] ?? FEATURE_DEFAULTS[key];
+}
+
+export type Features = Record<FeatureKey, boolean>;
+
+/** Every key resolved, defaults filled in. */
+export function resolveFeatures(
+  org: Pick<Doc<"orgs">, "features"> | null | undefined,
+): Features {
+  const out = {} as Features;
+  for (const key of Object.keys(FEATURE_DEFAULTS) as FeatureKey[]) {
+    out[key] = isFeatureOn(org, key);
+  }
+  return out;
+}
+
+export function isFeatureKey(key: string): key is FeatureKey {
+  return Object.prototype.hasOwnProperty.call(FEATURE_DEFAULTS, key);
+}
+
+/**
+ * The community whose switches apply. A sandbox has none of its own: it
+ * follows the real community it belongs to.
+ */
+export async function featureOrg(
+  ctx: QueryCtx | MutationCtx,
+  org: Doc<"orgs">,
+): Promise<Doc<"orgs">> {
+  if (!org.isSandbox || !org.sandboxForOrgId) return org;
+  return (await ctx.db.get(org.sandboxForOrgId)) ?? org;
+}
+
+/** One feature for a community id, sandbox resolved. Off when the id is gone. */
+export async function orgFeatureOn(
+  ctx: QueryCtx | MutationCtx,
+  orgId: Doc<"orgs">["_id"],
+  key: FeatureKey,
+): Promise<boolean> {
+  const org = await ctx.db.get(orgId);
+  if (!org) return FEATURE_DEFAULTS[key];
+  return isFeatureOn(await featureOrg(ctx, org), key);
 }
 
 export const DEFAULT_JUNIOR_BOARD_TITLE = "Playground Bullies";

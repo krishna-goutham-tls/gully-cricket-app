@@ -11,6 +11,7 @@ import {
   POINTS_RECEIPT,
 } from "./lib/points";
 import { loadMatchAccess, sideLabel, sidePlayers } from "./scoring";
+import { orgFeatureOn } from "./lib/features";
 
 type Side = "A" | "B";
 
@@ -492,8 +493,12 @@ export const matchStory = query({
     const badges: Badge[] = [];
     const used = new Set<string>();
     let roasts = 0;
+    // An admin who turned The Roast off gets no roast lines. Nothing is saved,
+    // so turning it on again brings them back.
+    const roastOn = await orgFeatureOn(ctx, match.orgId, "roast");
     for (const c of candidates) {
       if (badges.length >= 4) break;
+      if (c.kind === "roast" && !roastOn) continue;
       if (used.has(c.playerId)) continue;
       if (c.kind === "roast" && roasts >= 2) continue;
       used.add(c.playerId);

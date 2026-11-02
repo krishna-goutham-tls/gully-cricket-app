@@ -113,6 +113,8 @@ export function buildSeasonCards(args: {
   totalsBoard: Board;
   allRound: Array<{ displayName: string; points: number }>;
   soFar?: boolean;
+  /** False when the community turned The Roast off. */
+  roast?: boolean;
 }): SeasonShareData[] {
   const cards: SeasonShareData[] = [];
   const byKind = new Map(args.awards.map((a) => [a.kind, a]));
@@ -183,7 +185,7 @@ export function buildSeasonCards(args: {
 
   const roastItems: FeatRecord[] = [];
   for (const g of args.records) {
-    if (g.tone !== "roast") continue;
+    if (g.tone !== "roast" || args.roast === false) continue;
     for (const item of g.items) {
       if (ROAST_PICK.includes(item.label)) roastItems.push(item);
     }
