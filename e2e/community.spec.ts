@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { loginAs, open } from "./lib/auth.mjs";
-import { api, client, ORG_A, ORG_B } from "./lib/env.mjs";
+import { api, client, ORG_A, ORG_B, signIn } from "./lib/env.mjs";
 
 // Switches change in the second test community only, and every test puts them
 // back on, so the other specs see the defaults.
@@ -59,6 +59,8 @@ test("Series off hides the tab and the pages; on brings them back", async ({ pag
     await expect(page.getByText("Series is off")).toBeVisible();
     await open(page, "/tournaments/new");
     await expect(page.getByText("Series is off")).toBeVisible();
+    const box = await page.getByRole("link", { name: "Open Community" }).boundingBox();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
     await page.getByRole("link", { name: "Open Community" }).click();
     await page.getByRole("switch", { name: "Series" }).click();
     await expect(page.getByRole("switch", { name: "Series" })).toBeChecked();
@@ -114,4 +116,22 @@ test("a player has no Community row and the page says Admins only", async ({ pag
   await expect(page.getByRole("link", { name: "Community" })).toHaveCount(0);
   await open(page, "/community");
   await expect(page.getByText("Admins only")).toBeVisible();
+});
+
+test("a player on a series page with Series off has a way back to Home", async ({ page }) => {
+  // The first community has players. Its admin turns Series off for this test only.
+  const { token } = await signIn("organiser");
+  const boot = await client().query(api.auth.bootstrap, { token });
+  const orgA = boot.memberships.find((m: { orgName: string }) => m.orgName === ORG_A).orgId;
+  try {
+    await setFeature(token, orgA, "series", false);
+    await loginAs(page, "player", ORG_A);
+    await open(page, "/tournaments/new");
+    await expect(page.getByText("Series is off")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open Community" })).toHaveCount(0);
+    await page.getByRole("link", { name: "Go to Home" }).click();
+    await expect(page).toHaveURL(/\/home$/);
+  } finally {
+    await setFeature(token, orgA, "series", true);
+  }
 });

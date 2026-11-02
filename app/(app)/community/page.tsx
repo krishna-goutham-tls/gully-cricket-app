@@ -10,7 +10,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
-import { Switch } from "@/components/ui/Switch";
+import { SwitchTrack } from "@/components/ui/Switch";
 import { errorMessage } from "@/lib/utils";
 
 /**
@@ -216,6 +216,7 @@ export default function CommunityPage() {
   );
 }
 
+/** The whole row is the switch, so the tap target is the full row. */
 function SwitchRow({
   label,
   line,
@@ -230,12 +231,20 @@ function SwitchRow({
   onChange: (on: boolean) => void;
 }) {
   return (
-    <div className="flex min-h-14 items-center gap-3 border-t border-line px-4 py-3 first:border-t-0">
-      <div className="min-w-0 flex-1">
-        <p className="text-[15px] font-semibold text-ink">{label}</p>
-        <p className="text-[13px] leading-snug text-muted">{line}</p>
-      </div>
-      <Switch checked={checked} label={label} disabled={disabled} onChange={onChange} />
-    </div>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className="flex min-h-14 w-full items-center gap-3 border-t border-line px-4 py-3 text-left first:border-t-0 active:bg-bg disabled:opacity-60"
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] font-semibold text-ink">{label}</span>
+        <span className="block text-[13px] leading-snug text-muted">{line}</span>
+      </span>
+      <SwitchTrack checked={checked} />
+    </button>
   );
 }
