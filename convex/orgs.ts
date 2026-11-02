@@ -11,6 +11,7 @@ import { maskPhone } from "./lib/phone";
 import { requireCreateOrgAllowance } from "./access";
 import { deleteMatchCascade } from "./lib/matches";
 import { orgRole } from "./schema";
+import { resolvePlayerTags } from "./lib/playerLabel";
 import {
   isClaimableRow,
   isUnclaimedNoPhone,
@@ -449,6 +450,19 @@ export const setRoles = mutation({
     const roles = Array.from(new Set(args.roles));
     if (!roles.includes("player")) roles.push("player");
     if (roles.length === 0) throw new Error("At least one role required");
+
+    const org = await ctx.db.get(args.orgId);
+    if (!membership.roles.includes("admin") && roles.includes("admin") && !org?.isSandbox) {
+      const target = await ctx.db.get(args.userId);
+      const tags = resolvePlayerTags(
+        membership.playerTags,
+        membership.playerLabel,
+        target?.isGuest ?? false,
+      );
+      if (!target?.pinHash || tags.length > 0) {
+        throw new Error("Only a regular player with an account can be admin");
+      }
+    }
 
     if (membership.roles.includes("admin") && !roles.includes("admin")) {
       const others = await signInAdmins(ctx, args.orgId, args.userId);

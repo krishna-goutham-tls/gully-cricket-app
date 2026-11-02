@@ -269,8 +269,15 @@ describe("rename and admins", () => {
 
     await expect(demote(admin)).rejects.toThrow("A community needs one admin");
 
+    // Old data can hold a guest with the admin tag. It does not count.
     const { userId: guestId } = await t.mutation(api.players.addGuest, { token: admin.token, orgId, name: "Guest Gary" });
-    await t.mutation(api.orgs.setRoles, { token: admin.token, orgId, userId: guestId, roles: ["admin", "player"] });
+    await t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("orgMembers")
+        .withIndex("by_org_user", (q) => q.eq("orgId", orgId).eq("userId", guestId))
+        .unique();
+      await ctx.db.patch(row!._id, { roles: ["admin", "player"] });
+    });
     await expect(demote(admin)).rejects.toThrow("A community needs one admin");
 
     await t.mutation(api.orgs.setRoles, { token: admin.token, orgId, userId: a2.userId, roles: ["admin", "player"] });
@@ -287,5 +294,52 @@ describe("Leaders format filter", () => {
     ]);
     const board = await t.query(api.stats.leaderboard, { token: admin.token, orgId });
     expect(board!.formats).toEqual({ test: 0, limited: 1 });
+  });
+});
+
+describe("admin, tags and guest names", () => {
+  const makeAdmin = (t: T, by: Person, orgId: Id<"orgs">, userId: Id<"users">) =>
+    t.mutation(api.orgs.setRoles, { token: by.token, orgId, userId, roles: ["admin", "player"] });
+  const tag = (t: T, by: Person, orgId: Id<"orgs">, userId: Id<"users">, which: "junior" | "visitor") =>
+    t.mutation(api.players.togglePlayerTag, { token: by.token, orgId, userId, tag: which });
+
+  test("a junior, a visitor or a guest cannot be made admin", async () => {
+    const { t, admin, a2, j1, orgId } = await setup();
+    await expect(makeAdmin(t, admin, orgId, j1.userId)).rejects.toThrow("Only a regular player with an account");
+    await tag(t, admin, orgId, a2.userId, "visitor");
+    await expect(makeAdmin(t, admin, orgId, a2.userId)).rejects.toThrow("Only a regular player with an account");
+    const { userId: guestId } = await t.mutation(api.players.addGuest, { token: admin.token, orgId, name: "Guest Gary" });
+    await tag(t, admin, orgId, guestId, "visitor"); // guests start as Visitor; take it off
+    await expect(makeAdmin(t, admin, orgId, guestId)).rejects.toThrow("Only a regular player with an account");
+    await tag(t, admin, orgId, a2.userId, "visitor");
+    await expect(makeAdmin(t, admin, orgId, a2.userId)).resolves.toMatchObject({ ok: true });
+  });
+
+  test("an admin cannot be tagged junior or visitor; untagging stays allowed", async () => {
+    const { t, admin, a2, orgId } = await setup();
+    await makeAdmin(t, admin, orgId, a2.userId);
+    await expect(tag(t, admin, orgId, a2.userId, "junior")).rejects.toThrow("Remove admin first");
+    await expect(tag(t, admin, orgId, a2.userId, "visitor")).rejects.toThrow("Remove admin first");
+  });
+
+  test("a player can be both junior and visitor", async () => {
+    const { t, admin, j1, orgId } = await setup();
+    const res = await tag(t, admin, orgId, j1.userId, "visitor");
+    expect(res.playerTags.sort()).toEqual(["junior", "visitor"]);
+  });
+
+  test("an admin renames a guest, not a player with an account", async () => {
+    const { t, admin, a2, orgId } = await setup();
+    const { userId: guestId } = await t.mutation(api.players.addGuest, { token: admin.token, orgId, name: "Gary" });
+    const rename = (userId: Id<"users">, name: string, by = admin) =>
+      t.mutation(api.players.renameGuest, { token: by.token, orgId, userId, name });
+    await rename(guestId, "  Gary   Kumar ");
+    expect((await t.run((ctx) => ctx.db.get(guestId)))!.displayName).toBe("Gary Kumar");
+    await expect(rename(guestId, "bala")).rejects.toThrow("already has that name");
+    await expect(rename(a2.userId, "New Name")).rejects.toThrow("Only a guest");
+    await expect(rename(guestId, "Mine", a2)).rejects.toThrow("Admin only");
+    const players = await t.query(api.players.listOrgPlayers, { token: admin.token, orgId });
+    expect(players.find((p) => p.userId === guestId)!.hasAccount).toBe(false);
+    expect(players.find((p) => p.userId === a2.userId)!.hasAccount).toBe(true);
   });
 });

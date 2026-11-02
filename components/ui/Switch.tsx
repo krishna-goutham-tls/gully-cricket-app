@@ -22,3 +22,38 @@ export function SwitchTrack({ checked }: { checked: boolean }) {
     </span>
   );
 }
+
+/** The whole row is the switch, so the tap target is the full row. */
+export function SwitchRow({
+  label,
+  line,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  line?: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (on: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className="flex min-h-14 w-full items-center gap-3 border-t border-line px-4 py-3 text-left first:border-t-0 active:bg-bg disabled:opacity-60"
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] font-semibold text-ink">{label}</span>
+        {line ? (
+          <span className="block text-[13px] leading-snug text-muted">{line}</span>
+        ) : null}
+      </span>
+      <SwitchTrack checked={checked} />
+    </button>
+  );
+}

@@ -12,25 +12,13 @@ import { api } from "@/convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
 import { Id } from "@/convex/_generated/dataModel";
 import { errorMessage } from "@/lib/utils";
-import {
-  PlayerTagEditor,
-  PlayerTagList,
-} from "@/components/player/LabelTag";
-import type { PlayerTag } from "@/lib/playerLabel";
+import { PlayerSheet } from "@/components/player/PlayerSheet";
+import { PLAYER_TAG_COPY } from "@/lib/playerLabel";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ChevronRight, Plus, UserMinus, X } from "lucide-react";
+import { ChevronRight, Plus, X } from "lucide-react";
 
 const NEW_TAG_MS = 7 * 24 * 60 * 60 * 1000;
-
-function initials(name: string) {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? "")
-    .join("");
-}
 
 export default function PlayersPage() {
   const { token, activeOrgId, activeOrg, isAdmin, isSandbox, user } = useAuth();
@@ -40,6 +28,7 @@ export default function PlayersPage() {
     displayName: string;
   } | null>(null);
   const [search, setSearch] = useState("");
+  const [openId, setOpenId] = useState<Id<"users"> | null>(null);
   const [guestOpen, setGuestOpen] = useState(false);
   const [guestName, setGuestName] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
@@ -67,8 +56,6 @@ export default function PlayersPage() {
     isAdmin && token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
   );
   const addGuest = useMutation(api.players.addGuest);
-  const togglePlayerTag = useMutation(api.players.togglePlayerTag);
-  const [tagBusyId, setTagBusyId] = useState<string | null>(null);
   const approveMember = useMutation(api.orgs.approveMember);
   const rejectMember = useMutation(api.orgs.rejectMember);
   const approvePinReset = useMutation(api.auth.approvePinReset);
@@ -88,10 +75,10 @@ export default function PlayersPage() {
     const put = (id: string, part: string) =>
       map.set(id, map.has(id) ? `${map.get(id)} · ${part}` : part);
     for (const r of board.batting) {
-      if (r.runs > 0) put(String(r.userId), `${r.runs} runs`);
+      if (r.runs > 0) put(String(r.userId), `${r.runs} run${r.runs === 1 ? "" : "s"}`);
     }
     for (const r of board.bowling) {
-      if (r.wickets > 0) put(String(r.userId), `${r.wickets} wkts`);
+      if (r.wickets > 0) put(String(r.userId), `${r.wickets} wkt${r.wickets === 1 ? "" : "s"}`);
     }
     return map;
   }, [board]);
@@ -99,6 +86,9 @@ export default function PlayersPage() {
   // reference but nothing is waiting on the admin, so they don't count.
   const waitingCount =
     joinRequests.length + resets.filter((r) => r.status === "pending").length;
+
+  // The sheet reads the live row, so a tag change shows at once.
+  const openPlayer = (players ?? []).find((p) => p.userId === openId) ?? null;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -175,24 +165,6 @@ export default function PlayersPage() {
   function openGuestForm(prefill: string) {
     setGuestName(prefill);
     setGuestOpen(true);
-  }
-
-  async function onToggleTag(userId: Id<"users">, tag: PlayerTag) {
-    if (!token || !activeOrgId) return;
-    setTagBusyId(String(userId));
-    setError(null);
-    try {
-      await togglePlayerTag({
-        token,
-        orgId: activeOrgId,
-        userId,
-        tag,
-      });
-    } catch (e) {
-      setError(errorMessage(e, "Could not update that tag"));
-    } finally {
-      setTagBusyId(null);
-    }
   }
 
   return (
@@ -391,83 +363,57 @@ export default function PlayersPage() {
               {search.trim()
                 ? `${filtered.length} of ${(players ?? []).length} players`
                 : `${filtered.length} player${filtered.length === 1 ? "" : "s"}`}
-              {isAdmin ? " · tap Visitor or Junior to tag" : ""}
             </p>
             <div className="overflow-hidden rounded-2xl border border-line bg-surface">
-              {filtered.map((p) => (
-                <div
-                  key={String(p.userId)}
-                  className="flex min-h-12 items-center gap-3 border-b border-line/60 px-3.5 py-2.5 last:border-b-0"
-                >
-                  <Link
-                    href={`/players/${p.userId}`}
-                    className="flex min-w-0 flex-1 items-center gap-3 active:opacity-70"
-                  >
-                    {/* Same face as the Records screen's holder chip — the two
-                        directories read as one system. */}
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-ink/[0.05] text-[13px] font-bold text-muted">
-                      {initials(p.displayName)}
-                    </span>
+              {filtered.map((p) => {
+                const isNew =
+                  isAdmin && !!p.joinedByLinkAt && Date.now() - p.joinedByLinkAt < NEW_TAG_MS;
+                const words = [
+                  ...(p.isAdmin ? ["Admin"] : []),
+                  ...p.playerTags.map((t) => PLAYER_TAG_COPY[t]),
+                ];
+                const body = (
+                  <>
                     <span className="min-w-0 flex-1">
-                      <span
-                        className="block truncate text-[15px] font-semibold text-ink"
-                        title={p.displayName}
-                      >
+                      <span className="line-clamp-2 break-words text-[15px] font-semibold leading-snug text-ink">
                         {p.displayName}
                       </span>
-                      <span className="mt-0.5 flex min-w-0 items-center gap-1.5">
-                        {p.isAdmin ? (
-                          <span className="shrink-0 rounded-full bg-ink/[0.06] px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                            Admin
+                      <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 text-[13px] text-muted">
+                        {isNew ? (
+                          <span className="font-semibold text-accent-deep">New</span>
+                        ) : null}
+                        {words.length > 0 ? (
+                          <span className="font-semibold text-ink/70">{words.join(" · ")}</span>
+                        ) : isAdmin ? (
+                          <span className="rounded-md border border-line px-1.5 text-[11px] font-semibold leading-5 text-muted">
+                            + Tag
                           </span>
                         ) : null}
-                        {isAdmin &&
-                        p.joinedByLinkAt &&
-                        Date.now() - p.joinedByLinkAt < NEW_TAG_MS ? (
-                          <span className="shrink-0 rounded-full bg-accent-soft px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-accent-deep">
-                            New
-                          </span>
-                        ) : null}
-                        <span className="tabular min-w-0 truncate text-[13px] text-muted">
+                        <span className="tabular min-w-0 truncate">
                           {summary.get(String(p.userId)) ?? "Yet to play"}
                         </span>
                       </span>
                     </span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-faint" />
+                  </>
+                );
+                const rowCls =
+                  "flex min-h-14 w-full items-center gap-3 border-b border-line/60 px-4 py-2.5 text-left last:border-b-0 active:bg-bg";
+                return isAdmin ? (
+                  <button
+                    key={String(p.userId)}
+                    type="button"
+                    onClick={() => setOpenId(p.userId)}
+                    className={rowCls}
+                  >
+                    {body}
+                  </button>
+                ) : (
+                  <Link key={String(p.userId)} href={`/players/${p.userId}`} className={rowCls}>
+                    {body}
                   </Link>
-                  {isAdmin ? (
-                    <PlayerTagEditor
-                      tags={p.playerTags}
-                      busy={tagBusyId === String(p.userId)}
-                      onToggle={(tag) => void onToggleTag(p.userId, tag)}
-                    />
-                  ) : (
-                    <PlayerTagList tags={p.playerTags} />
-                  )}
-                  {isAdmin && !isSandbox && p.userId !== user?._id ? (
-                    <button
-                      type="button"
-                      aria-label={`Remove ${p.displayName}`}
-                      onClick={() =>
-                        setRemoving({
-                          userId: p.userId,
-                          displayName: p.displayName,
-                        })
-                      }
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-faint active:bg-ink/[0.04]"
-                    >
-                      <UserMinus className="h-4 w-4" />
-                    </button>
-                  ) : (
-                    <Link
-                      href={`/players/${p.userId}`}
-                      aria-label={`Open ${p.displayName}`}
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-faint active:bg-ink/[0.04]"
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Link>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
@@ -479,6 +425,21 @@ export default function PlayersPage() {
           orgId={activeOrgId}
           orgName={activeOrg.orgName}
           onClose={() => setInviteOpen(false)}
+        />
+      ) : null}
+
+      {openPlayer && token && activeOrgId ? (
+        <PlayerSheet
+          token={token}
+          orgId={activeOrgId}
+          player={openPlayer}
+          isSelf={openPlayer.userId === user?._id}
+          isSandbox={isSandbox}
+          onRemove={() => {
+            setRemoving({ userId: openPlayer.userId, displayName: openPlayer.displayName });
+            setOpenId(null);
+          }}
+          onClose={() => setOpenId(null)}
         />
       ) : null}
 

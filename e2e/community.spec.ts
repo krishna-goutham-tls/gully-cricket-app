@@ -135,3 +135,69 @@ test("a player on a series page with Series off has a way back to Home", async (
     await setFeature(token, orgA, "series", true);
   }
 });
+
+async function orgAAdmin() {
+  const { token } = await signIn("organiser");
+  const boot = await client().query(api.auth.bootstrap, { token });
+  const orgId = boot.memberships.find((m: { orgName: string }) => m.orgName === ORG_A).orgId;
+  const players = await client().query(api.players.listOrgPlayers, { token, orgId });
+  const id = (n: string) => players.find((p: { displayName: string }) => p.displayName === n).userId;
+  return { token, orgId, id };
+}
+
+test("players show full names; an admin tags in 2 taps from a sheet", async ({ page }, info) => {
+  const { token, orgId, id } = await orgAAdmin();
+  await loginAs(page, "organiser", ORG_A);
+  try {
+    await open(page, "/players");
+    const row = page.getByRole("button", { name: /^E2E Player/ });
+    await expect(row).toBeVisible();
+    await expect(row.getByText("+ Tag")).toBeVisible();
+    await expect(page.getByRole("button", { name: /^E2E Junior/ }).getByText("Junior", { exact: true })).toBeVisible();
+    await page.screenshot({ path: `e2e/out/shots/${info.project.name}/players-list.png` });
+    await noSidewaysScroll(page);
+
+    await row.click();
+    const sheet = page.getByRole("dialog", { name: "E2E Player" });
+    await sheet.getByRole("switch", { name: "Junior" }).click();
+    await expect(sheet.getByRole("switch", { name: "Junior" })).toBeChecked();
+    await expect(sheet.getByRole("switch", { name: "Admin" })).toBeDisabled();
+    await page.screenshot({ path: `e2e/out/shots/${info.project.name}/player-sheet.png` });
+    await sheet.getByRole("switch", { name: "Junior" }).click();
+    await expect(sheet.getByRole("switch", { name: "Admin" })).toBeEnabled();
+    await sheet.getByRole("button", { name: "Close" }).click();
+    await expect(row.getByText("+ Tag")).toBeVisible();
+
+    // A guest has no Admin switch.
+    await page.getByRole("button", { name: /^E2E Added Nophone/ }).click();
+    await expect(page.getByRole("dialog").getByRole("switch", { name: "Admin" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Rename guest" })).toBeVisible();
+  } finally {
+    const players = await client().query(api.players.listOrgPlayers, { token, orgId });
+    const me = players.find((p: { userId: string }) => p.userId === id("E2E Player"));
+    if (me.playerTags.includes("junior")) {
+      await client().mutation(api.players.togglePlayerTag, { token, orgId, userId: me.userId, tag: "junior" });
+    }
+  }
+});
+
+test("Admins in Community lists admins and offers only regulars with an account", async ({ page }, info) => {
+  const { token, orgId, id } = await orgAAdmin();
+  await loginAs(page, "organiser", ORG_A);
+  try {
+    await open(page, "/community");
+    await page.getByRole("button", { name: /^Admins/ }).click();
+    const sheet = page.getByRole("dialog", { name: "Admins" });
+    await expect(sheet.getByText("E2E Organiser")).toBeVisible();
+    await sheet.getByRole("button", { name: "Add admin" }).click();
+    await expect(sheet.getByText("E2E Junior")).toHaveCount(0);
+    await expect(sheet.getByText("E2E Visitor")).toHaveCount(0);
+    await expect(sheet.getByText("E2E Added Nophone")).toHaveCount(0);
+    await page.screenshot({ path: `e2e/out/shots/${info.project.name}/admins-add.png` });
+    await sheet.getByRole("button", { name: /^E2E Player/ }).click();
+    await expect(sheet.getByText("E2E Player")).toBeVisible();
+    await expect(sheet.getByRole("button", { name: "Remove admin" })).toHaveCount(2);
+  } finally {
+    await client().mutation(api.orgs.setRoles, { token, orgId, userId: id("E2E Player"), roles: ["player"] });
+  }
+});

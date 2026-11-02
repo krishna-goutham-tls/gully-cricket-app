@@ -13,6 +13,8 @@ import {
   type PlayerTag,
 } from "./lib/playerLabel";
 
+const ADMIN_NO_TAG = "An admin cannot be a junior or a visitor. Remove admin first.";
+
 /**
  * Quick-add a guest player to the org pool. Guests have no PIN; if a phone
  * is given, signing up with that phone later claims this player and all
@@ -181,6 +183,8 @@ export const listOrgPlayers = query({
           userId: u._id,
           displayName: u.displayName,
           isGuest: u.isGuest ?? false,
+          // Can sign in. Only such a player can be made admin.
+          hasAccount: !!u.pinHash,
           playerTags: resolvePlayerTags(
             m.playerTags,
             m.playerLabel,
@@ -281,9 +285,14 @@ export const togglePlayerTag = mutation({
       membership.playerLabel,
       user?.isGuest ?? false,
     );
-    const next = current.includes(args.tag)
-      ? current.filter((t) => t !== args.tag)
-      : [...current, args.tag];
+    const adding = !current.includes(args.tag);
+    if (adding && membership.roles.includes("admin")) {
+      const org = await ctx.db.get(args.orgId);
+      if (!org?.isSandbox) throw new Error(ADMIN_NO_TAG);
+    }
+    const next = adding
+      ? [...current, args.tag]
+      : current.filter((t) => t !== args.tag);
     const playerTags = sortTags(next);
     await ctx.db.patch(membership._id, { playerTags });
     return { ok: true, playerTags };
@@ -316,5 +325,47 @@ export const backfillPlayerTags = internalMutation({
       patched += 1;
     }
     return { patched };
+  },
+});
+
+/**
+ * Admin renames a guest, because a guest cannot sign in to rename themselves.
+ * A player with an account renames themselves in Profile.
+ */
+export const renameGuest = mutation({
+  args: {
+    token: v.string(),
+    orgId: v.id("orgs"),
+    userId: v.id("users"),
+    name: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await requireOrgAdmin(ctx, args.token, args.orgId);
+    const org = await ctx.db.get(args.orgId);
+    if (!org || org.isSandbox) throw new Error("Not in the sandbox");
+    const membership = await ctx.db
+      .query("orgMembers")
+      .withIndex("by_org_user", (q) => q.eq("orgId", args.orgId).eq("userId", args.userId))
+      .unique();
+    if (!membership || membership.status !== "active") throw new Error("Member not found");
+    const user = await ctx.db.get(args.userId);
+    if (!user || user.pinHash) throw new Error("Only a guest can be renamed here");
+
+    const name = args.name.trim().replace(/\s+/g, " ");
+    if (name.length < 2) throw new Error("Name is too short");
+    if (name.length > 40) throw new Error("Name can be 40 characters at most");
+    const members = await ctx.db
+      .query("orgMembers")
+      .withIndex("by_org_status", (q) => q.eq("orgId", args.orgId).eq("status", "active"))
+      .collect();
+    for (const m of members) {
+      if (m.userId === args.userId) continue;
+      const other = await ctx.db.get(m.userId);
+      if (other?.displayName.trim().toLowerCase() === name.toLowerCase()) {
+        throw new Error("Someone here already has that name");
+      }
+    }
+    await ctx.db.patch(args.userId, { displayName: name, updatedAt: Date.now() });
+    return { name };
   },
 });
