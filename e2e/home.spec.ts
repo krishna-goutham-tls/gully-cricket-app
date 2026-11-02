@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { loginAs, open } from "./lib/auth.mjs";
 import { api, client, convexRun, NAMES, ORG_A, ORG_B } from "./lib/env.mjs";
+import { playOneOverMatch } from "./lib/play.mjs";
 
 const setFeature = (token: string, orgId: string, key: string, on: boolean) =>
   client().mutation(api.orgs.setFeature, { token, orgId, key, on });
@@ -35,7 +36,7 @@ test("the tab bar is Home, Leaders, Players, Profile; Series only when it is on"
 test("Home reads top to bottom: start, last result, match day, then matches", async ({ page }, info) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await loginAs(page, "organiser", ORG_A);
+  const { token, orgId } = await loginAs(page, "organiser", ORG_A);
   await open(page, "/home");
 
   const start = page.getByRole("link", { name: /Start match/ });
@@ -44,6 +45,15 @@ test("Home reads top to bottom: start, last result, match day, then matches", as
   const all = page.getByRole("link", { name: "All matches" });
   await expect(start).toBeVisible();
   await expect(result).toBeVisible();
+  // The match-day card shows for 3 days after a match. Test data ages, so
+  // finish a match today when the last one is older than that.
+  if ((await day.count()) === 0) {
+    const c = client();
+    const players = await c.query(api.players.listOrgPlayers, { token, orgId });
+    await playOneOverMatch(c, { token, orgId }, players);
+    await page.reload();
+    await expect(result).toBeVisible();
+  }
   await expect(day.first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Share on WhatsApp" })).toBeVisible();
   await expect(all).toBeVisible();
