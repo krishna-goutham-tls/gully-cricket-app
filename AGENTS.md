@@ -6,11 +6,12 @@ an over with one thumb: tap ball outcome → instant register → next ball.
 Everything else (leaderboards, player profiles, match stories) is read-model
 on top of the ball log.
 
-Any active org member can create matches and score. An **admin** also
-approves PIN resets, sends the invite link, removes members, and runs the
-Community and Extra features groups in Profile → Settings: the name, admins,
-invite link, Visitors (show visitors on Leaders), seasons, grounds, and the
-Series, Test matches, The Roast, junior board and Practice mode switches.
+Any active org member can create matches, score, and use Practice mode
+(Profile → Settings). An **admin** also approves PIN resets, sends the invite
+link, removes members, and runs the Community and Extra features groups in
+Settings: the name, admins, invite link, Visitors (show visitors on Leaders),
+seasons, grounds, and the Series, Test matches, The Roast and junior board
+switches.
 
 **Stack:** Next.js 14 (App Router) · TypeScript · Tailwind · Convex · Netlify
 **Live:** https://gullycricket.space

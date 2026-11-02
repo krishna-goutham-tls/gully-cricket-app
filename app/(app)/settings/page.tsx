@@ -97,15 +97,16 @@ function LinkRow({
  * Admins of a real community also see the community and its extra features.
  */
 export default function SettingsPage() {
-  const { isAdmin, isSandbox, isObserver } = useAuth();
+  const { isAdmin, isSandbox, isObserver, user, activeOrgId } = useAuth();
   const admin = isAdmin && !isSandbox && !isObserver;
+  const back = user && activeOrgId ? `/players/${user._id}` : "/profile";
 
   return (
     <div className="bg-bg pb-6">
       <header className="sticky top-0 z-30 border-b border-line bg-bg/90 px-5 pb-3 pt-[calc(var(--safe-top)+0.75rem)] backdrop-blur-md">
         <div className="mx-auto flex max-w-md items-center gap-1">
           <Link
-            href="/profile"
+            href={back}
             aria-label="Back to profile"
             className="-ml-2 flex h-11 w-11 items-center justify-center rounded-lg text-muted active:bg-line/60"
           >
@@ -118,16 +119,9 @@ export default function SettingsPage() {
       </header>
 
       <main className="mx-auto max-w-md px-5 py-2">
+        <AccessRequestsRow />
         <AccountGroup />
         {admin ? <AdminGroups /> : null}
-        {isSandbox && !isObserver ? (
-          <>
-            <GroupLabel>Extra features</GroupLabel>
-            <div className="overflow-hidden rounded-2xl border border-line bg-surface">
-              <PracticeRow />
-            </div>
-          </>
-        ) : null}
       </main>
     </div>
   );
@@ -295,6 +289,8 @@ function AccountGroup() {
             </Button>
           </div>
         ) : null}
+
+        <PracticeRow />
 
         <LinkRow label="Ask for a feature or report a problem" href="/wishlist" />
 
@@ -478,7 +474,6 @@ function AdminGroups() {
             ) : null}
           </>
         ) : null}
-        <PracticeRow />
       </div>
 
       {adminsOpen ? (
@@ -583,7 +578,8 @@ function SeasonsRow() {
 
 /**
  * Practice mode is the sandbox: a paired community where matches count for
- * nothing. Switching is just switching community, so every screen follows.
+ * nothing. Every player can use it. Switching is just switching community,
+ * so every screen follows.
  */
 function PracticeRow() {
   const { token, activeOrgId, activeOrg, isSandbox, isObserver, selectOrg } = useAuth();
@@ -677,6 +673,43 @@ function PracticeRow() {
         onCancel={() => setConfirmReset(false)}
       />
     </div>
+  );
+}
+
+/**
+ * The platform owner's queue of communities asking for access. Renders
+ * nothing for everyone else.
+ */
+function AccessRequestsRow() {
+  const { token } = useAuth();
+  const isPlatformAdmin =
+    useQuery(api.access.amPlatformAdmin, token ? { token } : "skip") ?? false;
+  const waiting = useQuery(api.access.pendingCount, token ? { token } : "skip") ?? 0;
+
+  if (!isPlatformAdmin) return null;
+
+  return (
+    <Link
+      href="/admin/requests"
+      className="mt-3 flex min-h-14 items-center justify-between gap-3 rounded-2xl border border-line bg-surface px-4 py-3 active:bg-bg"
+    >
+      <span className="min-w-0">
+        <span className="block text-[15px] font-semibold text-ink">Access requests</span>
+        <span className="block text-[13px] text-muted">
+          {waiting > 0
+            ? `${waiting} community${waiting === 1 ? "" : "s"} waiting on you`
+            : "Nobody waiting"}
+        </span>
+      </span>
+      <span className="flex shrink-0 items-center gap-2">
+        {waiting > 0 ? (
+          <span className="tabular flex h-6 min-w-6 items-center justify-center rounded-full bg-danger px-1.5 text-[11px] font-bold text-bg">
+            {waiting}
+          </span>
+        ) : null}
+        <ChevronRight className="h-5 w-5 text-faint" />
+      </span>
+    </Link>
   );
 }
 

@@ -40,7 +40,7 @@ test("Home reads top to bottom: start, last result, match day, then matches", as
 
   const start = page.getByRole("link", { name: /Start match/ });
   const result = page.getByText("Last result", { exact: true });
-  const day = page.getByText(/^(Your match day|Player of the Match)$/);
+  const day = page.getByText(/^(Your match day|Player of the Match) · /);
   const all = page.getByRole("link", { name: "All matches" });
   await expect(start).toBeVisible();
   await expect(result).toBeVisible();

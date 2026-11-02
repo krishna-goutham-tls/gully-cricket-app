@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { loginAs, open } from "./lib/auth.mjs";
-import { api, client, ORG_A, ORG_B, signIn } from "./lib/env.mjs";
+import { api, client, NAMES, ORG_A, ORG_B, signIn } from "./lib/env.mjs";
 
 // Switches change in the second test community only, and every test puts them
 // back, so the other specs see what the seed left.
@@ -12,6 +12,14 @@ async function restore(token: string, orgId: string) {
   await client().mutation(api.orgs.rename, { token, orgId, name: ORG_B });
   for (const key of ["series", "roast"]) await setFeature(token, orgId, key, true);
   for (const key of ["juniorBoard", "testMatches"]) await setFeature(token, orgId, key, false);
+}
+
+/** Your own player page has landed: your name, Settings, and no phone number. */
+async function profileLoaded(page: Page, name: string) {
+  await expect(page).toHaveURL(/\/players\//);
+  await expect(page.getByRole("heading", { name })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Settings" })).toBeVisible();
+  await expect(page.getByText(/\+91/)).toHaveCount(0);
 }
 
 async function noSidewaysScroll(page: Page) {
@@ -27,10 +35,7 @@ test("an admin reaches Settings from Profile and sees all 3 groups", async ({ pa
   const { token, orgId } = await loginAs(page, "otherOrganiser", ORG_B);
   try {
     await open(page, "/profile");
-    await expect(page.getByRole("link", { name: "My stats" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Records" })).toHaveCount(0);
-    await expect(page.getByText("Wishlist")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Sign out" })).toHaveCount(0);
+    await profileLoaded(page, NAMES.otherOrganiser);
     await page.screenshot({ path: `e2e/out/shots/${info.project.name}/profile.png`, fullPage: true });
     await page.getByRole("link", { name: "Settings" }).click();
     await expect(page).toHaveURL(/\/settings$/);
@@ -48,6 +53,7 @@ test("an admin reaches Settings from Profile and sees all 3 groups", async ({ pa
     await expect(page.getByRole("switch", { name: "Series" })).toBeChecked();
     await expect(page.getByRole("switch", { name: "Test matches" })).not.toBeChecked();
     await expect(page.getByRole("switch", { name: "The Roast" })).toBeChecked();
+    // Practice mode is for every player, so it sits in Your account.
     await expect(page.getByRole("switch", { name: "Practice mode" })).not.toBeChecked();
     await expect(page.getByText("Try scoring. Real numbers stay the same.")).toBeVisible();
     await expect(page.getByText("Hides the Series tab")).toHaveCount(0);
@@ -130,17 +136,43 @@ test("an admin renames the community and the header follows", async ({ page }) =
   }
 });
 
+test("the Profile tab is your own player page, with Settings in the header", async ({ page }, info) => {
+  const { token } = await loginAs(page, "player", ORG_A);
+  const boot = await client().query(api.auth.bootstrap, { token });
+  await open(page, "/home");
+  const nav = page.getByRole("navigation");
+  await nav.getByRole("link", { name: "Profile" }).click();
+  await expect(page).toHaveURL(new RegExp(`/players/${boot.user._id}$`));
+  await profileLoaded(page, NAMES.player);
+  await expect(nav.getByRole("link", { name: "Profile" })).toHaveAttribute("aria-current", "page");
+  await expect(nav.getByRole("link", { name: "Players" })).not.toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("button", { name: "Back" })).toHaveCount(0);
+  // Old links still work.
+  await open(page, "/profile");
+  await expect(page).toHaveURL(new RegExp(`/players/${boot.user._id}$`));
+  await profileLoaded(page, NAMES.player);
+});
+
+test("the platform owner finds Access requests in Settings", async ({ page }) => {
+  await loginAs(page, "owner");
+  await open(page, "/settings");
+  await expect(page.getByRole("link", { name: /^Access requests/ })).toBeVisible();
+});
+
 test("a player sees only Your account in Settings, and /community lands there", async ({ page }, info) => {
   await loginAs(page, "player", ORG_A);
   await open(page, "/profile");
-  await expect(page.getByRole("link", { name: "My stats" })).toBeVisible();
+  await profileLoaded(page, NAMES.player);
   await page.getByRole("link", { name: "Settings" }).click();
   await expect(page).toHaveURL(/\/settings$/);
   await expect(page.getByText("Your account", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
   await expect(page.getByText("Community", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Extra features", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("switch")).toHaveCount(0);
+  // Practice mode is every player's: the one switch a player sees.
+  await expect(page.getByRole("switch")).toHaveCount(1);
+  await expect(page.getByRole("switch", { name: "Practice mode" })).toBeVisible();
+  await expect(page.getByText("Access requests")).toHaveCount(0);
   await page.screenshot({ path: `e2e/out/shots/${info.project.name}/settings-player.png`, fullPage: true });
   await open(page, "/community");
   await expect(page).toHaveURL(/\/settings$/);

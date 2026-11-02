@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 // the chart. "Series" over "Tournaments": the long label cannot fit five
 // 44px+ items at 375px without dropping below 12px type.
 // `badge` names which count rides on the item. Access requests hang off
-// Profile rather than a sixth nav item: five 44px+ targets already fill the
+// Profile → Settings rather than a sixth nav item: five 44px+ targets already fill the
 // row at 375px, and only the platform owner would ever see the sixth.
 const items: Array<{
   href: string;
@@ -38,7 +38,9 @@ const items: Array<{
 
 export function BottomNav() {
   const pathname = usePathname();
-  const { token, activeOrgId, features } = useAuth();
+  const { token, activeOrgId, features, user } = useAuth();
+  // Profile is your own player page; /profile sends you there too.
+  const ownPage = user ? `/players/${user._id}` : null;
   // Runs on every screen: two indexed reads, and zeroes for non-admins.
   const pending = useQuery(
     api.players.pendingApprovals,
@@ -56,10 +58,17 @@ export function BottomNav() {
         {items
           .filter((item) => item.href !== "/tournaments" || features.series)
           .map((item) => {
+          const isProfile = item.href === "/profile";
+          const onOwnPage = ownPage !== null && pathname === ownPage;
           // Settings opens from Profile, so Profile stays lit there.
-          const active = [item.href, ...(item.href === "/profile" ? ["/settings"] : [])].some(
-            (href) => pathname === href || pathname.startsWith(`${href}/`),
-          );
+          const active = isProfile
+            ? onOwnPage ||
+              ["/profile", "/settings"].some(
+                (href) => pathname === href || pathname.startsWith(`${href}/`),
+              )
+            : !(onOwnPage && item.href === "/players") &&
+              (pathname === item.href || pathname.startsWith(`${item.href}/`));
+          const href = isProfile && ownPage ? ownPage : item.href;
           const Icon = item.icon;
           const count =
             item.badge === "members"
@@ -70,7 +79,7 @@ export function BottomNav() {
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={href}
               aria-current={active ? "page" : undefined}
               className={cn(
                 "relative flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[11px] font-semibold transition-colors",

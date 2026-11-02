@@ -608,6 +608,8 @@ export function ResultCard({ match }: { match: MatchRow }) {
               >
                 {s.name}
               </TruncText>
+              {/* A side that never faced a ball still gets a line, so the
+                  card never shows one team with a score and one without. */}
               {s.score ? (
                 <span
                   className={cn(
@@ -617,7 +619,9 @@ export function ResultCard({ match }: { match: MatchRow }) {
                 >
                   {s.score}
                 </span>
-              ) : null}
+              ) : (
+                <span className="shrink-0 text-[13px] text-muted">Did not bat</span>
+              )}
             </div>
           );
         })}

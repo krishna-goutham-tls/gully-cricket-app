@@ -3,6 +3,7 @@ import { internalMutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { hashPin } from "./lib/crypto";
 import { normalizePhone, isValidPin } from "./lib/phone";
+import { writeTagsBeforeGuestFlip } from "./lib/playerLabel";
 
 /**
  * One-shot bootstrap: create an org, its admin, and all players in one run.
@@ -520,6 +521,8 @@ export const setPin = internalMutation({
       .unique();
     if (!user) throw new Error(`No user for ${phone}`);
 
+    // isGuest flips false below: keep every tag as it reads today.
+    await writeTagsBeforeGuestFlip(ctx, user._id, user.isGuest ?? false);
     const { hash, salt } = await hashPin(args.pin);
     await ctx.db.patch(user._id, {
       pinHash: hash,
@@ -597,6 +600,9 @@ export const foldDuplicateLogin = internalMutation({
     }
 
     const now = Date.now();
+    // Both accounts' isGuest flips below: keep every tag as it reads today.
+    await writeTagsBeforeGuestFlip(ctx, dup._id, dup.isGuest ?? false);
+    await writeTagsBeforeGuestFlip(ctx, keep._id, keep.isGuest ?? false);
     await ctx.db.patch(dup._id, {
       phone: undefined,
       pinHash: undefined,

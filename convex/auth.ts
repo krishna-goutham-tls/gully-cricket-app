@@ -10,7 +10,7 @@ import {
   sessionTtlMs,
 } from "./lib/session";
 import { playerRole } from "./schema";
-import { resolvePlayerTags } from "./lib/playerLabel";
+import { writeTagsBeforeGuestFlip } from "./lib/playerLabel";
 import { featuredSeasonForOrg } from "./lib/seasons";
 import {
   isClaimableRow,
@@ -267,17 +267,7 @@ export const signUp = mutation({
       userId = claimedId;
       // Claiming changes no tag. isGuest is about to flip false, which would
       // change what an unwritten row resolves to, so write today's tags.
-      const wasGuest = claimed.isGuest ?? false;
-      const memberships = await ctx.db
-        .query("orgMembers")
-        .withIndex("by_user", (q) => q.eq("userId", claimedId))
-        .collect();
-      for (const m of memberships) {
-        if (m.playerTags !== undefined) continue;
-        await ctx.db.patch(m._id, {
-          playerTags: resolvePlayerTags(m.playerTags, m.playerLabel, wasGuest),
-        });
-      }
+      await writeTagsBeforeGuestFlip(ctx, claimedId, claimed.isGuest ?? false);
     } else {
       userId = await ctx.db.insert("users", {
         phone,

@@ -156,10 +156,17 @@ export const enterSandbox = mutation({
 
     for (const m of realMembers) {
       const row = already.get(String(m.userId));
+      // The real community's tags, as they read today. An unwritten sandbox
+      // row would fall back to guest-means-Visitor.
+      const u = await ctx.db.get(m.userId);
+      const playerTags = resolvePlayerTags(m.playerTags, m.playerLabel, u?.isGuest ?? false);
       if (row) {
         // Someone who was removed and came back by link gets the sandbox back.
-        if (row.status !== "active") {
-          await ctx.db.patch(row._id, { status: "active", decidedAt: now });
+        if (row.status !== "active" || row.playerTags === undefined) {
+          await ctx.db.patch(row._id, {
+            ...(row.status !== "active" ? { status: "active" as const, decidedAt: now } : {}),
+            ...(row.playerTags === undefined ? { playerTags } : {}),
+          });
         }
         continue;
       }
@@ -167,6 +174,7 @@ export const enterSandbox = mutation({
         orgId: sandbox._id,
         userId: m.userId,
         status: "active",
+        playerTags,
         roles: ["admin", "player"],
         requestedAt: now,
         decidedAt: now,
