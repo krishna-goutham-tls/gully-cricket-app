@@ -88,4 +88,15 @@ describe("series squads", () => {
       }),
     ).rejects.toThrow("A player on both teams cannot lead one");
   });
+
+  test("a completed series keeps its captains", async () => {
+    const { t, admin, a2, b1, b2, orgId } = await setup();
+    const { tournamentId } = await create(t, admin, orgId, [admin, a2], [b1, b2]);
+    await t.mutation(api.tournaments.setWinner, { token: admin.token, tournamentId, winnerSide: "A" });
+    await expect(
+      t.mutation(api.tournaments.setCaptain, { token: admin.token, tournamentId, side: "A", userId: a2.userId }),
+    ).rejects.toThrow("This series is over");
+    const got = await t.query(api.tournaments.get, { token: admin.token, tournamentId });
+    expect(got!.sideA[0].userId).toBe(admin.userId);
+  });
 });
