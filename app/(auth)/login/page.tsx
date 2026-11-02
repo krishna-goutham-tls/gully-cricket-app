@@ -77,9 +77,7 @@ export default function LoginPage() {
       setNotice(null);
       setStep("signin-pin");
     } else if (lookup.status === "guest") {
-      setNotice(
-        "This number was added as a guest player. Set your name and PIN to claim your stats.",
-      );
+      setNotice("Added as a guest. Claim your stats below.");
       setStep("signup-name");
     } else {
       setNotice(null);
@@ -117,9 +115,7 @@ export default function LoginPage() {
         setPin("");
         setError(null);
       } else if (lower.includes("guest")) {
-        setNotice(
-          "This number was added as a guest player. Set your name and PIN to claim your stats.",
-        );
+        setNotice("Added as a guest. Claim your stats below.");
         setStep("signup-name");
         setPin("");
         setError(null);
@@ -160,11 +156,7 @@ export default function LoginPage() {
       const msg = errorMessage(e, "Sign up failed");
       if (msg.toLowerCase().includes("already registered")) {
         setNotice(null);
-        setError(
-          msg.toLowerCase().includes("didn't match")
-            ? "Looks like you already have an account. Enter your real PIN here."
-            : "Looks like you already have an account — enter your PIN.",
-        );
+        setError("You already have an account. Enter your PIN.");
         setStep("signin-pin");
         setPin("");
       } else {
@@ -184,7 +176,7 @@ export default function LoginPage() {
           Gully Cricket
         </h1>
         <p className="mt-3 max-w-[17rem] text-[15px] leading-relaxed text-muted">
-          Score gully cricket ball by ball. Phone + 4-digit PIN, no SMS.
+          Score gully cricket ball by ball.
         </p>
       </div>
 
@@ -269,10 +261,8 @@ export default function LoginPage() {
               <p className="text-[15px] font-semibold text-ink">
                 No account on this number
               </p>
-              <p className="mt-2 text-[13px] leading-relaxed text-muted">
-                We couldn’t find anyone signed up as{" "}
-                <span className="font-medium text-ink">{phone}</span>. If you’ve
-                played before, one digit is probably off — fix it and try again.
+              <p className="mt-2 text-[13px] text-muted">
+                Check the number. One digit may be off.
               </p>
             </div>
             <Input
@@ -326,11 +316,8 @@ export default function LoginPage() {
                   <p className="text-[15px] font-semibold text-ink">
                     Request sent
                   </p>
-                  <p className="mt-2 text-[13px] leading-relaxed text-muted">
-                    An admin of{" "}
-                    <span className="font-medium text-ink">{resetSent}</span>{" "}
-                    will reset your PIN and give you a temporary one. Sign in
-                    with that, then pick your own PIN.
+                  <p className="mt-0.5 text-[13px] text-muted">
+                    An admin will give you a new PIN.
                   </p>
                 </div>
                 <Button
@@ -349,13 +336,9 @@ export default function LoginPage() {
               <>
                 <div className="text-center">
                   <p className="text-[15px] font-semibold text-ink">
-                    Reset your PIN
+                    Forgot PIN?
                   </p>
-                  <p className="mt-2 text-[13px] leading-relaxed text-muted">
-                    We’ll ask an admin of your community to reset it. They’ll hand
-                    you a temporary PIN — no SMS involved.
-                  </p>
-                  <p className="mt-2 text-[13px] text-muted">{phone}</p>
+                  <p className="mt-0.5 text-[13px] text-muted">{phone}</p>
                 </div>
                 <Button
                   fullWidth
@@ -442,7 +425,7 @@ export default function LoginPage() {
             <div className="text-center">
               <p className="text-[15px] font-semibold text-ink">Set a 4-digit PIN</p>
               <p className="mt-0.5 text-[13px] text-muted">
-                You’ll use this every time. No SMS codes.
+                You’ll use this every time.
               </p>
             </div>
             <PinPad
