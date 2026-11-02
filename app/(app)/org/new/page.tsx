@@ -132,7 +132,7 @@ export default function NewOrgPage() {
           <legend className="text-[13px] font-semibold text-ink">
             {JUNIOR_RULE_HEADING}
           </legend>
-          <div role="radiogroup" aria-label="Seniors against juniors" className="mt-2 grid grid-cols-2 gap-2">
+          <div className="mt-2 grid grid-cols-2 gap-2">
             {[true, false].map((on) => (
               <JuniorRuleCard
                 key={String(on)}
@@ -172,18 +172,21 @@ function JuniorRuleCard({
 }) {
   const rows = [
     { label: "Match scorecard", counts: true },
-    { label: "Leaderboards, Caps, records, milestones", counts: !on },
+    { label: "Leaders, Caps, records, milestones", counts: !on },
   ];
   return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={selected}
-      onClick={onSelect}
-      className={`rounded-xl border p-3 text-left ${
+    <label
+      className={`block cursor-pointer rounded-2xl border p-3 has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ink ${
         selected ? "border-ink bg-bg ring-1 ring-ink" : "border-line bg-surface"
       }`}
     >
+      <input
+        type="radio"
+        name="juniorRule"
+        className="sr-only"
+        checked={selected}
+        onChange={onSelect}
+      />
       <span className="block text-[15px] font-semibold leading-snug text-ink">
         {juniorRuleLabel(on)}
       </span>
@@ -193,12 +196,12 @@ function JuniorRuleCard({
             {r.counts ? (
               <Check aria-label="counts" className="mt-0.5 h-4 w-4 shrink-0 text-ink" />
             ) : (
-              <X aria-label="does not count" className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
+              <X aria-label="does not count" className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
             )}
             {r.label}
           </span>
         ))}
       </span>
-    </button>
+    </label>
   );
 }

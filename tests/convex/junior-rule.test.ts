@@ -161,8 +161,20 @@ describe("the junior rule", () => {
       (await t.query(api.story.matchStory, { token: senior.token, matchId: matchIds[0] }))!
         .badges.find((b) => b.key === "potm")!.receipt;
     expect(await receipt()).toContain("nothing off juniors");
+    // Hero: with the rule on, Senior's 12 off Junior count nothing, so Other's
+    // 4 wins each match. With it off, Senior wins both.
+    const heroPotm = async () =>
+      (await t.query(api.hero.heroDay, {
+        token: senior.token,
+        orgId,
+        playerId: senior.userId,
+        dayStart: 0,
+        dayEnd: Date.now() + 60_000,
+      }))!.moments.potmCount;
+    expect(await heroPotm()).toBe(0);
 
     await setRule(t, orgId, false);
+    expect(await heroPotm()).toBe(2);
     expect(await seniorRuns(t, orgId, senior)).toEqual([
       { runs: 12, off: 0 },
       { runs: 12, off: 0 },
@@ -180,6 +192,29 @@ describe("the junior rule", () => {
     expect(await awards(t, seasonId)).toEqual(awardsBefore);
     expect(await t.query(api.stats.juniorBoard, { token: senior.token, orgId })).not.toBeNull();
     expect(await receipt()).toContain("nothing off juniors");
+    expect(await heroPotm()).toBe(0);
+  });
+
+  test("a sandbox folds by its real community's rule, and the command names it", async () => {
+    const t = newTest();
+    const { orgId, senior, junior } = await league(t);
+    const sandboxId = await t.run((ctx) =>
+      ctx.db.insert("orgs", {
+        name: "SANDBOX — x",
+        createdBy: senior.userId,
+        isDiscoverable: false,
+        isSandbox: true,
+        sandboxForOrgId: orgId,
+        createdAt: Date.now(),
+      }),
+    );
+    const res = await t.mutation(internal.maintenance.setJuniorRule, { orgId, on: false });
+    expect(res.sandboxIds.map(String)).toEqual([String(sandboxId)]);
+    const counted = await t.run(async (ctx) => {
+      const { countedJuniors, orgFeatureOn } = await import("../../convex/lib/features");
+      return countedJuniors([junior.userId], await orgFeatureOn(ctx, sandboxId, "juniorRule")).size;
+    });
+    expect(counted).toBe(0);
   });
 
   test("a match completed under Count everywhere still saves its real juniors", async () => {

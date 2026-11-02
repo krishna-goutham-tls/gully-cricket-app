@@ -525,7 +525,8 @@ export const setTournamentMatchCount = internalMutation({
  * numbers, so the agent then runs `stats:backfillStamps`,
  * `seasons:recomputeSeriesAwards` and `stats:checkStamps`, and reports every
  * winner change. `matches.juniorIds` keeps the real juniors, so this can be
- * undone. A sandbox follows its real community and has no rule of its own.
+ * undone. A sandbox follows its real community and has no rule of its own,
+ * but its stamps sit under its own id: backfill each `sandboxIds` too.
  */
 export const setJuniorRule = internalMutation({
   args: { orgId: v.id("orgs"), on: v.boolean() },
@@ -535,6 +536,12 @@ export const setJuniorRule = internalMutation({
     if (org.isSandbox) throw new Error("A sandbox follows its real community");
     const was = org.features?.juniorRule ?? true;
     await ctx.db.patch(orgId, { features: { ...org.features, juniorRule: on } });
-    return { was, on };
+    const sandboxIds = (
+      await ctx.db
+        .query("orgs")
+        .withIndex("by_sandbox_for", (q) => q.eq("sandboxForOrgId", orgId))
+        .collect()
+    ).map((s) => s._id);
+    return { was, on, sandboxIds };
   },
 });

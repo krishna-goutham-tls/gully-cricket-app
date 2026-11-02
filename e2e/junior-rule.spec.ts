@@ -24,8 +24,8 @@ test("the create step offers two rules, Scorecard only selected", async ({ page 
   await open(page, "/org/new");
   const scorecard = page.getByRole("radio", { name: /Scorecard only/ });
   const everywhere = page.getByRole("radio", { name: /Count everywhere/ });
-  await expect(scorecard).toHaveAttribute("aria-checked", "true");
-  await expect(everywhere).toHaveAttribute("aria-checked", "false");
+  await expect(scorecard).toBeChecked();
+  await expect(everywhere).not.toBeChecked();
   await expect(page.getByText("Seniors' runs, wickets and catches against juniors")).toBeVisible();
   await expect(page.getByText("Juniors' own numbers always count.")).toBeVisible();
   await page.screenshot({ path: `e2e/out/shots/${info.project.name}/create-rule.png`, fullPage: true });
@@ -36,8 +36,8 @@ test("the create step offers two rules, Scorecard only selected", async ({ page 
 
   const name = `E2E Rule ${Date.now().toString(36)}`;
   await page.getByLabel(/name/i).first().fill(name);
-  await everywhere.click();
-  await expect(everywhere).toHaveAttribute("aria-checked", "true");
+  await page.getByText("Count everywhere").click();
+  await expect(everywhere).toBeChecked();
   await page.getByRole("button", { name: /Create/ }).click();
   await page.waitForURL("**/home");
   await page.getByRole("button", { name: "Close" }).click();
