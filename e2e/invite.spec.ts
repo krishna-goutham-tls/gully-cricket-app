@@ -71,7 +71,7 @@ test("a new player joins by link and lands on Home, and the admin sees New", asy
   const adminPage = await ctx.newPage();
   await loginAs(adminPage, "otherOrganiser", ORG_B);
   await open(adminPage, "/players");
-  const row = adminPage.locator("div").filter({ hasText: /^LPLink Player/ }).first();
+  const row = adminPage.getByRole("button", { name: /^Link Player/ });
   await expect(adminPage.getByText("Link Player")).toBeVisible();
   await expect(row.getByText("New")).toBeVisible();
   await adminPage.screenshot({ path: `${shots}/invite-players-new.png` });
@@ -197,7 +197,8 @@ test("admin: Invite players, the WhatsApp link, New link and Remove", async ({ p
   await expect(send).not.toHaveAttribute("href", new RegExp(`%2Fi%2F${code}`));
   await page.getByRole("button", { name: "Close" }).click();
 
-  await page.getByRole("button", { name: `Remove ${gone}` }).click();
+  await page.getByRole("button", { name: new RegExp(`^${gone}`) }).click();
+  await page.getByRole("button", { name: "Remove from community" }).click();
   await expect(page.getByText("Their stats stay.")).toBeVisible();
   await page.screenshot({ path: `${shots}/remove-confirm.png` });
   await page.getByRole("button", { name: "Remove", exact: true }).click();

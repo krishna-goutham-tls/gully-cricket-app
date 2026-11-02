@@ -547,7 +547,7 @@ export default function PlayerDetailPage() {
   const params = useParams();
   const router = useRouter();
   const userId = params.id as Id<"users">;
-  const { token, activeOrgId, isAdmin } = useAuth();
+  const { token, activeOrgId, isAdmin, isSandbox, features } = useAuth();
   const togglePlayerTag = useMutation(api.players.togglePlayerTag);
   const [showAll, setShowAll] = useState(false);
   const [labelBusy, setLabelBusy] = useState(false);
@@ -826,7 +826,7 @@ export default function PlayerDetailPage() {
           switching && "opacity-60",
         )}
       >
-        {isAdmin && token && activeOrgId ? (
+        {isAdmin && token && activeOrgId && (!stats.isAdmin || isSandbox) ? (
           <Section title="Tags">
             <PlayerTagEditor
               tags={stats.playerTags}
@@ -860,7 +860,7 @@ export default function PlayerDetailPage() {
 
         {/* High on the page deliberately — rivalries are the most human thing
             here, and they land in the first fold. */}
-        {hasMatchups ? (
+        {hasMatchups && features.roast ? (
           <Section title="Match-ups">
             <NemesisCard matchups={stats.matchups} firstName={firstName} />
           </Section>

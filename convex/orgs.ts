@@ -11,6 +11,7 @@ import { maskPhone } from "./lib/phone";
 import { requireCreateOrgAllowance } from "./access";
 import { deleteMatchCascade } from "./lib/matches";
 import { orgRole } from "./schema";
+import { resolvePlayerTags } from "./lib/playerLabel";
 import {
   isClaimableRow,
   isUnclaimedNoPhone,
@@ -19,6 +20,13 @@ import {
   newInviteCode,
   orgByInviteCode,
 } from "./lib/invite";
+import {
+  cleanJuniorBoardTitle,
+  DEFAULT_JUNIOR_BOARD_TITLE,
+  isFeatureKey,
+  JUNIOR_BOARD_TITLE_MAX,
+  resolveFeatures,
+} from "./lib/features";
 
 const INVITE_STOPPED = "This link has stopped working. Ask your organiser for the new one.";
 
@@ -443,10 +451,50 @@ export const setRoles = mutation({
     if (!roles.includes("player")) roles.push("player");
     if (roles.length === 0) throw new Error("At least one role required");
 
+    const org = await ctx.db.get(args.orgId);
+    if (!membership.roles.includes("admin") && roles.includes("admin") && !org?.isSandbox) {
+      const target = await ctx.db.get(args.userId);
+      const tags = resolvePlayerTags(
+        membership.playerTags,
+        membership.playerLabel,
+        target?.isGuest ?? false,
+      );
+      if (!target?.pinHash || tags.length > 0) {
+        throw new Error("Only a regular player with an account can be admin");
+      }
+    }
+
+    if (membership.roles.includes("admin") && !roles.includes("admin")) {
+      const others = await signInAdmins(ctx, args.orgId, args.userId);
+      if (others === 0) throw new Error("A community needs one admin");
+    }
+
     await ctx.db.patch(membership._id, { roles });
     return { ok: true, roles };
   },
 });
+
+/**
+ * Active admins other than `except` who can sign in. A guest with an admin
+ * tag cannot open the app, so it does not keep the community running.
+ */
+async function signInAdmins(
+  ctx: MutationCtx,
+  orgId: Id<"orgs">,
+  except: Id<"users">,
+) {
+  const rows = await ctx.db
+    .query("orgMembers")
+    .withIndex("by_org_status", (q) => q.eq("orgId", orgId).eq("status", "active"))
+    .collect();
+  let n = 0;
+  for (const m of rows) {
+    if (m.userId === except || !m.roles.includes("admin")) continue;
+    const u = await ctx.db.get(m.userId);
+    if (u?.pinHash) n += 1;
+  }
+  return n;
+}
 
 async function requireRealOrgAdmin(
   ctx: MutationCtx,
@@ -697,5 +745,91 @@ export const getOrg = query({
       roles: membership?.roles ?? [],
       isObserver,
     };
+  },
+});
+
+/** The Community screen: name, admins, switches and the junior board title. */
+export const settings = query({
+  args: { token: v.optional(v.string()), orgId: v.id("orgs") },
+  handler: async (ctx, args) => {
+    const user = await getUserBySessionToken(ctx, args.token);
+    if (!user) return null;
+    const org = await ctx.db.get(args.orgId);
+    if (!org || org.isSandbox) return null;
+    const me = await ctx.db
+      .query("orgMembers")
+      .withIndex("by_org_user", (q) => q.eq("orgId", args.orgId).eq("userId", user._id))
+      .unique();
+    if (me?.status !== "active" || !me.roles.includes("admin")) return null;
+
+    const members = await ctx.db
+      .query("orgMembers")
+      .withIndex("by_org_status", (q) => q.eq("orgId", args.orgId).eq("status", "active"))
+      .collect();
+    const admins: string[] = [];
+    for (const m of members) {
+      if (!m.roles.includes("admin")) continue;
+      const u = await ctx.db.get(m.userId);
+      if (u) admins.push(u.displayName);
+    }
+    admins.sort((a, b) => a.localeCompare(b));
+
+    return {
+      name: org.name,
+      admins,
+      features: resolveFeatures(org),
+      juniorBoardTitle: org.juniorBoardTitle ?? DEFAULT_JUNIOR_BOARD_TITLE,
+      juniorBoardTitleMax: JUNIOR_BOARD_TITLE_MAX,
+    };
+  },
+});
+
+/** Admin renames the community. Its sandbox keeps the same name with its prefix. */
+export const rename = mutation({
+  args: { token: v.string(), orgId: v.id("orgs"), name: v.string() },
+  handler: async (ctx, args) => {
+    await requireRealOrgAdmin(ctx, args.token, args.orgId);
+    const name = args.name.trim().replace(/\s+/g, " ");
+    if (name.length < 2) throw new Error("Name is too short");
+    if (name.length > 40) throw new Error("Name can be 40 characters at most");
+    await ctx.db.patch(args.orgId, { name });
+    const sandbox = await ctx.db
+      .query("orgs")
+      .withIndex("by_sandbox_for", (q) => q.eq("sandboxForOrgId", args.orgId))
+      .first();
+    if (sandbox) await ctx.db.patch(sandbox._id, { name: `SANDBOX — ${name}` });
+    return { name };
+  },
+});
+
+/**
+ * Admin turns one feature on or off. It changes what shows, never a number,
+ * so it can flip any number of times.
+ */
+export const setFeature = mutation({
+  args: {
+    token: v.string(),
+    orgId: v.id("orgs"),
+    key: v.string(),
+    on: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const { org } = await requireRealOrgAdmin(ctx, args.token, args.orgId);
+    if (!isFeatureKey(args.key)) throw new Error("Unknown setting");
+    await ctx.db.patch(args.orgId, {
+      features: { ...org.features, [args.key]: args.on },
+    });
+    return { key: args.key, on: args.on };
+  },
+});
+
+/** Admin names the junior board. */
+export const setJuniorBoardTitle = mutation({
+  args: { token: v.string(), orgId: v.id("orgs"), title: v.string() },
+  handler: async (ctx, args) => {
+    await requireRealOrgAdmin(ctx, args.token, args.orgId);
+    const title = cleanJuniorBoardTitle(args.title);
+    await ctx.db.patch(args.orgId, { juniorBoardTitle: title });
+    return { title };
   },
 });

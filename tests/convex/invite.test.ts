@@ -203,7 +203,9 @@ describe("Is this you?", () => {
     const far = await addedNoPhone(t, farOrg, otherAdmin, "Asha Far");
     await expect(sign(far, "Asha", code)).rejects.toThrow("Could not claim");
     const boss = await addedNoPhone(t, orgId, admin, "Boss Added");
-    await t.mutation(api.orgs.setRoles, { token: admin.token, orgId, userId: boss, roles: ["admin", "player"] });
+    // Old data: a guest holding admin. The app no longer allows this.
+    const bossRow = await rowOf(t, orgId, boss);
+    await t.run((ctx) => ctx.db.patch(bossRow!._id, { roles: ["admin", "player"] }));
     await expect(sign(boss, "Boss", code)).rejects.toThrow("Could not claim");
     expect(await t.query(api.orgs.inviteNameMatches, { code, name: "Boss" })).toEqual([]);
   });

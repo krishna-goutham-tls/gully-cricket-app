@@ -16,7 +16,11 @@ import {
 import { homeGroundOf } from "./lib/grounds";
 import { Doc, Id } from "./_generated/dataModel";
 import { requireOrgViewer } from "./lib/session";
-import { DEFAULT_JUNIOR_BOARD_TITLE, isFeatureOn } from "./lib/features";
+import {
+  DEFAULT_JUNIOR_BOARD_TITLE,
+  featureOrg,
+  isFeatureOn,
+} from "./lib/features";
 import { legalBallToOverText } from "./lib/scoring";
 import { captainTeamLabel } from "./lib/teams";
 import { matchFormat } from "./schema";
@@ -1452,8 +1456,16 @@ async function leaderboardFor(
     if (!isBoardRegular(tags.get(key) ?? [])) excludedCount += 1;
   }
 
+  // Matches per format in this time window, across every ground. Leaders
+  // shows its Test/ODI filter only when both formats were played.
+  const formats = { test: 0, limited: 0 };
+  for (const m of set.matches) {
+    if (inWindow(m, { afterTs, beforeTs })) formats[m.format] += 1;
+  }
+
   return {
     matchCount: current.matchCount,
+    formats,
     excludedCount,
     includeVisitorsAndJuniors: includeExtras,
     // The reader only trusts movement once there's a past to move from —
@@ -1542,7 +1554,10 @@ export const juniorBoard = query({
       return null;
     }
     const org = await ctx.db.get(orgId);
-    if (!org || !isFeatureOn(org, "juniorBoard")) return null;
+    if (!org) return null;
+    const switches = await featureOrg(ctx, org);
+    if (!isFeatureOn(switches, "roast") || !isFeatureOn(switches, "juniorBoard"))
+      return null;
 
     let window: Window = {};
     if (seasonId) {
@@ -1622,7 +1637,7 @@ export const juniorBoard = query({
         a.displayName.localeCompare(b.displayName),
     );
     return {
-      title: org.juniorBoardTitle ?? DEFAULT_JUNIOR_BOARD_TITLE,
+      title: switches.juniorBoardTitle ?? DEFAULT_JUNIOR_BOARD_TITLE,
       rows,
     };
   },
@@ -2025,6 +2040,14 @@ async function playerStatsFor(
     displayName: player.displayName,
     isGuest: player.isGuest ?? false,
     playerTags: labels.get(key) ?? [],
+    // An admin cannot take a tag, so the profile hides the tag buttons.
+    isAdmin:
+      (
+        await ctx.db
+          .query("orgMembers")
+          .withIndex("by_org_user", (q) => q.eq("orgId", args.orgId).eq("userId", args.userId))
+          .unique()
+      )?.roles.includes("admin") ?? false,
     photoUrl: player.photoUrl,
     bio: player.bio,
     primaryRole: player.primaryRole,

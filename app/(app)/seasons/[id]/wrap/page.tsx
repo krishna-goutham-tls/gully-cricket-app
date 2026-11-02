@@ -19,7 +19,7 @@ export default function SeasonWrapPage() {
   const { id } = useParams<{ id: string }>();
   const seasonId = id as Id<"seasons">;
   const router = useRouter();
-  const { token, activeOrgId } = useAuth();
+  const { token, activeOrgId, features } = useAuth();
   const railRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
 
@@ -76,8 +76,9 @@ export default function SeasonWrapPage() {
       totalsBoard,
       allRound: board.allRound,
       soFar: season.status !== "complete",
+      roast: features.roast,
     });
-  }, [season, board, totalsBoard]);
+  }, [season, board, totalsBoard, features.roast]);
 
   const card = cards[active] ?? null;
   // Records is the long version of the awards slides, so the door opens once

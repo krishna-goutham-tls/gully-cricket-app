@@ -570,6 +570,17 @@ export default function LeaderboardPage() {
       : "skip",
   );
 
+  // The Test/ODI filter shows only when this window has both formats. The
+  // last known counts carry over while the next board loads, so it does not
+  // flicker. When it hides, the board goes back to All.
+  const [bothFormats, setBothFormats] = useState(false);
+  useEffect(() => {
+    if (!data) return;
+    const both = data.formats.test > 0 && data.formats.limited > 0;
+    setBothFormats(both);
+    if (!both) setFormat("all");
+  }, [data]);
+
   const chips = useMemo(() => MEASURES.filter((m) => m.tab === tab), [tab]);
   const measure =
     MEASURES.find((m) => m.key === measureKey && m.tab === tab) ?? chips[0];
@@ -760,17 +771,21 @@ export default function LeaderboardPage() {
 
         {!scrolled ? (
           <div className="mt-1 flex items-center justify-center">
-            <WordToggle
-              ariaLabel="Test or ODI"
-              value={format}
-              onChange={setFormat}
-              options={[
-                { id: "test", label: "Tests" },
-                { id: "limited", label: "ODI" },
-                { id: "all", label: "All" },
-              ]}
-            />
-            <span className="mx-1 h-4 w-px shrink-0 bg-line" aria-hidden />
+            {bothFormats ? (
+              <>
+                <WordToggle
+                  ariaLabel="Test or ODI"
+                  value={format}
+                  onChange={setFormat}
+                  options={[
+                    { id: "test", label: "Tests" },
+                    { id: "limited", label: "ODI" },
+                    { id: "all", label: "All" },
+                  ]}
+                />
+                <span className="mx-1 h-4 w-px shrink-0 bg-line" aria-hidden />
+              </>
+            ) : null}
             <WordToggle
               ariaLabel="Who appears on the board"
               value={includeExtras ? "everyone" : "regulars"}
