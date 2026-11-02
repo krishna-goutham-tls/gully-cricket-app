@@ -16,6 +16,7 @@ import {
 } from "@/components/shelf/SeasonScopeMenu";
 import { MilestoneRaces } from "@/components/leaderboard/MilestoneRaces";
 import { AppHeader } from "@/components/shell/AppHeader";
+import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TruncText } from "@/components/ui/TruncText";
 import { api } from "@/convex/_generated/api";
@@ -23,6 +24,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
+import { ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -33,6 +35,19 @@ const TAB_LABEL: Record<Tab, string> = {
   milestones: "Milestones",
   roast: "The Roast",
 };
+
+/**
+ * Honours opens on these five: the records every gully group argues about.
+ * Top scorer and top wicket-taker, the best single innings and spell, and
+ * who wins Player of the Match most. The rest wait behind "All records".
+ */
+const HEADLINES = [
+  "Most runs",
+  "Best score",
+  "Most wickets",
+  "Best spell",
+  "Most Player of the Match",
+];
 
 function initials(name: string) {
   return name
@@ -227,6 +242,7 @@ export default function RecordsPage() {
   }, [features.roast]);
   const visibleTabs = TABS.filter((t) => t !== "roast" || features.roast);
   const [scope, setScope] = useState<Scope | null>(null);
+  const [allRecords, setAllRecords] = useState(false);
 
   const seasons = useQuery(
     api.seasons.list,
@@ -279,6 +295,15 @@ export default function RecordsPage() {
   );
   const shown = groups.filter((g) => g.tone === tab);
   const onInk = tab === "roast";
+  // Honours shows the headline five first; the Roast is short enough to
+  // show whole.
+  const headlines = HEADLINES.flatMap((label) =>
+    shown.flatMap((g) => g.items.filter((it) => it.label === label)),
+  );
+  const restCount =
+    shown.reduce((n, g) => n + g.items.length, 0) - headlines.length;
+  const collapsed =
+    tab === "honour" && !allRecords && headlines.length > 0 && restCount > 0;
   const juniorBoard = useQuery(
     api.stats.juniorBoard,
     ready && onInk
@@ -396,7 +421,19 @@ export default function RecordsPage() {
             {hasJuniorBoard ? (
               <JuniorBoardSection board={juniorBoard ?? null} />
             ) : null}
-            {shown.length > 0 ? (
+            {collapsed ? (
+              <>
+                <RecordRows items={headlines} />
+                <Button
+                  variant="secondary"
+                  fullWidth
+                  onClick={() => setAllRecords(true)}
+                >
+                  All records
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </>
+            ) : shown.length > 0 ? (
               shown.map((g) => (
                 <RecordSection key={g.title} group={g} onInk={onInk} />
               ))

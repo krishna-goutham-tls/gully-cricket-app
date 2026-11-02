@@ -7,7 +7,9 @@ import { Id } from "@/convex/_generated/dataModel";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { CoinToss } from "@/components/match/CoinToss";
 import { PlayerMultiSelect } from "@/components/match/PlayerMultiSelect";
-import { SideChoice, type SideValue } from "@/components/match/SideChoice";
+import { type SideValue } from "@/components/match/SideChoice";
+import { PlayerSideRow } from "@/components/match/PlayerSideRow";
+import { Choice, SettingRow, Stepper } from "@/components/match/SettingRow";
 import { usePlayableGrounds } from "@/components/ground/GroundChips";
 import {
   DEFAULT_TEST_MINUTES,
@@ -28,18 +30,9 @@ import { balanceTeams } from "@/lib/autoTeams";
 import { cn, errorMessage } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { NumberField } from "@/components/ui/NumberField";
-import { TruncText } from "@/components/ui/TruncText";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  ArrowLeft,
-  ChevronDown,
-  Crown,
-  History,
-  Minus,
-  Plus,
-  X,
-} from "lucide-react";
+import { ArrowLeft, ChevronDown, History, X } from "lucide-react";
 
 type Step = "who" | "teams" | "start";
 type Side = "A" | "B";
@@ -705,43 +698,18 @@ export default function NewMatchPage() {
           </div>
 
           <section className="divide-y divide-line rounded-2xl border border-line bg-surface">
-            {rows.map((id) => {
-              const isCaptain = id === captainA || id === captainB;
-              const canLead = !common.includes(id);
-              return (
-                <div key={id} className="flex items-center gap-2 px-3 py-1.5">
-                  <button
-                    type="button"
-                    disabled={!canLead}
-                    aria-label={
-                      isCaptain
-                        ? `${nameOf(id)}, captain`
-                        : `Make ${nameOf(id)} captain`
-                    }
-                    onClick={() => makeCaptain(id)}
-                    className="flex min-h-12 min-w-0 flex-1 items-center gap-1.5 text-left"
-                  >
-                    <TruncText
-                      lines={2}
-                      className="text-[15px] font-semibold text-ink"
-                    >
-                      {nameOf(id)}
-                    </TruncText>
-                    {isCaptain ? (
-                      <Crown
-                        aria-hidden
-                        className="h-4 w-4 shrink-0 text-accent-deep"
-                      />
-                    ) : null}
-                  </button>
-                  <SideChoice
-                    name={nameOf(id)}
-                    value={sideOf(id)}
-                    onChange={(next) => moveTo(id, next)}
-                  />
-                </div>
-              );
-            })}
+            {rows.map((id) => (
+              <PlayerSideRow
+                key={id}
+                className="px-3 py-1.5"
+                name={nameOf(id)}
+                value={sideOf(id)}
+                onChange={(next) => moveTo(id, next)}
+                captain={id === captainA || id === captainB}
+                canLead={!common.includes(id)}
+                onMakeCaptain={() => makeCaptain(id)}
+              />
+            ))}
           </section>
           {errorBanner}
         </main>
@@ -935,31 +903,13 @@ export default function NewMatchPage() {
                   </SettingRow>
                 ) : (
                   <SettingRow label="Overs each">
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        aria-label="Fewer overs each"
-                        onClick={() =>
-                          setOversPerPlayer((o) => Math.max(2, o - 2))
-                        }
-                        className="flex h-11 w-11 items-center justify-center rounded-xl border border-line text-muted active:bg-bg"
-                      >
-                        <Minus className="h-4 w-4" />
-                      </button>
-                      <span className="tabular w-8 text-center text-[15px] font-semibold text-ink">
-                        {oversPerPlayer}
-                      </span>
-                      <button
-                        type="button"
-                        aria-label="More overs each"
-                        onClick={() =>
-                          setOversPerPlayer((o) => Math.min(20, o + 2))
-                        }
-                        className="flex h-11 w-11 items-center justify-center rounded-xl border border-line text-muted active:bg-bg"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
-                    </div>
+                    <Stepper
+                      value={oversPerPlayer}
+                      decLabel="Fewer overs each"
+                      incLabel="More overs each"
+                      onDec={() => setOversPerPlayer((o) => Math.max(2, o - 2))}
+                      onInc={() => setOversPerPlayer((o) => Math.min(20, o + 2))}
+                    />
                   </SettingRow>
                 )}
                 <SettingRow label="Batters">
@@ -1114,51 +1064,6 @@ export default function NewMatchPage() {
               : "Start scoring"}
         </Button>,
       )}
-    </div>
-  );
-}
-
-function SettingRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <p className="text-[15px] font-semibold text-ink">{label}</p>
-      {children}
-    </div>
-  );
-}
-
-function Choice<T extends string>({
-  options,
-  value,
-  onChange,
-}: {
-  options: Array<{ value: T; label: string }>;
-  value: T;
-  onChange: (next: T) => void;
-}) {
-  return (
-    <div className="flex rounded-xl border border-line p-1">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          type="button"
-          aria-pressed={value === opt.value}
-          onClick={() => onChange(opt.value)}
-          className={
-            value === opt.value
-              ? "min-h-11 rounded-lg bg-ink px-4 text-[13px] font-semibold text-bg"
-              : "min-h-11 rounded-lg px-4 text-[13px] font-semibold text-muted"
-          }
-        >
-          {opt.label}
-        </button>
-      ))}
     </div>
   );
 }

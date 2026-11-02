@@ -66,7 +66,7 @@ export default function AccessRequestsPage() {
         ) : pending.length === 0 && decided.length === 0 ? (
           <EmptyState
             title="Nobody waiting"
-            body="Registrations from the landing page land here. You'll see a badge on Profile the moment one does."
+            body="Sign-ups from the landing page show here."
           />
         ) : null}
 

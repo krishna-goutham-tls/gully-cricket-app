@@ -113,7 +113,7 @@ values are NOT interchangeable. **Netlify does not push Convex.** A push to
 2. When the work is ready to go live, push PROD **yourself**, then merge a
    PR to `main` so Netlify rebuilds the app against the new functions.
    Tournament start/bin allows walk-ons; each XI must still include a player
-   from that series team. Missing cores warn in the UI and do not block.
+   from that series team.
 3. **`npx convex deploy` always means prod.** Never run it to "sync dev".
 4. Local `.env.local` has `CONVEX_DEPLOYMENT=dev:posh-mastiff-400` and a **dev**
    `CONVEX_DEPLOY_KEY`. That key would send `npx convex deploy` to the wrong

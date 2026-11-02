@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -21,7 +21,7 @@ import {
   ArrowLeft,
   Check,
   ChevronDown,
-  Star,
+  Crown,
   Trash2,
   Trophy,
   UserPlus,
@@ -31,7 +31,6 @@ type SquadPlayer = {
   userId: string;
   displayName: string;
   isGuest: boolean;
-  isCore: boolean;
 };
 
 type DeclareTarget = "A" | "B" | "draw";
@@ -61,11 +60,11 @@ export default function TournamentDetailPage() {
   const reopen = useMutation(api.tournaments.reopen);
   const removeTournament = useMutation(api.tournaments.remove);
   const renameTeams = useMutation(api.tournaments.renameTeams);
+  const setCaptain = useMutation(api.tournaments.setCaptain);
 
   const [panelOpen, setPanelOpen] = useState(false);
   const [presentA, setPresentA] = useState<Set<string>>(new Set());
   const [presentB, setPresentB] = useState<Set<string>>(new Set());
-  const [warn, setWarn] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Kept separate from `error`: the Admin card sits below the full match
@@ -82,18 +81,10 @@ export default function TournamentDetailPage() {
   const [renA, setRenA] = useState("");
   const [renB, setRenB] = useState("");
   const [renBusy, setRenBusy] = useState(false);
+  const [captainsOpen, setCaptainsOpen] = useState(false);
+  const [captainBusy, setCaptainBusy] = useState(false);
   const [binOpen, setBinOpen] = useState(false);
   const [binId, setBinId] = useState<Id<"matches"> | null>(null);
-
-  const missingCore = useMemo(() => {
-    if (!t) return [] as string[];
-    const miss: string[] = [];
-    for (const p of t.sideA)
-      if (p.isCore && !presentA.has(p.userId)) miss.push(p.displayName);
-    for (const p of t.sideB)
-      if (p.isCore && !presentB.has(p.userId)) miss.push(p.displayName);
-    return miss;
-  }, [t, presentA, presentB]);
 
   if (t === undefined) {
     return (
@@ -113,46 +104,24 @@ export default function TournamentDetailPage() {
     );
   }
 
-  /**
-   * Cores are expected every match; challengers float in and out. Defaulting to
-   * cores means the scorer adds today's challengers rather than remembering to
-   * remove every absentee. Cores are optional, though — a side can legitimately
-   * have none starred, so fall back to its full squad rather than opening the
-   * panel with that side empty (and confirmStart erroring on "at least 2").
-   */
-  function pickCore() {
-    if (!t) return;
-    const coreA = t.sideA.filter((p) => p.isCore);
-    const coreB = t.sideB.filter((p) => p.isCore);
-    setPresentA(
-      new Set((coreA.length ? coreA : t.sideA).map((p) => p.userId)),
-    );
-    setPresentB(
-      new Set((coreB.length ? coreB : t.sideB).map((p) => p.userId)),
-    );
-    setWarn(false);
-  }
-
   function pickAll() {
     if (!t) return;
     setPresentA(new Set(t.sideA.map((p) => p.userId)));
     setPresentB(new Set(t.sideB.map((p) => p.userId)));
-    setWarn(false);
   }
 
   function pickLast() {
     if (!t?.lastLineup) return;
     setPresentA(new Set(t.lastLineup.sideAPlayerIds.map(String)));
     setPresentB(new Set(t.lastLineup.sideBPlayerIds.map(String)));
-    setWarn(false);
   }
 
   function openPanel() {
     if (!t) return;
     // Prefer "same as last match" — it's the closest guess at who's actually
-    // here today — and fall back to cores when there's no history yet.
+    // here today — and fall back to the whole squad when there's no history yet.
     if (t.lastLineup) pickLast();
-    else pickCore();
+    else pickAll();
     setError(null);
     setPanelOpen(true);
   }
@@ -163,7 +132,6 @@ export default function TournamentDetailPage() {
     if (n.has(id)) n.delete(id);
     else n.add(id);
     (setter as (s: Set<string>) => void)(n);
-    setWarn(false);
   }
 
   async function confirmStart() {
@@ -171,14 +139,23 @@ export default function TournamentDetailPage() {
     // Someone removed from the community can still sit in a squad or the last
     // lineup. They cannot play, so they must not block the start.
     const inCommunity = new Set((orgPlayers ?? []).map((p) => String(p.userId)));
-    const sideA = Array.from(presentA).filter((id) => inCommunity.has(id));
-    const sideB = Array.from(presentB).filter((id) => inCommunity.has(id));
+    // Index 0 leads the match, so the series captain goes first when here.
+    const lead = (ids: string[], squad: SquadPlayer[]) => {
+      const captain = squad[0]?.userId;
+      return captain && ids.includes(captain)
+        ? [captain, ...ids.filter((id) => id !== captain)]
+        : ids;
+    };
+    const sideA = lead(
+      Array.from(presentA).filter((id) => inCommunity.has(id)),
+      t?.sideA ?? [],
+    );
+    const sideB = lead(
+      Array.from(presentB).filter((id) => inCommunity.has(id)),
+      t?.sideB ?? [],
+    );
     if (sideA.length < 2 || sideB.length < 2) {
       setError("Each side needs at least 2 players today.");
-      return;
-    }
-    if (missingCore.length > 0 && !warn) {
-      setWarn(true);
       return;
     }
     setBusy(true);
@@ -216,6 +193,19 @@ export default function TournamentDetailPage() {
       setAdminError(errorMessage(e, "Could not rename the teams"));
     } finally {
       setRenBusy(false);
+    }
+  }
+
+  async function chooseCaptain(side: "A" | "B", userId: string) {
+    if (!token) return;
+    setCaptainBusy(true);
+    setAdminError(null);
+    try {
+      await setCaptain({ token, tournamentId, side, userId: userId as Id<"users"> });
+    } catch (e) {
+      setAdminError(errorMessage(e, "Could not change the captain"));
+    } finally {
+      setCaptainBusy(false);
     }
   }
 
@@ -297,22 +287,12 @@ export default function TournamentDetailPage() {
   const s = t.standings;
   const ranLong = s.played > t.matchCount;
   // Deleting keeps everything that was scored and only drops fixtures nobody
-  // ever opened — the copy below has to say so, or "delete" reads as
-  // "wipe five matches of stats".
+  // ever opened, so "delete" must not read as "wipe the stats".
   const hasLiveMatch = t.matches.some((m) => m.status === "live");
   const scoredCount = t.matches.filter((m) => m.status !== "scheduled").length;
-  const unplayedCount = t.matches.length - scoredCount;
-  const deleteDescription = [
-    scoredCount > 0
-      ? `The ${scoredCount} match${scoredCount === 1 ? "" : "es"} already played stay${scoredCount === 1 ? "s" : ""} in your history and leaderboards — ${scoredCount === 1 ? "it" : "they"} just stop${scoredCount === 1 ? "s" : ""} counting toward a series.`
-      : "Nothing has been scored in this series, so no match data is lost.",
-    unplayedCount > 0
-      ? `${unplayedCount} fixture${unplayedCount === 1 ? "" : "s"} that never started ${unplayedCount === 1 ? "is" : "are"} removed.`
-      : null,
-    "The series itself can't be brought back.",
-  ]
-    .filter(Boolean)
-    .join(" ");
+  const deleteDescription = `${
+    scoredCount > 0 ? "Played matches stay in history." : "Nothing was scored."
+  } This can't be undone.`;
   const declareName =
     declareTarget === "A"
       ? t.sideAName
@@ -338,7 +318,6 @@ export default function TournamentDetailPage() {
       userId: p.userId,
       displayName: p.displayName,
       isGuest: p.isGuest,
-      isCore: false,
     }));
   const binTarget = binId
     ? (linkable ?? []).find((m) => m._id === binId) ?? null
@@ -399,9 +378,8 @@ export default function TournamentDetailPage() {
           {s.overrun && t.status !== "complete" ? (
             <p className="mt-2.5 rounded-xl border border-accent/30 bg-accent-soft px-3 py-2 text-[11px] font-medium leading-relaxed text-accent-deep">
               {ranLong
-                ? `${s.played} match${s.played === 1 ? "" : "es"} played — ${t.matchCount} ${t.matchCount === 1 ? "was" : "were"} planned. Extra matches still count.`
-                : `All ${t.matchCount} planned match${t.matchCount === 1 ? "" : "es"} ${t.matchCount === 1 ? "is" : "are"} done.`}
-              {" An admin can declare the series whenever you're ready."}
+                ? `${s.played} of ${t.matchCount} played. Extras still count.`
+                : `All ${t.matchCount} match${t.matchCount === 1 ? "" : "es"} done.`}
             </p>
           ) : t.status !== "complete" ? (
             <p className="mt-2 text-[11px] text-muted">
@@ -497,8 +475,7 @@ export default function TournamentDetailPage() {
             {t.status === "complete" ? (
               <>
                 <p className="mt-1 text-[11px] leading-relaxed text-muted">
-                  This series is closed. Reopen it if the result was declared by
-                  mistake.
+                  Declared by mistake? Reopen it.
                 </p>
                 <div className="mt-3">
                   <Button variant="secondary" onClick={() => setReopenOpen(true)}>
@@ -523,8 +500,7 @@ export default function TournamentDetailPage() {
                     <p className="text-[11px] leading-relaxed text-muted">
                       {s.leaderSide
                         ? `${s.leaderSide === "A" ? t.sideAName : t.sideBName} lead ${Math.max(s.winsA, s.winsB)}–${Math.min(s.winsA, s.winsB)}.`
-                        : "Series is level."}{" "}
-                      Declaring ends the series — you&apos;ll be asked to confirm.
+                        : "Series is level."}
                     </p>
                     <div className="grid gap-2">
                       <Button
@@ -562,8 +538,7 @@ export default function TournamentDetailPage() {
                     Rename teams
                   </p>
                   <p className="text-[11px] leading-relaxed text-muted">
-                    Fixes a mislabelled side. Matches already played keep their
-                    old name; new matches use the new one.
+                    Played matches keep the old name.
                   </p>
                   <Input
                     value={renA}
@@ -593,6 +568,72 @@ export default function TournamentDetailPage() {
               )}
             </div>
 
+            {t.status !== "complete" ? (
+            <div className="mt-4 border-t border-line pt-3">
+              {captainsOpen ? (
+                <div className="space-y-3">
+                  <p className="text-[13px] font-semibold text-ink">Captains</p>
+                  {(
+                    [
+                      { side: "A", label: t.sideAName, squad: t.sideA, other: sideBIds },
+                      { side: "B", label: t.sideBName, squad: t.sideB, other: sideAIds },
+                    ] as const
+                  ).map(({ side, label, squad, other }) => (
+                    <div key={side}>
+                      <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-faint">
+                        {label}
+                      </p>
+                      <div className="mt-1.5 flex flex-wrap gap-2">
+                        {squad.map((p, i) => (
+                          <button
+                            key={p.userId}
+                            type="button"
+                            aria-pressed={i === 0}
+                            aria-label={
+                              i === 0
+                                ? `${p.displayName}, captain`
+                                : `Make ${p.displayName} captain of ${label}`
+                            }
+                            // A player on both teams cannot lead one.
+                            disabled={captainBusy || (i !== 0 && other.has(p.userId))}
+                            onClick={() => {
+                              if (i !== 0) void chooseCaptain(side, p.userId);
+                            }}
+                            className={cn(
+                              "flex min-h-11 max-w-full items-center gap-1.5 rounded-lg border px-3 text-[13px] font-semibold disabled:opacity-40",
+                              i === 0
+                                ? "border-ink bg-ink text-bg disabled:opacity-100"
+                                : "border-line text-ink active:bg-bg",
+                            )}
+                          >
+                            {i === 0 ? (
+                              <Crown aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                            ) : null}
+                            <span className="truncate">{p.displayName}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  <Button variant="ghost" onClick={() => setCaptainsOpen(false)}>
+                    Done
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="secondary"
+                  fullWidth
+                  onClick={() => {
+                    setAdminError(null);
+                    setCaptainsOpen(true);
+                  }}
+                >
+                  Change captains
+                </Button>
+              )}
+            </div>
+            ) : null}
+
             <div className="mt-4 border-t border-line pt-3">
               {t.status !== "complete" ? (
                 binOpen ? (
@@ -600,13 +641,9 @@ export default function TournamentDetailPage() {
                     <p className="text-[13px] font-semibold text-ink">
                       Add a played match
                     </p>
-                    <p className="text-[11px] leading-relaxed text-muted">
-                      Bins a completed match onto this series. Walk-ons stay
-                      on the scorecard. Side A must still be {t.sideAName}.
-                    </p>
                     {(linkable ?? []).length === 0 ? (
                       <p className="text-[11px] text-muted">
-                        No matching friendlies to add.
+                        No matches to add.
                       </p>
                     ) : (
                       <div className="space-y-1.5">
@@ -658,8 +695,8 @@ export default function TournamentDetailPage() {
               </Button>
               <p className="mt-2 text-[11px] leading-relaxed text-muted">
                 {hasLiveMatch
-                  ? "A match is being scored right now. Finish or abandon it before deleting the series."
-                  : "Matches already played are kept — they stop counting toward a series."}
+                  ? "Finish the live match first."
+                  : "Played matches stay in history."}
               </p>
             </div>
           </div>
@@ -674,14 +711,7 @@ export default function TournamentDetailPage() {
               <p className="text-[15px] font-semibold text-ink">
                 Who&apos;s playing today?
               </p>
-              <p className="mt-1 text-[11px] leading-relaxed text-muted">
-                Core players are pre-selected. Tap to add today&apos;s
-                challengers or drop anyone who didn&apos;t turn up. Walk-ons
-                who aren&apos;t on either squad can join. Short on players?
-                Borrow one from the other team.
-              </p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <QuickPick label="Core only" onClick={pickCore} />
                 {t.lastLineup ? (
                   <QuickPick label="Same as last match" onClick={pickLast} />
                 ) : null}
@@ -710,14 +740,7 @@ export default function TournamentDetailPage() {
               />
             </div>
 
-            {/* Footer is pinned so the core warning can never scroll away from
-                the button whose meaning it changes. */}
             <div className="shrink-0 border-t border-line px-5 pb-4 pt-3">
-              {warn && missingCore.length > 0 ? (
-                <p className="mb-3 rounded-xl border border-accent/30 bg-accent-soft px-3 py-2.5 text-[13px] leading-relaxed text-accent-deep">
-                  Core missing: {missingCore.join(", ")}. Play anyway?
-                </p>
-              ) : null}
               {error ? (
                 <p className="mb-3 text-[13px] text-danger">{error}</p>
               ) : null}
@@ -726,11 +749,7 @@ export default function TournamentDetailPage() {
                   Cancel
                 </Button>
                 <Button disabled={busy} onClick={confirmStart}>
-                  {busy
-                    ? "Starting…"
-                    : warn && missingCore.length > 0
-                      ? "Play anyway"
-                      : "Start match"}
+                  {busy ? "Starting…" : "Start match"}
                 </Button>
               </div>
             </div>
@@ -745,7 +764,7 @@ export default function TournamentDetailPage() {
             ? "End the series in a draw?"
             : `${declareName} win the series?`
         }
-        description={`This closes ${t.name} at ${s.winsA}–${s.winsB} after ${s.played} match${s.played === 1 ? "" : "es"}. No more matches can be started, and only an admin can reopen it.`}
+        description={`${t.name} ends at ${s.winsA}–${s.winsB}.`}
         confirmLabel={declareTarget === "draw" ? "End in a draw" : "Declare"}
         busy={confirmBusy}
         onConfirm={() => void confirmDeclare()}
@@ -768,8 +787,8 @@ export default function TournamentDetailPage() {
         title="Add this match to the series?"
         description={
           binTarget
-            ? `${binTarget.resultText ?? `${binTarget.sideAName} vs ${binTarget.sideBName}`} will count toward ${t.name}. You can still declare the winner after.`
-            : "This match will count toward the series."
+            ? `${binTarget.resultText ?? `${binTarget.sideAName} vs ${binTarget.sideBName}`} counts toward ${t.name}.`
+            : "This match counts toward the series."
         }
         confirmLabel="Add to series"
         busy={confirmBusy}
@@ -780,7 +799,7 @@ export default function TournamentDetailPage() {
       <ConfirmDialog
         open={reopenOpen}
         title="Reopen this series?"
-        description="The declared result is cleared and the series returns paused — hit Resume when you're ready to play more matches."
+        description="The result is cleared. The series stays paused."
         confirmLabel="Reopen"
         busy={confirmBusy}
         onConfirm={() => void confirmReopen()}
@@ -821,8 +840,6 @@ function SquadPicker({
 }) {
   const [showBorrow, setShowBorrow] = useState(false);
   const [showWalk, setShowWalk] = useState(false);
-  const cores = players.filter((p) => p.isCore);
-  const challengers = players.filter((p) => !p.isCore);
   const ownIn = players.filter((p) => present.has(p.userId)).length;
   const borrowedIn = borrowable.filter((p) => present.has(p.userId)).length;
   const walkIn = walkable.filter((p) => present.has(p.userId)).length;
@@ -840,41 +857,16 @@ function SquadPicker({
         </span>
       </div>
 
-      {cores.length > 0 ? (
-        <>
-          <p className="mt-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
-            Core · expected every match
-          </p>
-          <div className="mt-1.5 space-y-1.5">
-            {cores.map((p) => (
-              <PlayerRow
-                key={p.userId}
-                player={p}
-                on={present.has(p.userId)}
-                onToggle={() => onToggle(p.userId)}
-              />
-            ))}
-          </div>
-        </>
-      ) : null}
-
-      {challengers.length > 0 ? (
-        <>
-          <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-muted">
-            Challengers
-          </p>
-          <div className="mt-1.5 space-y-1.5">
-            {challengers.map((p) => (
-              <PlayerRow
-                key={p.userId}
-                player={p}
-                on={present.has(p.userId)}
-                onToggle={() => onToggle(p.userId)}
-              />
-            ))}
-          </div>
-        </>
-      ) : null}
+      <div className="mt-2.5 space-y-1.5">
+        {players.map((p) => (
+          <PlayerRow
+            key={p.userId}
+            player={p}
+            on={present.has(p.userId)}
+            onToggle={() => onToggle(p.userId)}
+          />
+        ))}
+      </div>
 
       {/* Borrow a player from the other squad to balance numbers. Collapsed by
           default since it's the exception; the header's "+N borrowed" count
@@ -973,12 +965,7 @@ function PlayerRow({
           : "border-line text-muted",
       )}
     >
-      <span className="flex min-w-0 items-center gap-1.5">
-        {player.isCore ? (
-          <Star className="h-3.5 w-3.5 shrink-0 text-accent" fill="currentColor" />
-        ) : null}
-        <span className="truncate font-medium">{player.displayName}</span>
-      </span>
+      <span className="min-w-0 truncate font-medium">{player.displayName}</span>
       {on ? <Check className="h-4 w-4 shrink-0" /> : null}
     </button>
   );

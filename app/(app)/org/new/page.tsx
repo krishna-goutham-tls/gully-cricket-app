@@ -57,16 +57,16 @@ export default function NewOrgPage() {
       allowance.reason === "pending"
         ? {
             title: "You're in the queue",
-            body: "Your request is in. I'll WhatsApp you to say hello, and your community opens up right after.",
+            body: "I'll WhatsApp you, then it opens.",
           }
         : allowance.reason === "already-used"
           ? {
               title: "You've already got one",
-              body: "That number has a community against it. One per organiser — open it from the list, or ask me if something's gone wrong.",
+              body: "One per organiser. Open it from your list.",
             }
           : {
               title: "Communities are invite-only",
-              body: "Register yours at gullycricket.space and I'll WhatsApp you within a day. Every community gets a personal hello before it gets a scorebook.",
+              body: "Register at gullycricket.space. I'll WhatsApp you.",
             };
 
     return (

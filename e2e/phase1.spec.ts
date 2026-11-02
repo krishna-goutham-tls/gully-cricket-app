@@ -61,11 +61,21 @@ test("the Bowling card on a profile adds up", async ({ page }, info) => {
   await open(page, `/players/${me.userId ?? me._id}`);
   await expect(page.locator("main").first()).toBeVisible();
   await page.waitForTimeout(800);
-  // The card adds up: 13 conceded off 1.0 over is 13.0 an over.
+  // The card adds up: economy is runs conceded per over. Other tests add
+  // matches to the test data, so check the sum, not fixed numbers.
   const tile = (label: string) => page.getByText(label, { exact: true }).last().locator("..");
-  await expect(tile("Economy")).toContainText("13.0");
-  await expect(tile("Overs")).toContainText("1.0");
-  await expect(tile("Conceded")).toContainText("13");
+  const num = async (label: string) => {
+    await expect(tile(label)).toContainText(/\d/);
+    const text = (await tile(label).innerText()).replace(label, "");
+    return Number((text.match(/\d+(\.\d+)?/) ?? ["NaN"])[0]);
+  };
+  const overs = await num("Overs");
+  const conceded = await num("Conceded");
+  const economy = await num("Economy");
+  // "1.3" overs means 1 over and 3 balls.
+  const balls = Math.floor(overs) * 6 + Math.round((overs % 1) * 10);
+  expect(balls).toBeGreaterThan(0);
+  expect(economy).toBeCloseTo((conceded * 6) / balls, 1);
   await page.screenshot({ path: `e2e/out/shots/${info.project.name}-player-bowling.png`, fullPage: true });
   expect(errors).toEqual([]);
 });
