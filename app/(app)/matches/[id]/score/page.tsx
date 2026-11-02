@@ -582,7 +582,7 @@ export default function ScorePage() {
                 solo ? "the first batter" : "the openers"
               }.`
             : solo
-              ? "One batter at a time — pick who opens and who bowls."
+              ? "Pick the batter and opening bowler."
               : "Pick the openers and opening bowler."}
         </p>
         <TestClockLine tone="paper" />
@@ -1285,11 +1285,11 @@ export default function ScorePage() {
                 </p>
                 {activeSheet.type === "noball" ? (
                   <p className="mt-1 text-[13px] text-muted">
-                    The no-ball is +1. This is what they hit.
+                    No-ball is +1. Pick what they hit.
                   </p>
                 ) : activeSheet.type === "wide" ? (
                   <p className="mt-1 text-[13px] text-muted">
-                    The wide is +1. These are the runs they ran.
+                    Wide is +1. Pick the runs they ran.
                   </p>
                 ) : null}
                 <div
@@ -1443,7 +1443,7 @@ export default function ScorePage() {
                 </p>
                 <p className="mt-1 text-[13px] text-muted">
                   {midOverBowlerChange
-                    ? `The bowler has gone in to bat — someone else bowls the remaining ${ballsLeftInOver} ball${ballsLeftInOver === 1 ? "" : "s"}.`
+                    ? `Bowler went in to bat. ${ballsLeftInOver} ball${ballsLeftInOver === 1 ? "" : "s"} left.`
                     : "Over done — same bowler can’t bowl again."}
                 </p>
                 {noBowlerToFollow ? null : (
@@ -1476,9 +1476,7 @@ export default function ScorePage() {
                       Nobody left to bowl
                     </p>
                     <p className="mt-1 text-[13px] text-muted">
-                      Everyone eligible either just bowled that over or is
-                      currently batting. Add a player, or undo the last ball
-                      to carry on.
+                      Add a player, or undo the last ball.
                     </p>
                     <Button fullWidth className="mt-3" onClick={openSquad}>
                       Add a player
@@ -1520,9 +1518,8 @@ export default function ScorePage() {
                 <p className="text-[15px] font-semibold text-ink">Next batsman</p>
                 {live.potBalls > 0 ? (
                   <p className="mt-1 text-[13px] text-muted">
-                    {live.potBalls} spare {live.potBalls === 1 ? "ball" : "balls"}{" "}
-                    left by batters out early — anyone can bat them, even after
-                    their own quota.
+                    {live.potBalls} spare {live.potBalls === 1 ? "ball" : "balls"}.
+                    Anyone can bat them.
                   </p>
                 ) : null}
                 {noBatterToFollow ? null : (
@@ -1589,8 +1586,8 @@ export default function ScorePage() {
                     </p>
                     <p className="mt-1 text-[13px] text-muted">
                       {lastWasRetire
-                        ? "Everyone else is out or already at the crease. Add a player, or undo the retirement to put them back in."
-                        : "Everyone else is out or already at the crease. Add a player, or undo the last ball to carry on."}
+                        ? "Add a player, or undo the retirement."
+                        : "Add a player, or undo the last ball."}
                     </p>
                     <Button fullWidth className="mt-3" onClick={openSquad}>
                       Add a player
@@ -1624,22 +1621,20 @@ export default function ScorePage() {
                 </p>
                 <p className="mt-1 text-[13px] text-muted">
                   {retireForced && live.strikerQuota
-                    ? `${live.striker?.displayName ?? "Striker"} has batted their ${
+                    ? `${live.striker?.displayName ?? "Striker"} has faced ${
                         live.strikerQuota.cap
-                      } balls and there are no spare balls left — next batter comes in.`
-                    : "Retired not out — no wicket. They keep their score and can be sent back in whenever the side needs them."}
+                      } balls. Next batter in.`
+                    : "Not out, no wicket. Can bat again later."}
                 </p>
                 {!retireForced && live.potBalls > 0 ? (
                   <p className="mt-2 rounded-2xl border border-accent/25 bg-accent-soft px-3 py-2.5 text-[13px] text-accent-deep">
                     {live.potBalls} spare{" "}
-                    {live.potBalls === 1 ? "ball" : "balls"} in hand — no need to
-                    retire yet if you want to keep this batter on.
+                    {live.potBalls === 1 ? "ball" : "balls"} left. No need to retire.
                   </p>
                 ) : null}
                 {noBatterToFollow ? (
                   <p className="mt-3 rounded-2xl border border-danger/20 bg-danger-soft px-3 py-2.5 text-[13px] text-danger">
-                    Nobody is left to come in. Retire now and the innings stops
-                    until you add a player or undo.
+                    No one left to come in. Innings pauses.
                   </p>
                 ) : null}
                 {!retireForced ? (
@@ -1712,8 +1707,8 @@ export default function ScorePage() {
                 </p>
                 <p className="mt-1 text-[13px] text-muted">
                   {state.lastBallDrop
-                    ? "Tap someone else to correct it, or remove it below."
-                    : "Goes on the ball you just scored — doesn’t change the score."}
+                    ? "Tap someone else to fix, or remove below."
+                    : "Adds to the last ball. Score unchanged."}
                 </p>
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   {dropCandidates.map((p) => {

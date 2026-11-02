@@ -389,7 +389,7 @@ function BattingCard({
               ? { value: b.average, label: `avg ${b.average.toFixed(0)}` }
               : undefined
           }
-          hint="Every innings. Gold is 30 or more. Tap a bar."
+          hint="Gold is 30 or more. Tap a bar."
         />
       </div>
 
@@ -478,7 +478,7 @@ function BowlingCard({
       <div className="mt-4 border-t border-line pt-3">
         <InningsBars
           bars={bowlingBars(log)}
-          hint="Wickets in every spell. Gold is 3 or more. Tap a bar."
+          hint="Gold is 3 or more wickets. Tap a bar."
         />
       </div>
 
@@ -619,7 +619,7 @@ export default function PlayerDetailPage() {
       <div className="px-5 py-8">
         <EmptyState
           title="Player not found"
-          body="They may have been removed from this community, or you followed an old link."
+          body="Removed, or an old link."
           action={
             <Button href="/players">Back to players</Button>
           }
@@ -949,7 +949,7 @@ export default function PlayerDetailPage() {
             body={
               selectedSeason
                 ? `No batting or bowling in ${selectedSeason.name} yet.`
-                : "Stats appear here once they have batted or bowled in a completed match."
+                : "Stats show after their first finished match."
             }
           />
         ) : null}
@@ -959,10 +959,8 @@ export default function PlayerDetailPage() {
             <p className="text-[13px] font-semibold text-accent-deep">
               This is still a guest profile
             </p>
-            <p className="mt-1 text-[13px] leading-relaxed text-ink">
-              Every run and wicket here is already saved. When{" "}
-              {stats.displayName} signs up with the same phone number, this whole
-              record becomes their account — nothing to transfer, nothing lost.
+            <p className="mt-1 text-[13px] text-ink">
+              Stats stay when they sign up.
             </p>
           </section>
         ) : null}

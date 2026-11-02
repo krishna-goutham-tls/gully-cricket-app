@@ -150,7 +150,7 @@ export default function MatchesPage() {
           <div className="mt-6">
             <EmptyState
               title="No matches yet"
-              body="Start your first match from Home — pick two teams and score ball by ball."
+              body="Start one from Home."
             />
           </div>
         ) : (
@@ -190,7 +190,7 @@ export default function MatchesPage() {
         description={
           pending?.kind === "end"
             ? "It stays in your history."
-            : "Every ball scored in it goes too. This cannot be undone."
+            : "Every ball goes too. This can't be undone."
         }
         confirmLabel={pending?.kind === "end" ? "End match" : "Delete"}
         danger={pending?.kind === "delete"}
