@@ -76,9 +76,10 @@ describe("community switches", () => {
       series: true,
       roast: true,
       juniorBoard: false,
+      juniorRule: true,
     });
     const s = await t.query(api.orgs.settings, { token: admin.token, orgId });
-    expect(s!.features).toEqual({ series: true, roast: true, juniorBoard: false });
+    expect(s!.features).toEqual({ series: true, roast: true, juniorBoard: false, juniorRule: true });
     expect(s!.admins).toEqual(["Asha"]);
     expect(s!.juniorBoardTitle).toBe("Playground Bullies");
   });

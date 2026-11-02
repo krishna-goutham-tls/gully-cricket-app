@@ -3,6 +3,7 @@ import { Doc, Id } from "../_generated/dataModel";
 import { CATCH_POINTS, WICKET_POINTS, earnsPoints, matchPoints } from "./points";
 import type { Side } from "./contribution";
 import { tagsForUsers } from "./playerLabel";
+import { countedJuniors, orgFeatureOn } from "./features";
 
 /**
  * Stat stamps: one completed match's ball log, folded per player, written to
@@ -810,7 +811,12 @@ export async function restampMatch(
     .query("balls")
     .withIndex("by_match", (q) => q.eq("matchId", matchId))
     .collect();
-  const juniors = await juniorsOf(ctx, match, balls);
+  // Freeze the real juniors even when the rule is off, so a later change
+  // of rule has the list to fold against.
+  const juniors = countedJuniors(
+    await juniorsOf(ctx, match, balls),
+    await orgFeatureOn(ctx, match.orgId, "juniorRule"),
+  );
   const folded = foldMatch(match, innings, balls, juniors);
   await ctx.db.insert("matchStats", folded.match);
   for (const row of folded.players) await ctx.db.insert("playerMatchStats", row);

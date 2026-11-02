@@ -518,3 +518,23 @@ export const setTournamentMatchCount = internalMutation({
     return { name: t.name, from: t.matchCount, to: matchCount };
   },
 });
+
+/**
+ * Ops: change a community's junior rule after an organiser's email to
+ * Krishna. On is "Scorecard only", off is "Count everywhere". It moves
+ * numbers, so the agent then runs `stats:backfillStamps`,
+ * `seasons:recomputeSeriesAwards` and `stats:checkStamps`, and reports every
+ * winner change. `matches.juniorIds` keeps the real juniors, so this can be
+ * undone. A sandbox follows its real community and has no rule of its own.
+ */
+export const setJuniorRule = internalMutation({
+  args: { orgId: v.id("orgs"), on: v.boolean() },
+  handler: async (ctx, { orgId, on }) => {
+    const org = await ctx.db.get(orgId);
+    if (!org) throw new Error("Community not found");
+    if (org.isSandbox) throw new Error("A sandbox follows its real community");
+    const was = org.features?.juniorRule ?? true;
+    await ctx.db.patch(orgId, { features: { ...org.features, juniorRule: on } });
+    return { was, on };
+  },
+});

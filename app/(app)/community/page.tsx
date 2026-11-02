@@ -13,10 +13,12 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
 import { SwitchRow } from "@/components/ui/Switch";
 import { errorMessage } from "@/lib/utils";
+import { juniorRuleChangeMailto, juniorRuleLabel } from "@/lib/juniorRule";
 
 /**
  * The admin's settings for the community. A switch changes what players see,
- * never a number, so an admin can flip it any time.
+ * never a number, so an admin can flip it any time. The junior rule changes
+ * numbers, so it is not a switch: Change emails Krishna.
  */
 export default function CommunityPage() {
   const { token, activeOrgId, isSandbox } = useAuth();
@@ -180,7 +182,7 @@ export default function CommunityPage() {
                 disabled={busy !== null}
                 onChange={(on) => flip("roast", on)}
               />
-              {features.roast ? (
+              {features.roast && features.juniorRule ? (
                 <>
                   <SwitchRow
                     label="Junior board"
@@ -211,6 +213,21 @@ export default function CommunityPage() {
                   ) : null}
                 </>
               ) : null}
+            </div>
+
+            <div className="flex min-h-14 items-center gap-3 overflow-hidden rounded-2xl border border-line bg-surface px-4 py-3">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13px] text-muted">Seniors against juniors</span>
+                <span className="block text-[15px] font-semibold text-ink">
+                  {juniorRuleLabel(features.juniorRule)}
+                </span>
+              </span>
+              <a
+                href={juniorRuleChangeMailto(settings.name, features.juniorRule)}
+                className="flex min-h-11 shrink-0 items-center px-2 text-[15px] font-semibold text-accent-deep active:opacity-70"
+              >
+                Change
+              </a>
             </div>
           </>
         )}

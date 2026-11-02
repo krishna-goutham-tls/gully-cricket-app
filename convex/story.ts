@@ -8,10 +8,10 @@ import {
   bowlingHaulBonus,
   earnsPoints,
   matchPoints,
-  POINTS_RECEIPT,
+  pointsReceipt,
 } from "./lib/points";
 import { loadMatchAccess, sideLabel, sidePlayers } from "./scoring";
-import { orgFeatureOn } from "./lib/features";
+import { countedJuniors, orgFeatureOn } from "./lib/features";
 
 type Side = "A" | "B";
 
@@ -178,7 +178,8 @@ export const matchStory = query({
     // and milestones.
     let totalSixes = 0;
     const overRuns = new Map<string, { runs: number; bowlerId: Id<"users"> }>();
-    const juniors = new Set((match.juniorIds ?? []).map(String));
+    const juniorRule = await orgFeatureOn(ctx, match.orgId, "juniorRule");
+    const juniors = countedJuniors(match.juniorIds, juniorRule);
 
     for (let idx = 0; idx < inningsList.length; idx++) {
       const inn = inningsList[idx];
@@ -344,7 +345,7 @@ export const matchStory = query({
         "Player of the Match",
         potm,
         potmLine(potm.runs, potm.wickets, potm.catches),
-        `${plural(potmPoints(potm), "point", "points")} — ${POINTS_RECEIPT}.` +
+        `${plural(potmPoints(potm), "point", "points")} — ${pointsReceipt(juniorRule)}.` +
           (runner
             ? ` Next best: ${runner.name}, ${potmPoints(runner)}.`
             : ""),

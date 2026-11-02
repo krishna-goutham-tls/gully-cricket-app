@@ -1556,7 +1556,11 @@ export const juniorBoard = query({
     const org = await ctx.db.get(orgId);
     if (!org) return null;
     const switches = await featureOrg(ctx, org);
-    if (!isFeatureOn(switches, "roast") || !isFeatureOn(switches, "juniorBoard"))
+    if (
+      !isFeatureOn(switches, "roast") ||
+      !isFeatureOn(switches, "juniorBoard") ||
+      !isFeatureOn(switches, "juniorRule")
+    )
       return null;
 
     let window: Window = {};

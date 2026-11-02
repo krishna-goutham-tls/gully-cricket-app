@@ -13,6 +13,13 @@ export const FEATURE_DEFAULTS = {
   roast: true,
   /** A Roast board of the points regulars did not earn against juniors. */
   juniorBoard: false,
+  /**
+   * Seniors earn nothing against juniors on boards, Caps, records and
+   * milestones ("Scorecard only"). Off is "Count everywhere". The organiser
+   * picks it at creation. Only an agent changes it later, because it moves
+   * numbers (`maintenance.setJuniorRule`).
+   */
+  juniorRule: true,
 } as const;
 
 export type FeatureKey = keyof typeof FEATURE_DEFAULTS;
@@ -39,6 +46,24 @@ export function resolveFeatures(
 
 export function isFeatureKey(key: string): key is FeatureKey {
   return Object.prototype.hasOwnProperty.call(FEATURE_DEFAULTS, key);
+}
+
+/** The keys an admin can flip. The junior rule moves numbers, so it is not one. */
+export function isAdminSwitch(key: string): key is FeatureKey {
+  return isFeatureKey(key) && key !== "juniorRule";
+}
+
+/**
+ * The juniors a match's points leave out. `matches.juniorIds` always holds
+ * the real juniors, so turning the rule back on restores them. With the rule
+ * off ("Count everywhere") nobody is left out.
+ */
+export function countedJuniors(
+  juniorIds: readonly Doc<"users">["_id"][] | Set<string> | undefined,
+  ruleOn: boolean,
+): Set<string> {
+  if (!ruleOn || !juniorIds) return new Set();
+  return juniorIds instanceof Set ? juniorIds : new Set(juniorIds.map(String));
 }
 
 /**

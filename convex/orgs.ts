@@ -23,7 +23,7 @@ import {
 import {
   cleanJuniorBoardTitle,
   DEFAULT_JUNIOR_BOARD_TITLE,
-  isFeatureKey,
+  isAdminSwitch,
   JUNIOR_BOARD_TITLE_MAX,
   resolveFeatures,
 } from "./lib/features";
@@ -35,6 +35,8 @@ export const create = mutation({
     token: v.string(),
     name: v.string(),
     location: v.optional(v.string()),
+    /** The junior rule: true is "Scorecard only", false "Count everywhere". Absent means true. */
+    juniorRule: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     // Invite-only: the caller must hold an approved, unspent access request
@@ -51,6 +53,8 @@ export const create = mutation({
       location: args.location?.trim() || undefined,
       createdBy: user._id,
       isDiscoverable: true,
+      // Only "Count everywhere" is stored. The default needs no row.
+      features: args.juniorRule === false ? { juniorRule: false } : undefined,
       createdAt: now,
     });
 
@@ -815,7 +819,7 @@ export const setFeature = mutation({
   },
   handler: async (ctx, args) => {
     const { org } = await requireRealOrgAdmin(ctx, args.token, args.orgId);
-    if (!isFeatureKey(args.key)) throw new Error("Unknown setting");
+    if (!isAdminSwitch(args.key)) throw new Error("Unknown setting");
     await ctx.db.patch(args.orgId, {
       features: { ...org.features, [args.key]: args.on },
     });

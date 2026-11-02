@@ -10,6 +10,7 @@ import {
   earnsPoints,
 } from "./lib/points";
 import { sideLabel } from "./scoring";
+import { countedJuniors, orgFeatureOn } from "./lib/features";
 
 type Side = "A" | "B";
 
@@ -123,6 +124,7 @@ export const heroDay = query({
     const player = await ctx.db.get(args.playerId);
     if (!player) return null;
     const playerKey = String(args.playerId);
+    const juniorRule = await orgFeatureOn(ctx, args.orgId, "juniorRule");
 
     const allCompleted = await ctx.db
       .query("matches")
@@ -207,7 +209,7 @@ export const heroDay = query({
       // bucketed per innings (key `${inningsId}:${playerId}`) because the
       // batting milestone bonus is per innings, not per match. Nothing
       // against a junior counts (`earnsPoints`).
-      const juniors = new Set((match.juniorIds ?? []).map(String));
+      const juniors = countedJuniors(match.juniorIds, juniorRule);
       const pInnRuns = new Map<string, number>();
       const pWkts = new Map<string, number>();
       const pCatch = new Map<string, number>();
@@ -745,6 +747,7 @@ export const dayShares = query({
     const dayMatches = allCompleted.filter(
       (m) => m.createdAt >= args.dayStart && m.createdAt < args.dayEnd,
     );
+    const juniorRule = await orgFeatureOn(ctx, args.orgId, "juniorRule");
 
     const seen = new Set<string>();
     for (const m of dayMatches) {
@@ -773,7 +776,7 @@ export const dayShares = query({
       const catches = new Map<string, number>();
       const bump = (m: Map<string, number>, k: string, by = 1) =>
         m.set(k, (m.get(k) ?? 0) + by);
-      const juniors = new Set((match.juniorIds ?? []).map(String));
+      const juniors = countedJuniors(match.juniorIds, juniorRule);
 
       for (const b of balls) {
         if (b.isRetire) continue;
