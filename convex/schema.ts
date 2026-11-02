@@ -643,6 +643,13 @@ export default defineSchema({
         ballsFaced: v.number(),
         wickets: v.number(),
         catches: v.number(),
+        /** Absent on rows stamped before Home's match day read them. */
+        fours: v.optional(v.number()),
+        sixes: v.optional(v.number()),
+        /** Most runs off the bat in one over. */
+        bestOver: v.optional(v.number()),
+        /** Legal balls bowled that gave away nothing. */
+        bowlDots: v.optional(v.number()),
       }),
     ),
     /** Run-outs this player made as the fielder. */

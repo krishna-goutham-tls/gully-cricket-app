@@ -35,6 +35,9 @@ describe("tags stay put", () => {
     });
     expect((await tagsIn(sandboxId)).get(String(guestId))).toEqual(["visitor"]);
 
+    // A dry run counts the row and leaves it alone.
+    expect(await t.mutation(internal.maintenance.copySandboxTags, { dryRun: true })).toMatchObject({ copied: 1 });
+    expect((await t.run((ctx) => ctx.db.get(sandboxRow)))!.playerTags).toBeUndefined();
     expect(await t.mutation(internal.maintenance.copySandboxTags, {})).toMatchObject({ copied: 1 });
     expect((await t.run((ctx) => ctx.db.get(sandboxRow)))!.playerTags).toEqual([]);
     expect(await t.mutation(internal.maintenance.copySandboxTags, {})).toMatchObject({ copied: 0 });

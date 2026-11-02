@@ -878,7 +878,8 @@ export const matchDay = query({
     let playerId = viewerId;
     let stamps = await stampsOf(viewerId);
     if (stamps.length === 0) {
-      const potm = dayMatches[dayMatches.length - 1].potm?.[0]?.userId;
+      // The latest match of the day that named one.
+      const potm = [...dayMatches].reverse().find((m) => m.potm?.[0])?.potm?.[0]?.userId;
       if (!potm) return null;
       playerId = potm;
       stamps = await stampsOf(potm);
@@ -914,23 +915,24 @@ export const matchDay = query({
 
     for (const r of stamps) {
       const m = byMatch.get(String(r.matchId));
-      // Every ball, juniors included, as the scorecard counts it.
+      // Every ball, juniors included, as the scorecard counts it. Rows stamped
+      // before `real` held boundaries fall back to `bat` until a restamp.
       const mRuns = r.real?.runs ?? (r.bat?.runs ?? 0) + (r.offJuniors?.runs ?? 0);
       const mFaced = r.real?.ballsFaced ?? r.bat?.balls ?? 0;
       const mWkts = r.real?.wickets ?? (r.bowl?.wickets ?? 0) + (r.offJuniors?.wickets ?? 0);
       const mOut = (r.bat?.dismissals ?? 0) > 0;
       runs += mRuns;
       ballsFaced += mFaced;
-      fours += r.bat?.fours ?? 0;
-      sixes += r.bat?.sixes ?? 0;
+      fours += r.real?.fours ?? r.bat?.fours ?? 0;
+      sixes += r.real?.sixes ?? r.bat?.sixes ?? 0;
       wickets += mWkts;
       runsConceded += r.bowl?.runs ?? 0;
       ballsBowled += r.bowl?.legalBalls ?? 0;
-      dotsBowled += r.bowl?.dots ?? 0;
+      dotsBowled += r.real?.bowlDots ?? r.bowl?.dots ?? 0;
       catches += r.real?.catches ?? r.catches + (r.offJuniors?.catches ?? 0);
       dismissals += r.bat?.dismissals ?? 0;
       if (mFaced > 0) inningsBattedCount += 1;
-      const over = r.bat?.bestOver;
+      const over = r.bat ? (r.real?.bestOver ?? r.bat.bestOver) : undefined;
       if (over !== undefined && (bestBattingOver === null || over > bestBattingOver)) {
         bestBattingOver = over;
       }

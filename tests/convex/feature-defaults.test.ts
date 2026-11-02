@@ -53,6 +53,14 @@ describe("pinFeatureDefaults", () => {
     });
     const { orgId: sandbox } = await t.mutation(api.orgs.enterSandbox, { token: chitra.token, orgId: office });
 
+    // A dry run reports the same plan and writes nothing.
+    const plan = await t.mutation(internal.maintenance.pinFeatureDefaults, { dryRun: true });
+    expect(new Map(plan.map((r) => [String(r.orgId), r.set])).get(String(sonesta))).toEqual({
+      series: true,
+      testMatches: true,
+    });
+    expect((await t.run((ctx) => ctx.db.get(sonesta)))!.features).toBeUndefined();
+
     const first = await t.mutation(internal.maintenance.pinFeatureDefaults, {});
     const byOrg = new Map(first.map((r) => [String(r.orgId), r.set]));
     expect(byOrg.get(String(sonesta))).toEqual({ series: true, testMatches: true });

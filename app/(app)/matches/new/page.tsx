@@ -59,7 +59,7 @@ function whenLabel(ts: number) {
 }
 
 export default function NewMatchPage() {
-  const { token, activeOrgId, features } = useAuth();
+  const { token, activeOrgId, features, featuresLive } = useAuth();
   const router = useRouter();
   const pool = useQuery(
     api.players.listOrgPlayers,
@@ -136,19 +136,21 @@ export default function NewMatchPage() {
   const players = useMemo(() => pool ?? [], [pool]);
 
   // Test matches off: no format choice, every match is limited overs. A phone
-  // that last scored a Test starts from limited-overs settings instead.
+  // that last scored a Test starts from limited-overs settings instead. Both
+  // this and the defaults below wait for the live switches: a cached one can
+  // read Test matches as off when it is on.
   const testsOn = features.testMatches;
   useEffect(() => {
-    if (testsOn || format !== "test") return;
+    if (!featuresLive || testsOn || format !== "test") return;
     setFormat("limited");
     setOvers(getLastOvers("limited"));
-  }, [testsOn, format]);
+  }, [featuresLive, testsOn, format]);
 
   // The community's last match sets the defaults, so every phone starts the
   // same. The values saved on this phone only cover a community's first match.
   const defaultsApplied = useRef(false);
   useEffect(() => {
-    if (defaultsApplied.current || !lastMatch) return;
+    if (defaultsApplied.current || !lastMatch || !featuresLive) return;
     defaultsApplied.current = true;
     if (lastMatch.format === "test" && !features.testMatches) return;
     setFormat(lastMatch.format);
@@ -177,7 +179,7 @@ export default function NewMatchPage() {
           : DEFAULT_TEST_MINUTES,
       );
     }
-  }, [lastMatch, features.testMatches]);
+  }, [lastMatch, features.testMatches, featuresLive]);
 
   const nameOf = useMemo(() => {
     const m = new Map(players.map((p) => [String(p.userId), p.displayName]));

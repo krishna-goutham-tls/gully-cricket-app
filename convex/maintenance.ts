@@ -554,10 +554,11 @@ export const setJuniorRule = internalMutation({
  * this stores today's value for every real community: `series` on when it has
  * any series, `testMatches` on when it has any Test. A key the community
  * already stored is never touched, so a second run changes nothing.
+ * `dryRun` returns what it would set and writes nothing.
  */
 export const pinFeatureDefaults = internalMutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { dryRun: v.optional(v.boolean()) },
+  handler: async (ctx, { dryRun }) => {
     const orgs = await ctx.db.query("orgs").collect();
     const out: Array<{ orgId: Id<"orgs">; name: string; set: Record<string, boolean> }> = [];
     for (const org of orgs) {
@@ -579,7 +580,7 @@ export const pinFeatureDefaults = internalMutation({
         set.testMatches = matches.some((m) => m.ruleSnapshot.format === "test");
       }
       if (Object.keys(set).length === 0) continue;
-      await ctx.db.patch(org._id, { features: { ...stored, ...set } });
+      if (!dryRun) await ctx.db.patch(org._id, { features: { ...stored, ...set } });
       out.push({ orgId: org._id, name: org.name, set });
     }
     return out;
@@ -590,11 +591,11 @@ export const pinFeatureDefaults = internalMutation({
  * Ops, once: sandbox player rows made before the sandbox copied tags have
  * none, so a guest there reads as a Visitor. Copy each from the real
  * community's row, as it reads today. Rows with tags are left alone, so a
- * second run changes nothing.
+ * second run changes nothing. `dryRun` counts without writing.
  */
 export const copySandboxTags = internalMutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { dryRun: v.optional(v.boolean()) },
+  handler: async (ctx, { dryRun }) => {
     const sandboxes = (await ctx.db.query("orgs").collect()).filter(
       (o) => o.isSandbox && o.sandboxForOrgId,
     );
@@ -618,9 +619,11 @@ export const copySandboxTags = internalMutation({
           continue;
         }
         const u = await ctx.db.get(row.userId);
-        await ctx.db.patch(row._id, {
-          playerTags: resolvePlayerTags(real.playerTags, real.playerLabel, u?.isGuest ?? false),
-        });
+        if (!dryRun) {
+          await ctx.db.patch(row._id, {
+            playerTags: resolvePlayerTags(real.playerTags, real.playerLabel, u?.isGuest ?? false),
+          });
+        }
         copied += 1;
       }
     }

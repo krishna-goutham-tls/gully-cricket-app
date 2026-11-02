@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -28,24 +28,38 @@ function matchTimeHint(minutes: number) {
 }
 
 export default function NewTournamentPage() {
-  const { token, activeOrgId, features } = useAuth();
+  const { token, activeOrgId, features, featuresLive } = useAuth();
   const testsOn = features.testMatches;
   const router = useRouter();
   const pool = useQuery(
     api.players.listOrgPlayers,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
   );
+  const recentMatches = useQuery(
+    api.matches.list,
+    token && activeOrgId && testsOn ? { token, orgId: activeOrgId } : "skip",
+  );
   const createTournament = useMutation(api.tournaments.create);
   const addGuest = useMutation(api.players.addGuest);
 
   const [name, setName] = useState("");
-  const [format, setFormat] = useState<"limited" | "test">(() =>
-    testsOn ? "test" : "limited",
-  );
-  // Test matches off: no format choice, every series is limited overs.
+  const [format, setFormat] = useState<"limited" | "test">("limited");
+  // Test matches off: no format choice, every series is limited overs. On: the
+  // series starts in the format of the community's last match, Test when there
+  // is none. Waits for the live switches, since a cached one can read Test
+  // matches as off when it is on. A tap on the format wins.
+  const formatPicked = useRef(false);
   useEffect(() => {
-    if (!testsOn) setFormat("limited");
-  }, [testsOn]);
+    if (!featuresLive) return;
+    if (!testsOn) {
+      setFormat("limited");
+      return;
+    }
+    if (formatPicked.current || recentMatches === undefined) return;
+    formatPicked.current = true;
+    const last = recentMatches.find((m) => m.status !== "abandoned");
+    setFormat(last?.format === "limited" ? "limited" : "test");
+  }, [featuresLive, testsOn, recentMatches]);
   const [durationMinutes, setDurationMinutes] = useState(DEFAULT_TEST_MINUTES);
   const [overs, setOvers] = useState(20);
   const [oversPerPlayer, setOversPerPlayer] = useState(2);
@@ -237,7 +251,10 @@ export default function NewTournamentPage() {
                   <button
                     key={opt.id}
                     type="button"
-                    onClick={() => setFormat(opt.id)}
+                    onClick={() => {
+                      formatPicked.current = true;
+                      setFormat(opt.id);
+                    }}
                     aria-pressed={format === opt.id}
                     className={
                       format === opt.id
