@@ -264,7 +264,7 @@ export default function HomePage() {
         description={
           pending?.kind === "end"
             ? "It stays in your history."
-            : "Every ball scored in it goes too. This cannot be undone."
+            : "Every ball goes too. This can't be undone."
         }
         confirmLabel={pending?.kind === "end" ? "End match" : "Delete"}
         danger={pending?.kind === "delete"}

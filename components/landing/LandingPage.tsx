@@ -500,7 +500,7 @@ function HeroLive() {
           <div className="contents lg:block">
             {/* Mobile budget is tight: the fold must also fit the phone down
                 to its big score, so every mobile gap here is spent twice. */}
-            <div className="order-1 mt-7 sm:mt-16 lg:mt-0 lg:flex lg:min-h-[calc(88vh-120px)] lg:flex-col lg:justify-center">
+            <div className="order-1 mt-7 sm:mt-16 lg:mt-0 lg:pt-16 lg:flex lg:min-h-[calc(88vh-120px)] lg:flex-col lg:justify-center">
               <Kicker>The scorebook for your match</Kicker>
               <h1 className="mt-3 text-[2.4rem] font-bold leading-[1.04] tracking-tight text-ink sm:mt-4 sm:text-6xl lg:text-7xl">
                 Score the whole match.

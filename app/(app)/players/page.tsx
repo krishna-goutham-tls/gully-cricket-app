@@ -232,7 +232,7 @@ export default function PlayersPage() {
                   <p className="mt-0.5 text-[11px] text-muted">
                     {r.status === "pending"
                       ? "Forgot their PIN"
-                      : "Has a temporary PIN — waiting to sign in"}
+                      : "Temporary PIN · not signed in yet"}
                   </p>
                   {r.status === "pending" ? (
                     <div className="mt-3 grid grid-cols-2 gap-2">
@@ -254,9 +254,8 @@ export default function PlayersPage() {
                   ) : null}
                   {r.tempPin ? (
                     <div className="mt-3 rounded-xl bg-accent-soft px-3.5 py-3">
-                      <p className="text-[11px] leading-relaxed text-accent-deep">
-                        Give {r.displayName} this temporary PIN — they’ll set
-                        their own after signing in.
+                      <p className="text-[11px] text-accent-deep">
+                        Give {r.displayName} this one-time PIN
                       </p>
                       <p className="tabular mt-1.5 text-2xl font-semibold tracking-[0.3em] text-ink">
                         {r.tempPin}
@@ -318,7 +317,7 @@ export default function PlayersPage() {
             <Input
               value={guestPhone}
               onChange={(e) => setGuestPhone(e.target.value)}
-              placeholder="Phone (optional — lets them claim stats later)"
+              placeholder="Phone (optional)"
               inputMode="tel"
               className="bg-bg"
             />
@@ -344,8 +343,8 @@ export default function PlayersPage() {
             title={search.trim() ? "Nobody by that name" : "No players yet"}
             body={
               search.trim()
-                ? "They may not be in the pool yet. Add them as a guest and they can claim their stats later."
-                : "Add the players you turn up with. Anyone without the app goes in as a guest."
+                ? "Add them as a guest."
+                : "Add the people you play with."
             }
             action={
               <Button
