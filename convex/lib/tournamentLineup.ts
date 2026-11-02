@@ -11,8 +11,7 @@ export function countOnSquad(
 /**
  * Walk-ons (org players not on either fixed squad) are allowed. Each XI must
  * still include at least one player from that series side so match A/B keeps
- * mapping to tournament A/B. Missing starred cores stay a UI warning — this
- * does not block them.
+ * mapping to tournament A/B.
  */
 export function assertSeriesSides(args: {
   sideAName: string;

@@ -9,7 +9,7 @@ import {
 import { buildRuleSnapshot } from "./lib/rules";
 import { buildMatchClock, DEFAULT_TEST_MINUTES } from "./lib/clock";
 import { deleteMatchCascade } from "./lib/matches";
-import { captainTeamLabel } from "./lib/teams";
+import { captainTeamLabel, firstName } from "./lib/teams";
 import { assertSeriesSides } from "./lib/tournamentLineup";
 import { battingMode, matchFormat, side } from "./schema";
 import { orgFeatureOn } from "./lib/features";
@@ -83,9 +83,10 @@ export const create = mutation({
     sideAName: v.string(),
     sideBName: v.string(),
     sideASquadIds: v.array(v.id("users")),
-    sideACoreIds: v.array(v.id("users")),
+    /** Old clients still send core players. The app no longer marks them. */
+    sideACoreIds: v.optional(v.array(v.id("users"))),
     sideBSquadIds: v.array(v.id("users")),
-    sideBCoreIds: v.array(v.id("users")),
+    sideBCoreIds: v.optional(v.array(v.id("users"))),
     matchCount: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
@@ -118,13 +119,15 @@ export const create = mutation({
     }
 
     // Core must be a subset of that side's squad.
+    const sideACoreIds = args.sideACoreIds ?? [];
+    const sideBCoreIds = args.sideBCoreIds ?? [];
     const inSquad = (squad: Id<"users">[], core: Id<"users">[]) => {
       const s = new Set(squad.map(String));
       return core.every((c) => s.has(String(c)));
     };
     if (
-      !inSquad(args.sideASquadIds, args.sideACoreIds) ||
-      !inSquad(args.sideBSquadIds, args.sideBCoreIds)
+      !inSquad(args.sideASquadIds, sideACoreIds) ||
+      !inSquad(args.sideBSquadIds, sideBCoreIds)
     ) {
       throw new Error("Core players must be part of their squad");
     }
@@ -156,9 +159,9 @@ export const create = mutation({
       sideAName: cleanName(args.sideAName, "Team A"),
       sideBName: cleanName(args.sideBName, "Team B"),
       sideASquadIds: args.sideASquadIds,
-      sideACoreIds: args.sideACoreIds,
+      sideACoreIds,
       sideBSquadIds: args.sideBSquadIds,
-      sideBCoreIds: args.sideBCoreIds,
+      sideBCoreIds,
       matchCount,
       status: "active",
       createdBy: user._id,
@@ -329,7 +332,6 @@ export const get = query({
  * Walk-ons (org members not on either squad) are allowed. Each side must
  * still include at least one player from that series team. Side A always
  * maps to tournament team A so match winners feed standings directly.
- * The soft "core missing" gate is a UI warning — the backend never blocks.
  */
 export const startMatch = mutation({
   args: {
@@ -606,6 +608,56 @@ export const renameTeams = mutation({
       return { ok: true };
     }
     await ctx.db.patch(t._id, patch);
+    return { ok: true };
+  },
+});
+
+/**
+ * Make a squad player that side's captain: index 0 of the squad, which leads
+ * each new match. A name that only ever named the old captain follows the new
+ * one; a typed-in name stays. Matches already played keep their captain.
+ */
+export const setCaptain = mutation({
+  args: {
+    token: v.string(),
+    tournamentId: v.id("tournaments"),
+    side,
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const t = await ctx.db.get(args.tournamentId);
+    if (!t) throw new Error("Tournament not found");
+    await requireOrgAdmin(ctx, args.token, t.orgId);
+
+    const squad = args.side === "A" ? t.sideASquadIds : t.sideBSquadIds;
+    const otherSquad = args.side === "A" ? t.sideBSquadIds : t.sideASquadIds;
+    if (!squad.some((id) => id === args.userId)) {
+      throw new Error("Pick a player from that team");
+    }
+    if (squad[0] === args.userId) return { ok: true };
+    if (otherSquad.some((id) => id === args.userId)) {
+      throw new Error("A player on both teams cannot lead one");
+    }
+
+    const nextSquad = [args.userId, ...squad.filter((id) => id !== args.userId)];
+    const stored = args.side === "A" ? t.sideAName : t.sideBName;
+    const oldCaptain = squad[0] ? await ctx.db.get(squad[0]) : null;
+    const newCaptain = await ctx.db.get(args.userId);
+    const followsCaptain =
+      !!oldCaptain &&
+      (stored === `Team ${firstName(oldCaptain.displayName)}` ||
+        stored === `Team ${oldCaptain.displayName}`.slice(0, 40));
+    const name =
+      followsCaptain && newCaptain
+        ? `Team ${firstName(newCaptain.displayName)}`.slice(0, 40)
+        : stored;
+
+    await ctx.db.patch(
+      t._id,
+      args.side === "A"
+        ? { sideASquadIds: nextSquad, sideAName: name }
+        : { sideBSquadIds: nextSquad, sideBName: name },
+    );
     return { ok: true };
   },
 });
