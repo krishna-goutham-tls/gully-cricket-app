@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, X } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { TruncText } from "@/components/ui/TruncText";
-import { SideChoice, type SideValue } from "@/components/match/SideChoice";
+import { PlayerSideRow } from "@/components/match/PlayerSideRow";
+import { type SideValue } from "@/components/match/SideChoice";
 import { cn } from "@/lib/utils";
 
 type Side = "A" | "B";
@@ -120,39 +120,20 @@ export function SquadSheet({
       ...(leads.B ? (["A"] as const) : []),
     ];
     const canRemove = row.sides.length > 0 && !leads.A && !leads.B;
-    const rowError = error?.userId === row.userId ? error.message : null;
     return (
-      <div key={row.userId} className="py-1.5">
-        <div className="flex items-center gap-2">
-          {canRemove ? (
-            <button
-              type="button"
-              aria-label={`Take ${row.displayName} out of the match`}
-              disabled={busyId !== null}
-              onClick={() => void assign(row.userId, [])}
-              className="-ml-3 flex h-11 w-11 shrink-0 items-center justify-center text-faint active:text-danger disabled:opacity-40"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          ) : null}
-          <TruncText
-            lines={2}
-            className="min-w-0 flex-1 text-[15px] font-semibold text-ink"
-          >
-            {row.displayName}
-          </TruncText>
-          <SideChoice
-            name={row.displayName}
-            value={toValue(row.sides)}
-            disabled={busyId !== null}
-            locked={locked}
-            onChange={(next) => void assign(row.userId, toSides(next))}
-          />
-        </div>
-        {rowError ? (
-          <p className="mt-1 text-[13px] text-danger">{rowError}</p>
-        ) : null}
-      </div>
+      <PlayerSideRow
+        key={row.userId}
+        className="py-1.5"
+        name={row.displayName}
+        value={toValue(row.sides)}
+        onChange={(next) => void assign(row.userId, toSides(next))}
+        captain={leads.A || leads.B}
+        locked={locked}
+        disabled={busyId !== null}
+        onRemove={canRemove ? () => void assign(row.userId, []) : undefined}
+        removeLabel={`Take ${row.displayName} out of the match`}
+        error={error?.userId === row.userId ? error.message : null}
+      />
     );
   };
 

@@ -21,10 +21,6 @@ export default function TournamentsPage() {
     <div>
       <AppHeader title="Series" />
       <main className="mx-auto max-w-md px-5 py-5">
-        <p className="mb-4 text-[13px] text-muted">
-          Fixed two-team series with core squads.
-        </p>
-
         {isObserver ? null : (
           <Button href="/tournaments/new" fullWidth size="lg">
             <Plus className="h-5 w-5" strokeWidth={2.4} />
@@ -45,7 +41,7 @@ export default function TournamentsPage() {
           ) : tournaments.length === 0 ? (
             <EmptyState
               title="No series yet"
-              body="Set up two teams, mark your core players, and play a series."
+              body="Two teams, a run of matches."
             />
           ) : (
             tournaments.map((t) => {
