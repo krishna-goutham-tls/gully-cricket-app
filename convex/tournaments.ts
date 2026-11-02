@@ -628,6 +628,7 @@ export const setCaptain = mutation({
     const t = await ctx.db.get(args.tournamentId);
     if (!t) throw new Error("Tournament not found");
     await requireOrgAdmin(ctx, args.token, t.orgId);
+    if (t.status === "complete") throw new Error("This series is over");
 
     const squad = args.side === "A" ? t.sideASquadIds : t.sideBSquadIds;
     const otherSquad = args.side === "A" ? t.sideBSquadIds : t.sideASquadIds;

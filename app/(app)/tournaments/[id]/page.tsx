@@ -568,6 +568,7 @@ export default function TournamentDetailPage() {
               )}
             </div>
 
+            {t.status !== "complete" ? (
             <div className="mt-4 border-t border-line pt-3">
               {captainsOpen ? (
                 <div className="space-y-3">
@@ -631,6 +632,7 @@ export default function TournamentDetailPage() {
                 </Button>
               )}
             </div>
+            ) : null}
 
             <div className="mt-4 border-t border-line pt-3">
               {t.status !== "complete" ? (
