@@ -2,12 +2,13 @@
 
 import { useAuth } from "@/components/providers/AuthProvider";
 import { PosterPreview } from "@/components/share/PosterPreview";
-import { type HeroShareData, type ShareStat } from "@/components/share/ShareCard";
+import { type HeroShareData } from "@/components/share/ShareCard";
 import { ShareButton } from "@/components/share/ShareButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { dayLabel, groupByDay } from "@/lib/dates";
+import { dayBounds, groupByDay } from "@/lib/dates";
+import { heroFilename, heroShareData, initials } from "@/lib/heroShare";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { ArrowLeft } from "lucide-react";
@@ -25,23 +26,6 @@ import { Suspense, useEffect, useMemo, useState } from "react";
  * this page groups it into calendar days with `groupByDay` (the same helper
  * `home/page.tsx` uses), so local-timezone logic lives in exactly one place.
  */
-
-function initials(name: string) {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? "")
-    .join("");
-}
-
-/** Local-midnight bounds for the calendar day a timestamp falls in — the
- * plain-number `dayStart`/`dayEnd` pair `hero.heroDay` takes as args. */
-function dayBounds(ts: number) {
-  const d = new Date(ts);
-  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).getTime();
-  return { dayStart: start, dayEnd: start + 24 * 60 * 60 * 1000 };
-}
 
 function HeroPageInner() {
   const router = useRouter();
@@ -134,70 +118,10 @@ function HeroPageInner() {
       : "skip",
   );
 
-  const heroData: HeroShareData | null = useMemo(() => {
-    if (!hero) return null;
-    const n = hero.numbers;
-    const bowlLed = n.wickets >= 3 && n.wickets * 20 >= n.runs;
-    const stats: ShareStat[] = [{ label: "Matches", value: String(n.matches) }];
-    if (bowlLed && n.ballsBowled > 0) {
-      stats.push({
-        label: "Wickets",
-        value: String(n.wickets),
-        accent: true,
-      });
-      stats.push({
-        label: "Economy",
-        value: n.economy !== null ? n.economy.toFixed(1) : "—",
-      });
-      if (n.ballsFaced > 0) {
-        stats.push({ label: "Runs", value: String(n.runs) });
-      }
-    } else {
-      if (n.ballsFaced > 0) {
-        stats.push({
-          label: "Runs",
-          value: String(n.runs),
-          accent: true,
-        });
-        stats.push({ label: "SR", value: n.strikeRate.toFixed(1) });
-      }
-      if (n.ballsBowled > 0) {
-        stats.push({
-          label: "Wickets",
-          value: String(n.wickets),
-          accent: n.ballsFaced === 0,
-        });
-      }
-    }
-    if (n.fours > 0 || n.sixes > 0) {
-      stats.push({ label: "4s / 6s", value: `${n.fours}/${n.sixes}` });
-    }
-    if (n.catches > 0) {
-      stats.push({ label: "Catches", value: String(n.catches) });
-    }
-    return {
-      kind: "hero",
-      displayName: hero.displayName,
-      initials: initials(hero.displayName),
-      dayLabel: dayLabel(hero.dayStart),
-      headline: hero.headline,
-      matchCount: n.matches,
-      insights: hero.insights,
-      stats: stats.slice(0, 6),
-      miniLines: hero.miniLines.map((m) => ({
-        opponent: m.opponent,
-        battingFigure: m.battingFigure,
-        bowlingFigure: m.bowlingFigure,
-        result: m.result,
-      })),
-    };
-  }, [hero]);
-
-  const slug = hero?.displayName
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  const heroData: HeroShareData | null = useMemo(
+    () => (hero ? heroShareData(hero) : null),
+    [hero],
+  );
 
   return (
     <div className="min-h-dvh bg-ink pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
@@ -339,7 +263,7 @@ function HeroPageInner() {
               </button>
               <ShareButton
                 data={heroData}
-                filename={`gully-hero-${slug || "player"}.png`}
+                filename={heroFilename(hero!.displayName)}
                 tone="dark"
                 className="h-11 w-11 rounded-2xl border border-white/10"
               />

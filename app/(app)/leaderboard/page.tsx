@@ -8,6 +8,7 @@ import {
 } from "@/components/leaderboard/records";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { AppHeader } from "@/components/shell/AppHeader";
+import Link from "next/link";
 import type { LeaderboardShareData } from "@/components/share/ShareCard";
 import { ShareButton } from "@/components/share/ShareButton";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -514,7 +515,7 @@ function emptyCopy(format: FormatScope, season: Season | null) {
 }
 
 export default function LeaderboardPage() {
-  const { token, activeOrgId, user, activeOrg } = useAuth();
+  const { token, activeOrgId, user, activeOrg, features } = useAuth();
   const cap = useSearchParams().get("cap");
   const [tab, setTab] = useState<Tab>(
     cap === "purple" ? "bowling" : "batting",
@@ -522,8 +523,6 @@ export default function LeaderboardPage() {
   const [measureKey, setMeasureKey] = useState<MeasureKey>(
     cap === "purple" ? "wickets" : "runs",
   );
-  // Default: visitors and juniors off the board. Anyone can flip Everyone.
-  const [includeExtras, setIncludeExtras] = useState(false);
   // Mixed board is how the community already argues. Tests / ODI is the slice.
   const [format, setFormat] = useState<FormatScope>("all");
   // null = not chosen yet, which resolves to the live season when one is
@@ -562,7 +561,6 @@ export default function LeaderboardPage() {
       ? {
           token,
           orgId: activeOrgId,
-          includeVisitorsAndJuniors: includeExtras,
           ...(selectedSeason ? { seasonId: selectedSeason._id } : {}),
           ...(format === "all" ? {} : { format }),
           ...(ground ? { groundId: ground._id } : {}),
@@ -570,16 +568,17 @@ export default function LeaderboardPage() {
       : "skip",
   );
 
-  // The Test/ODI filter shows only when this window has both formats. The
-  // last known counts carry over while the next board loads, so it does not
-  // flicker. When it hides, the board goes back to All.
+  // The Test/ODI filter shows only with Test matches on and both formats in
+  // this window. The last known counts carry over while the next board loads,
+  // so it does not flicker. When it hides, the board goes back to All.
   const [bothFormats, setBothFormats] = useState(false);
+  const testsOn = features.testMatches;
   useEffect(() => {
     if (!data) return;
-    const both = data.formats.test > 0 && data.formats.limited > 0;
+    const both = testsOn && data.formats.test > 0 && data.formats.limited > 0;
     setBothFormats(both);
     if (!both) setFormat("all");
-  }, [data]);
+  }, [data, testsOn]);
 
   const chips = useMemo(() => MEASURES.filter((m) => m.tab === tab), [tab]);
   const measure =
@@ -592,7 +591,8 @@ export default function LeaderboardPage() {
 
   const rows = useMemo(() => {
     const raw = data ? measure.rows(data) : ([] as RankRow[]);
-    if (!data || !includeExtras) return raw;
+    // The community's "Show visitors on Leaders" decides who is on the board.
+    if (!data || !data.includeVisitorsAndJuniors) return raw;
     const byId = new Map<string, PlayerTag[]>();
     for (const r of [
       ...data.batting,
@@ -612,7 +612,7 @@ export default function LeaderboardPage() {
           tags.length === 0 ? undefined : tags.map((t) => PLAYER_TAG_COPY[t]),
       };
     });
-  }, [data, measure, includeExtras]);
+  }, [data, measure]);
 
   const hasData = data && data.matchCount > 0 && rows.length > 0;
   // Arrows read a 7-day lookback. Inside a season that window is clipped to
@@ -719,13 +719,21 @@ export default function LeaderboardPage() {
           ) : undefined
         }
         trailing={
-          hasData && shareData ? (
-            <ShareButton
-              data={shareData}
-              filename={`gully-leaders-${measure.key}.png`}
-              tone="light"
-            />
-          ) : null
+          <div className="flex items-center gap-1">
+            <Link
+              href="/records"
+              className="flex min-h-11 items-center rounded-lg px-2 text-[13px] font-semibold text-ink active:bg-line/60"
+            >
+              Records
+            </Link>
+            {hasData && shareData ? (
+              <ShareButton
+                data={shareData}
+                filename={`gully-leaders-${measure.key}.png`}
+                tone="light"
+              />
+            ) : null}
+          </div>
         }
         below={disciplineTabs}
       />
@@ -769,30 +777,16 @@ export default function LeaderboardPage() {
           </div>
         )}
 
-        {!scrolled ? (
+        {!scrolled && bothFormats ? (
           <div className="mt-1 flex items-center justify-center">
-            {bothFormats ? (
-              <>
-                <WordToggle
-                  ariaLabel="Test or ODI"
-                  value={format}
-                  onChange={setFormat}
-                  options={[
-                    { id: "test", label: "Tests" },
-                    { id: "limited", label: "ODI" },
-                    { id: "all", label: "All" },
-                  ]}
-                />
-                <span className="mx-1 h-4 w-px shrink-0 bg-line" aria-hidden />
-              </>
-            ) : null}
             <WordToggle
-              ariaLabel="Who appears on the board"
-              value={includeExtras ? "everyone" : "regulars"}
-              onChange={(next) => setIncludeExtras(next === "everyone")}
+              ariaLabel="Test or ODI"
+              value={format}
+              onChange={setFormat}
               options={[
-                { id: "regulars", label: "Regulars" },
-                { id: "everyone", label: "Everyone" },
+                { id: "test", label: "Tests" },
+                { id: "limited", label: "ODI" },
+                { id: "all", label: "All" },
               ]}
             />
           </div>

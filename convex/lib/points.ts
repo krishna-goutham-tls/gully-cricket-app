@@ -67,9 +67,14 @@ export function earnsPoints(
   return !juniors.has(String(againstId));
 }
 
-/** Receipt line shown wherever the working is printed (POTM badge). */
-export const POINTS_RECEIPT =
-  "runs + 20 per wicket + 8 per catch, plus milestone bonuses; nothing off juniors";
+/**
+ * Receipt line shown wherever the working is printed (POTM badge). The
+ * junior clause shows only when the community's junior rule is on.
+ */
+export function pointsReceipt(juniorRule: boolean): string {
+  const base = "runs + 20 per wicket + 8 per catch, plus milestone bonuses";
+  return juniorRule ? `${base}; nothing off juniors` : base;
+}
 
 /**
  * One stamp's points for its match alone — base plus bonuses, exactly as

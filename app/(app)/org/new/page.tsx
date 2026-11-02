@@ -25,7 +25,6 @@ export default function NewOrgPage() {
   );
   const router = useRouter();
   const [name, setName] = useState("");
-  const [location, setLocation] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -34,11 +33,7 @@ export default function NewOrgPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await createOrg({
-        token,
-        name,
-        location: location || undefined,
-      });
+      const res = await createOrg({ token, name });
       setActiveOrgId(res.orgId);
       await selectOrg(res.orgId);
       // Getting players in is the first job, so Home opens the invite sheet.
@@ -102,7 +97,7 @@ export default function NewOrgPage() {
           Create your community
         </h1>
         <p className="mt-1.5 text-[13px] text-muted">
-          You become admin. Players sign up and you approve them.
+          You become admin. Invite players with a link.
         </p>
       </div>
 
@@ -112,12 +107,6 @@ export default function NewOrgPage() {
           placeholder="Green Valley Society"
           value={name}
           onChange={(e) => setName(e.target.value)}
-        />
-        <Input
-          label="Location"
-          placeholder="Optional"
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
         />
         {error ? <p className="text-[13px] text-danger">{error}</p> : null}
         <Button

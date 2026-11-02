@@ -10,7 +10,7 @@ import {
   sessionTtlMs,
 } from "./lib/session";
 import { playerRole } from "./schema";
-import { resolvePlayerTags, sortTags } from "./lib/playerLabel";
+import { writeTagsBeforeGuestFlip } from "./lib/playerLabel";
 import { featuredSeasonForOrg } from "./lib/seasons";
 import {
   isClaimableRow,
@@ -265,20 +265,9 @@ export const signUp = mutation({
         updatedAt: now,
       });
       userId = claimedId;
-      // Walk-on stays a Visitor on the board until an admin says otherwise.
-      // isGuest is about to flip false, so make sure Visitor is in the tags
-      // without wiping Junior if they already have it.
-      const memberships = await ctx.db
-        .query("orgMembers")
-        .withIndex("by_user", (q) => q.eq("userId", claimedId))
-        .collect();
-      for (const m of memberships) {
-        const tags = new Set(
-          resolvePlayerTags(m.playerTags, m.playerLabel, true),
-        );
-        tags.add("visitor");
-        await ctx.db.patch(m._id, { playerTags: sortTags(tags) });
-      }
+      // Claiming changes no tag. isGuest is about to flip false, which would
+      // change what an unwritten row resolves to, so write today's tags.
+      await writeTagsBeforeGuestFlip(ctx, claimedId, claimed.isGuest ?? false);
     } else {
       userId = await ctx.db.insert("users", {
         phone,

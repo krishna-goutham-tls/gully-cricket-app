@@ -88,7 +88,7 @@ export async function shareImageBlob(
 }
 
 /**
- * Share a link, not a picture: the public match or poll page with one line
+ * Share a link, not a picture: the public match page with one line
  * of text. WhatsApp builds the preview card from the page itself. With no
  * share sheet, the link goes to the clipboard.
  */
@@ -112,8 +112,4 @@ export async function shareLink(
 /** The no-login pages. Absolute, because the link leaves the app. */
 export function publicMatchUrl(matchId: string) {
   return `${window.location.origin}/m/${matchId}`;
-}
-
-export function publicPollUrl(pollId: string) {
-  return `${window.location.origin}/p/${pollId}`;
 }

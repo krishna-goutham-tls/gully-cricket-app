@@ -1,9 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Shared match and poll links are public by link only — never indexed.
+  // Shared match links are public by link only — never indexed.
   // The pages also say so in a meta tag; this covers their preview images.
   async headers() {
-    return ["/m/:path*", "/p/:path*"].map((source) => ({
+    return ["/m/:path*"].map((source) => ({
       source,
       headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
     }));
@@ -26,6 +26,12 @@ const nextConfig = {
         source: "/shelf",
         destination: "/records",
         permanent: true,
+      },
+      // Community Settings folded into Settings. /community/visitors stays.
+      {
+        source: "/community",
+        destination: "/settings",
+        permanent: false,
       },
       {
         source: "/match-stories",

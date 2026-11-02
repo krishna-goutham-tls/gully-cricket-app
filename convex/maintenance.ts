@@ -5,6 +5,7 @@ import { assertSeriesSides } from "./lib/tournamentLineup";
 import { buildRuleSnapshot } from "./lib/rules";
 import { legalBallToOverText } from "./lib/scoring";
 import { restampMatch } from "./lib/matchStats";
+import { resolvePlayerTags } from "./lib/playerLabel";
 
 const side = v.union(v.literal("A"), v.literal("B"));
 
@@ -516,5 +517,116 @@ export const setTournamentMatchCount = internalMutation({
     if (!t) throw new Error("Tournament not found");
     await ctx.db.patch(tournamentId, { matchCount });
     return { name: t.name, from: t.matchCount, to: matchCount };
+  },
+});
+
+/**
+ * Ops: change a community's junior rule after an organiser's email to
+ * Krishna. On (every community's default): seniors get no points off a
+ * junior. Off: seniors' points against juniors count like any other. It moves
+ * numbers, so the agent then runs `stats:backfillStamps`,
+ * `seasons:recomputeSeriesAwards` and `stats:checkStamps`, and reports every
+ * winner change. `matches.juniorIds` keeps the real juniors, so this can be
+ * undone. A sandbox follows its real community and has no rule of its own,
+ * but its stamps sit under its own id: backfill each `sandboxIds` too.
+ */
+export const setJuniorRule = internalMutation({
+  args: { orgId: v.id("orgs"), on: v.boolean() },
+  handler: async (ctx, { orgId, on }) => {
+    const org = await ctx.db.get(orgId);
+    if (!org) throw new Error("Community not found");
+    if (org.isSandbox) throw new Error("A sandbox follows its real community");
+    const was = org.features?.juniorRule ?? true;
+    await ctx.db.patch(orgId, { features: { ...org.features, juniorRule: on } });
+    const sandboxIds = (
+      await ctx.db
+        .query("orgs")
+        .withIndex("by_sandbox_for", (q) => q.eq("sandboxForOrgId", orgId))
+        .collect()
+    ).map((s) => s._id);
+    return { was, on, sandboxIds };
+  },
+});
+
+/**
+ * Ops, run once before the new defaults go live: Series and Test matches are
+ * off for a new community. A community that already used one keeps it, so
+ * this stores today's value for every real community: `series` on when it has
+ * any series, `testMatches` on when it has any Test. A key the community
+ * already stored is never touched, so a second run changes nothing.
+ * `dryRun` returns what it would set and writes nothing.
+ */
+export const pinFeatureDefaults = internalMutation({
+  args: { dryRun: v.optional(v.boolean()) },
+  handler: async (ctx, { dryRun }) => {
+    const orgs = await ctx.db.query("orgs").collect();
+    const out: Array<{ orgId: Id<"orgs">; name: string; set: Record<string, boolean> }> = [];
+    for (const org of orgs) {
+      if (org.isSandbox) continue;
+      const stored = org.features ?? {};
+      const set: Record<string, boolean> = {};
+      if (stored.series === undefined) {
+        const series = await ctx.db
+          .query("tournaments")
+          .withIndex("by_org", (q) => q.eq("orgId", org._id))
+          .first();
+        set.series = series !== null;
+      }
+      if (stored.testMatches === undefined) {
+        const matches = await ctx.db
+          .query("matches")
+          .withIndex("by_org", (q) => q.eq("orgId", org._id))
+          .collect();
+        set.testMatches = matches.some((m) => m.ruleSnapshot.format === "test");
+      }
+      if (Object.keys(set).length === 0) continue;
+      if (!dryRun) await ctx.db.patch(org._id, { features: { ...stored, ...set } });
+      out.push({ orgId: org._id, name: org.name, set });
+    }
+    return out;
+  },
+});
+
+/**
+ * Ops, once: sandbox player rows made before the sandbox copied tags have
+ * none, so a guest there reads as a Visitor. Copy each from the real
+ * community's row, as it reads today. Rows with tags are left alone, so a
+ * second run changes nothing. `dryRun` counts without writing.
+ */
+export const copySandboxTags = internalMutation({
+  args: { dryRun: v.optional(v.boolean()) },
+  handler: async (ctx, { dryRun }) => {
+    const sandboxes = (await ctx.db.query("orgs").collect()).filter(
+      (o) => o.isSandbox && o.sandboxForOrgId,
+    );
+    let copied = 0;
+    let noRealRow = 0;
+    for (const sandbox of sandboxes) {
+      const rows = await ctx.db
+        .query("orgMembers")
+        .withIndex("by_org", (q) => q.eq("orgId", sandbox._id))
+        .collect();
+      for (const row of rows) {
+        if (row.playerTags !== undefined) continue;
+        const real = await ctx.db
+          .query("orgMembers")
+          .withIndex("by_org_user", (q) =>
+            q.eq("orgId", sandbox.sandboxForOrgId!).eq("userId", row.userId),
+          )
+          .unique();
+        if (!real) {
+          noRealRow += 1;
+          continue;
+        }
+        const u = await ctx.db.get(row.userId);
+        if (!dryRun) {
+          await ctx.db.patch(row._id, {
+            playerTags: resolvePlayerTags(real.playerTags, real.playerLabel, u?.isGuest ?? false),
+          });
+        }
+        copied += 1;
+      }
+    }
+    return { sandboxes: sandboxes.length, copied, noRealRow };
   },
 });

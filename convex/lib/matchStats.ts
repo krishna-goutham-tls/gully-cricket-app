@@ -3,6 +3,7 @@ import { Doc, Id } from "../_generated/dataModel";
 import { CATCH_POINTS, WICKET_POINTS, earnsPoints, matchPoints } from "./points";
 import type { Side } from "./contribution";
 import { tagsForUsers } from "./playerLabel";
+import { countedJuniors, orgFeatureOn } from "./features";
 
 /**
  * Stat stamps: one completed match's ball log, folded per player, written to
@@ -142,7 +143,16 @@ type Player = {
   drops: number;
   pts: PtsWork;
   offJuniors: { runs: number; wickets: number; catches: number };
-  real: { runs: number; ballsFaced: number; wickets: number; catches: number };
+  real: {
+    runs: number;
+    ballsFaced: number;
+    wickets: number;
+    catches: number;
+    fours: number;
+    sixes: number;
+    bestOver: number;
+    bowlDots: number;
+  };
   runOuts: number;
   reached: Map<string, number>;
   dismissalTypes: Map<string, number>;
@@ -192,7 +202,16 @@ export function foldMatch(
         drops: 0,
         pts: { runs: 0, wickets: 0, catches: 0, innings: new Map() },
         offJuniors: { runs: 0, wickets: 0, catches: 0 },
-        real: { runs: 0, ballsFaced: 0, wickets: 0, catches: 0 },
+        real: {
+          runs: 0,
+          ballsFaced: 0,
+          wickets: 0,
+          catches: 0,
+          fours: 0,
+          sixes: 0,
+          bestOver: 0,
+          bowlDots: 0,
+        },
         runOuts: 0,
         reached: new Map(),
         dismissalTypes: new Map(),
@@ -328,6 +347,7 @@ export function foldMatch(
   // Running tallies for the one-over and in-a-row feats. Overs are keyed per
   // innings; a bowler's wicket run spans the match, a batter's dot run does not.
   const overBat = new Map<string, number>();
+  const overBatReal = new Map<string, number>();
   const overBowl = new Map<string, number>();
   const dotRunNow = new Map<string, number>();
   // Legal balls faced per innings — the quota counts only these.
@@ -395,6 +415,14 @@ export function foldMatch(
     const faced = b.isLegal || b.extrasType === "noball";
     striker.real.runs += b.runsBat;
     if (faced) striker.real.ballsFaced += 1;
+    if (b.runsBat === 4) striker.real.fours += 1;
+    if (b.runsBat === 6) striker.real.sixes += 1;
+    {
+      const k = `${innKey}:${b.overNumber}:${String(b.strikerId)}`;
+      const o = (overBatReal.get(k) ?? 0) + b.runsBat;
+      overBatReal.set(k, o);
+      if (o > striker.real.bestOver) striker.real.bestOver = o;
+    }
     {
       const dk = `${innKey}:${String(b.strikerId)}`;
       const real = realInnings.get(dk) ?? { runs: 0, balls: 0 };
@@ -555,6 +583,7 @@ export function foldMatch(
         markAt(b.bowlerId, "bowl.legalBalls", b.createdAt);
       }
     }
+    if (b.isLegal && b.runsBat + b.extrasRuns === 0) bowler.real.bowlDots += 1;
     if (bowlCounts && b.isLegal && b.runsBat + b.extrasRuns === 0) {
       bowl.dots += 1;
       markAt(b.bowlerId, "bowl.dots", b.createdAt);
@@ -810,7 +839,12 @@ export async function restampMatch(
     .query("balls")
     .withIndex("by_match", (q) => q.eq("matchId", matchId))
     .collect();
-  const juniors = await juniorsOf(ctx, match, balls);
+  // Freeze the real juniors even when the rule is off, so a later change
+  // of rule has the list to fold against.
+  const juniors = countedJuniors(
+    await juniorsOf(ctx, match, balls),
+    await orgFeatureOn(ctx, match.orgId, "juniorRule"),
+  );
   const folded = foldMatch(match, innings, balls, juniors);
   await ctx.db.insert("matchStats", folded.match);
   for (const row of folded.players) await ctx.db.insert("playerMatchStats", row);

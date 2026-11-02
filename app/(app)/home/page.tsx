@@ -3,12 +3,13 @@
 import {
   LiveHero,
   MatchCard,
+  ResultCard,
+  SeriesCard,
   type MatchRow,
 } from "@/components/home/HomeCards";
-import { SeasonStrip } from "@/components/home/SeasonStrip";
+import { MatchDayCard } from "@/components/home/MatchDayCard";
+import { SeasonLine } from "@/components/home/SeasonLine";
 import { InviteSheet } from "@/components/player/InviteSheet";
-import { PollCard } from "@/components/poll/PollCard";
-import { PollSheet } from "@/components/poll/PollSheet";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { AppHeader } from "@/components/shell/AppHeader";
 import { Button } from "@/components/ui/Button";
@@ -17,18 +18,9 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { groupByDay } from "@/lib/dates";
-import { TruncText } from "@/components/ui/TruncText";
 import { cn, errorMessage } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
-import {
-  ChevronRight,
-  History,
-  Medal,
-  Plus,
-  Sparkles,
-  Users,
-} from "lucide-react";
+import { ChevronRight, Plus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -44,39 +36,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-/**
- * One compact doorway in the explore row. Same anatomy as every list row in
- * the app — soft icon chip, title, one quiet meta line — kept deliberately
- * short so two of them share a line without turning into fat tiles.
- */
-function ExploreCard({
-  href,
-  icon,
-  title,
-  meta,
-}: {
-  href: string;
-  icon: React.ReactNode;
-  title: string;
-  meta: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="flex min-h-12 min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-line bg-surface px-3 py-2.5 active:bg-bg"
-    >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-deep">
-        {icon}
-      </span>
-      <span className="min-w-0 flex-1">
-        <TruncText className="text-[15px] font-semibold text-ink">{title}</TruncText>
-        <TruncText className="tabular text-[11px] text-muted">{meta}</TruncText>
-      </span>
-      <ChevronRight className="h-4 w-4 shrink-0 text-faint" />
-    </Link>
-  );
-}
-
 export default function HomePage() {
   const { token, activeOrgId, activeOrg, isAdmin, isObserver, isSandbox, features } =
     useAuth();
@@ -88,11 +47,6 @@ export default function HomePage() {
     api.tournaments.list,
     token && activeOrgId && features.series ? { token, orgId: activeOrgId } : "skip",
   );
-  const polls = useQuery(
-    api.polls.current,
-    token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
-  );
-  const [asking, setAsking] = useState(false);
   const abandonMatch = useMutation(api.matches.abandon);
   const removeMatch = useMutation(api.matches.remove);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -156,22 +110,22 @@ export default function HomePage() {
     }
   }
 
-  // Home reads top-down as urgency: a game being scored right now, the series
-  // it belongs to, the way to start the next one, then the doorways, then only
-  // the latest day's play — the full history lives on /matches.
-  const { hero, otherLive, scheduled, latestDay, doneCount } = useMemo(() => {
+  // Home reads top-down as urgency: a game being scored right now or the way
+  // to start one, the last result, your day, the season, then the last few
+  // matches. The full history lives on /matches.
+  const { hero, otherLive, scheduled, lastResult, earlier } = useMemo(() => {
     const rows: MatchRow[] = matches ?? [];
     const live = rows.filter((m) => m.status === "live");
     const done = rows.filter(
       (m) => m.status === "completed" || m.status === "abandoned",
     );
-    const days = groupByDay(done, (m) => m.createdAt);
+    const last = done.find((m) => m.status === "completed") ?? null;
     return {
       hero: live[0] ?? null,
       otherLive: live.slice(1),
       scheduled: rows.filter((m) => m.status === "scheduled"),
-      latestDay: days[0] ?? null,
-      doneCount: done.length,
+      lastResult: last,
+      earlier: done.filter((m) => m._id !== last?._id).slice(0, 5),
     };
   }, [matches]);
 
@@ -212,6 +166,18 @@ export default function HomePage() {
           </Button>
         )}
 
+        {lastResult ? <ResultCard match={lastResult} /> : null}
+
+        {lastResult ? <MatchDayCard playedAt={lastResult.createdAt} /> : null}
+
+        <SeasonLine />
+
+        {series ? (
+          <div className="mt-3">
+            <SeriesCard series={series} />
+          </div>
+        ) : null}
+
         {canInvite && inviteUsed === false ? (
           <Button
             type="button"
@@ -226,61 +192,6 @@ export default function HomePage() {
           </Button>
         ) : null}
 
-        {/* "Who's in?" — an open poll is a card with the answers on it; with
-            none, just a quiet line to ask. Never an empty card. */}
-        {(polls ?? []).map((p) => (
-          <div key={p._id} className="mt-3">
-            <PollCard poll={p} readOnly={isObserver} />
-          </div>
-        ))}
-        {!isObserver && polls !== undefined && polls.length === 0 ? (
-          <button
-            type="button"
-            onClick={() => setAsking(true)}
-            className="mt-1 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl text-[13px] font-semibold text-muted active:bg-ink/[0.04]"
-          >
-            <Users className="h-4 w-4" strokeWidth={2.2} />
-            Who&apos;s in? Ask everyone
-          </button>
-        ) : null}
-
-        <SeasonStrip series={series} />
-
-        {/* The doorways: full history and the record book. Two thin cards on
-            one line — visible without scrolling, never competing with the
-            live game or the CTA above. */}
-        <div className="mt-3 flex gap-2">
-          <ExploreCard
-            href="/matches"
-            icon={<History className="h-4 w-4" strokeWidth={2.2} />}
-            title="Matches"
-            meta={
-              matches === undefined
-                ? "…"
-                : `${doneCount} played`
-            }
-          />
-          <ExploreCard
-            href="/records"
-            icon={<Medal className="h-4 w-4" strokeWidth={2.2} />}
-            title="Records"
-            meta={features.roast ? "Honours & roasts" : "Honours"}
-          />
-        </div>
-
-        {/* Only once there's a completed match to relive — nothing to show
-            off from a day of setups that never got played. */}
-        {doneCount > 0 ? (
-          <div className="mt-2">
-            <ExploreCard
-              href="/hero"
-              icon={<Sparkles className="h-4 w-4" strokeWidth={2.2} />}
-              title="Relive match day"
-              meta="Build a shareable player card"
-            />
-          </div>
-        ) : null}
-
         {matches === undefined ? (
           <div className="mt-6 space-y-2">
             {[0, 1, 2].map((i) => (
@@ -291,11 +202,7 @@ export default function HomePage() {
           <div className="mt-6">
             <EmptyState
               title="No matches yet"
-              body={
-                isObserver
-                  ? "This community has not scored a match yet."
-                  : "Start your first match — pick two teams from your players and score ball by ball."
-              }
+              body={isObserver ? undefined : "Your first match shows up here."}
             />
           </div>
         ) : (
@@ -311,8 +218,7 @@ export default function HomePage() {
               </>
             ) : null}
 
-            {/* Setup that never got finished is a to-do, not history — it
-                would be lost at the bottom of a date group. */}
+            {/* Setup that never got finished is a to-do, not history. */}
             {scheduled.length > 0 ? (
               <>
                 <SectionLabel>Not started</SectionLabel>
@@ -324,30 +230,29 @@ export default function HomePage() {
               </>
             ) : null}
 
-            {latestDay ? (
+            {earlier.length > 0 ? (
               <>
-                <SectionLabel>{latestDay.label}</SectionLabel>
+                <SectionLabel>Earlier matches</SectionLabel>
                 <div className="space-y-2">
-                  {latestDay.items.map((m) => (
+                  {earlier.map((m) => (
                     <MatchCard key={m._id} {...cardProps(m)} />
                   ))}
                 </div>
-                {doneCount > latestDay.items.length ? (
-                  <Link
-                    href="/matches"
-                    className="mt-2 flex min-h-11 items-center justify-center gap-1 rounded-2xl border border-line bg-surface text-[13px] font-semibold text-muted active:bg-bg"
-                  >
-                    All {doneCount} matches
-                    <ChevronRight className="h-4 w-4" />
-                  </Link>
-                ) : null}
               </>
+            ) : null}
+
+            {lastResult || earlier.length > 0 ? (
+              <Link
+                href="/matches"
+                className="mt-2 flex min-h-11 items-center justify-center gap-1 rounded-2xl border border-line bg-surface text-[13px] font-semibold text-muted active:bg-bg"
+              >
+                All matches
+                <ChevronRight className="h-4 w-4" />
+              </Link>
             ) : null}
           </>
         )}
       </main>
-
-      <PollSheet open={asking} onClose={() => setAsking(false)} />
 
       <ConfirmDialog
         open={pending !== null}

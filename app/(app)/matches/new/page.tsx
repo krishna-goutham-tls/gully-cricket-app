@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -29,7 +29,7 @@ import { cn, errorMessage } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { NumberField } from "@/components/ui/NumberField";
 import { TruncText } from "@/components/ui/TruncText";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -58,28 +58,12 @@ function whenLabel(ts: number) {
     : d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-// useSearchParams needs a Suspense boundary to prerender.
 export default function NewMatchPage() {
-  return (
-    <Suspense fallback={<div className="min-h-dvh bg-bg" />}>
-      <NewMatchFlow />
-    </Suspense>
-  );
-}
-
-function NewMatchFlow() {
-  const { token, activeOrgId } = useAuth();
+  const { token, activeOrgId, features, featuresLive } = useAuth();
   const router = useRouter();
-  const pollId = useSearchParams().get("poll") as Id<"polls"> | null;
   const pool = useQuery(
     api.players.listOrgPlayers,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
-  );
-  // Started from "Who's in?": the In list arrives already ticked and the
-  // poll's ground already set. Nothing else about the flow changes.
-  const poll = useQuery(
-    api.polls.get,
-    token && pollId ? { token, pollId } : "skip",
   );
   const grounds = usePlayableGrounds();
   const [groundId, setGroundId] = useState<Id<"grounds"> | null>(null);
@@ -151,12 +135,24 @@ function NewMatchFlow() {
 
   const players = useMemo(() => pool ?? [], [pool]);
 
+  // Test matches off: no format choice, every match is limited overs. A phone
+  // that last scored a Test starts from limited-overs settings instead. Both
+  // this and the defaults below wait for the live switches: a cached one can
+  // read Test matches as off when it is on.
+  const testsOn = features.testMatches;
+  useEffect(() => {
+    if (!featuresLive || testsOn || format !== "test") return;
+    setFormat("limited");
+    setOvers(getLastOvers("limited"));
+  }, [featuresLive, testsOn, format]);
+
   // The community's last match sets the defaults, so every phone starts the
   // same. The values saved on this phone only cover a community's first match.
   const defaultsApplied = useRef(false);
   useEffect(() => {
-    if (defaultsApplied.current || !lastMatch) return;
+    if (defaultsApplied.current || !lastMatch || !featuresLive) return;
     defaultsApplied.current = true;
+    if (lastMatch.format === "test" && !features.testMatches) return;
     setFormat(lastMatch.format);
     setOvers(lastMatch.overs);
     if (
@@ -183,22 +179,8 @@ function NewMatchFlow() {
           : DEFAULT_TEST_MINUTES,
       );
     }
-  }, [lastMatch]);
+  }, [lastMatch, features.testMatches, featuresLive]);
 
-  // Applied once: after that the scorer owns the list, and a late answer on
-  // the poll must not tick someone they just unticked.
-  const pollApplied = useRef(false);
-  useEffect(() => {
-    if (pollApplied.current || !poll || !pool) return;
-    pollApplied.current = true;
-    const here = new Set(pool.map((p) => String(p.userId)));
-    setAvailable(
-      poll.groups.in
-        .map((p) => String(p.userId))
-        .filter((id) => here.has(id)),
-    );
-    if (poll.groundId) setGroundId(poll.groundId);
-  }, [poll, pool]);
   const nameOf = useMemo(() => {
     const m = new Map(players.map((p) => [String(p.userId), p.displayName]));
     return (id: string) => m.get(id) ?? "Player";
@@ -550,7 +532,6 @@ function NewMatchFlow() {
               )
             : undefined,
         ...(chosenGround ? { groundId: chosenGround._id } : {}),
-        ...(poll && poll.status !== "cancelled" ? { pollId: poll._id } : {}),
       });
       setLastOvers(Math.min(200, Math.max(1, overs)), format);
       setLastFormat(format);
@@ -808,7 +789,7 @@ function NewMatchFlow() {
   }
 
   const settingsLine = [
-    format === "test" ? "Test" : "ODI",
+    testsOn ? (format === "test" ? "Test" : "ODI") : null,
     `${overs} overs`,
     format === "test"
       ? `${durationMinutes} min`
@@ -918,19 +899,21 @@ function NewMatchFlow() {
             </button>
             {settingsOpen ? (
               <div className="space-y-3 px-4 pb-4 pt-1">
-                <SettingRow label="Format">
-                  <Choice
-                    options={[
-                      { value: "limited", label: "ODI" },
-                      { value: "test", label: "Test" },
-                    ]}
-                    value={format}
-                    onChange={(v) => {
-                      setFormat(v);
-                      setOvers(getLastOvers(v));
-                    }}
-                  />
-                </SettingRow>
+                {testsOn ? (
+                  <SettingRow label="Format">
+                    <Choice
+                      options={[
+                        { value: "limited", label: "ODI" },
+                        { value: "test", label: "Test" },
+                      ]}
+                      value={format}
+                      onChange={(v) => {
+                        setFormat(v);
+                        setOvers(getLastOvers(v));
+                      }}
+                    />
+                  </SettingRow>
+                ) : null}
                 <SettingRow label="Overs">
                   <NumberField
                     aria-label="Overs per innings"

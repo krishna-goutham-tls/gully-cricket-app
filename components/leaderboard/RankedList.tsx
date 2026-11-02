@@ -30,7 +30,7 @@ export type RankRow = {
   qualified: boolean;
   /** Where this row sat a week ago; null if it wasn't ranked then. */
   prevRank?: number | null;
-  /** Visitor / Junior chips when the Everyone board is on. Regulars have none. */
+  /** Visitor / Junior chips when the community shows visitors on Leaders. Regulars have none. */
   tags?: string[];
 };
 
@@ -80,7 +80,10 @@ export function RankedList({
   youId?: Id<"users"> | string | null;
   /** Draw weekly climb/drop arrows — off until the board has a week of history. */
   showMovement?: boolean;
-  /** Season Orange Cap / Purple Cap — printed on the leading qualified row. */
+  /**
+   * Season Orange Cap / Purple Cap — printed on the first qualified row with
+   * no Visitor or Junior tag, the same player the saved award and Home name.
+   */
   capLabel?: string | null;
   /**
    * True for economy and the bowling/batting averages, where the *smallest*
@@ -114,6 +117,10 @@ export function RankedList({
     const pct = Math.round(((max - value) / (max - min)) * 100);
     return Math.max(0, Math.min(100, pct));
   };
+
+  const capIndex = capLabel
+    ? rows.findIndex((r) => r.qualified && !(r.tags && r.tags.length > 0))
+    : -1;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-surface">
@@ -179,7 +186,7 @@ export function RankedList({
                 </span>
               </div>
               <div className="mt-1 flex items-center gap-2 pl-7 leading-tight">
-                {first && capLabel ? (
+                {i === capIndex ? (
                   <span className="shrink-0 text-[11px] font-semibold text-accent-deep">
                     {capLabel}
                   </span>

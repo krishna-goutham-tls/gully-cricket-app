@@ -23,8 +23,8 @@ export default function TournamentsLayout({ children }: { children: React.ReactN
         <EmptyState
           title="Series is off"
           action={
-            <Button href={admin ? "/community" : "/home"}>
-              {admin ? "Open Community Settings" : "Go to Home"}
+            <Button href={admin ? "/settings" : "/home"}>
+              {admin ? "Open Settings" : "Go to Home"}
             </Button>
           }
         />

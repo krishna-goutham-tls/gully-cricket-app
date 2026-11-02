@@ -65,3 +65,25 @@ export async function tagsForUsers(
   );
   return map;
 }
+
+/**
+ * Before a user's `isGuest` changes, write what each unwritten membership
+ * resolves to today. Otherwise the guest-means-Visitor fallback would quietly
+ * add or drop a Visitor tag the moment the flag flips.
+ */
+export async function writeTagsBeforeGuestFlip(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  wasGuest: boolean,
+) {
+  const memberships = await ctx.db
+    .query("orgMembers")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .collect();
+  for (const m of memberships) {
+    if (m.playerTags !== undefined) continue;
+    await ctx.db.patch(m._id, {
+      playerTags: resolvePlayerTags(m.playerTags, m.playerLabel, wasGuest),
+    });
+  }
+}

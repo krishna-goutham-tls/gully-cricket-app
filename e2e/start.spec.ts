@@ -56,7 +56,9 @@ test("a new match with an odd count: teams open split, one player on Both", asyn
   await page.screenshot({ path: `${shots}-start-4-openers.png`, fullPage: true });
 
   // Settings stay one tap away.
-  await page.getByRole("button", { name: /ODI|Test/ }).first().click();
+  // Test matches are off here, so the line has no format word.
+  await page.getByRole("button", { name: /^\d+ overs · / }).first().click();
+  await expect(page.getByText("Format", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^(Two|One)$/, pressed: true })).toBeVisible();
   await page.screenshot({ path: `${shots}-start-5-settings.png`, fullPage: true });
 
@@ -105,7 +107,7 @@ test("moving an opener to the other team and going back keeps a valid start", as
   await expect(page.getByRole("heading", { name: "Start" })).toBeVisible();
   await page.getByRole("button", { name: "Team E2E", exact: true }).first().click();
   // The last match sets the default, so choose two batters for this test.
-  await page.getByRole("button", { name: /ODI|Test/ }).first().click();
+  await page.getByRole("button", { name: /^\d+ overs · / }).first().click();
   await page.getByRole("button", { name: "Two", exact: true }).click();
   const striker = await page.getByRole("button", { name: /^Striker/ }).innerText();
   const strikerName = striker.split("\n").pop()!.trim();
@@ -136,7 +138,7 @@ test("one batter at a time starts with no non-striker", async ({ page }) => {
   await page.waitForTimeout(450);
   await page.getByRole("button", { name: /^Next · 2 v 2/ }).click();
   await page.getByRole("button", { name: "Team E2E", exact: true }).first().click();
-  await page.getByRole("button", { name: /ODI|Test/ }).first().click();
+  await page.getByRole("button", { name: /^\d+ overs · / }).first().click();
   await page.getByRole("button", { name: "One", exact: true }).click();
   await expect(page.getByRole("button", { name: /^Non-striker/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Start scoring" }).click();

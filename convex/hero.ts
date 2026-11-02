@@ -10,6 +10,8 @@ import {
   earnsPoints,
 } from "./lib/points";
 import { sideLabel } from "./scoring";
+import { countedJuniors, orgFeatureOn } from "./lib/features";
+import { captainTeamLabel } from "./lib/teams";
 
 type Side = "A" | "B";
 
@@ -123,6 +125,7 @@ export const heroDay = query({
     const player = await ctx.db.get(args.playerId);
     if (!player) return null;
     const playerKey = String(args.playerId);
+    const juniorRule = await orgFeatureOn(ctx, args.orgId, "juniorRule");
 
     const allCompleted = await ctx.db
       .query("matches")
@@ -207,7 +210,7 @@ export const heroDay = query({
       // bucketed per innings (key `${inningsId}:${playerId}`) because the
       // batting milestone bonus is per innings, not per match. Nothing
       // against a junior counts (`earnsPoints`).
-      const juniors = new Set((match.juniorIds ?? []).map(String));
+      const juniors = countedJuniors(match.juniorIds, juniorRule);
       const pInnRuns = new Map<string, number>();
       const pWkts = new Map<string, number>();
       const pCatch = new Map<string, number>();
@@ -745,6 +748,7 @@ export const dayShares = query({
     const dayMatches = allCompleted.filter(
       (m) => m.createdAt >= args.dayStart && m.createdAt < args.dayEnd,
     );
+    const juniorRule = await orgFeatureOn(ctx, args.orgId, "juniorRule");
 
     const seen = new Set<string>();
     for (const m of dayMatches) {
@@ -773,7 +777,7 @@ export const dayShares = query({
       const catches = new Map<string, number>();
       const bump = (m: Map<string, number>, k: string, by = 1) =>
         m.set(k, (m.get(k) ?? 0) + by);
-      const juniors = new Set((match.juniorIds ?? []).map(String));
+      const juniors = countedJuniors(match.juniorIds, juniorRule);
 
       for (const b of balls) {
         if (b.isRetire) continue;
@@ -823,5 +827,201 @@ export const dayShares = query({
       name: names.get(id) ?? "Player",
       points: points.get(id) ?? 0,
     }));
+  },
+});
+
+/**
+ * Home's "Your match day" card: the viewer's day, or the Player of the
+ * Match's when the viewer did not play. Built from the saved match summaries
+ * (`matchStats` and `playerMatchStats` for that day), never the ball log, so
+ * Home pays a few indexed rows rather than a replay. The over-by-over lines
+ * and the career comparison that `heroDay` adds stay on /hero.
+ */
+export const matchDay = query({
+  args: {
+    token: v.optional(v.string()),
+    orgId: v.id("orgs"),
+    dayStart: v.number(),
+    dayEnd: v.number(),
+  },
+  handler: async (ctx, args) => {
+    let viewerId: Id<"users">;
+    try {
+      viewerId = (await requireOrgViewer(ctx, args.token, args.orgId)).user._id;
+    } catch {
+      return null;
+    }
+
+    const dayMatches = await ctx.db
+      .query("matchStats")
+      .withIndex("by_org_date", (q) =>
+        q.eq("orgId", args.orgId).gte("date", args.dayStart).lt("date", args.dayEnd),
+      )
+      .collect();
+    if (dayMatches.length === 0) return null;
+    dayMatches.sort((a, b) => a.date - b.date);
+
+    const stampsOf = async (userId: Id<"users">) =>
+      (
+        await ctx.db
+          .query("playerMatchStats")
+          .withIndex("by_org_user_date", (q) =>
+            q
+              .eq("orgId", args.orgId)
+              .eq("userId", userId)
+              .gte("date", args.dayStart)
+              .lt("date", args.dayEnd),
+          )
+          .collect()
+      ).filter((r) => r.named || r.contributed);
+
+    let playerId = viewerId;
+    let stamps = await stampsOf(viewerId);
+    if (stamps.length === 0) {
+      // The latest match of the day that named one.
+      const potm = [...dayMatches].reverse().find((m) => m.potm?.[0])?.potm?.[0]?.userId;
+      if (!potm) return null;
+      playerId = potm;
+      stamps = await stampsOf(potm);
+      if (stamps.length === 0) return null;
+    }
+    const player = await ctx.db.get(playerId);
+    if (!player) return null;
+
+    const byMatch = new Map(dayMatches.map((m) => [String(m.matchId), m]));
+    stamps.sort((a, b) => a.date - b.date);
+
+    let runs = 0;
+    let ballsFaced = 0;
+    let fours = 0;
+    let sixes = 0;
+    let wickets = 0;
+    let runsConceded = 0;
+    let ballsBowled = 0;
+    let dotsBowled = 0;
+    let catches = 0;
+    let dismissals = 0;
+    let inningsBattedCount = 0;
+    let potmCount = 0;
+    let bestBattingOver: number | null = null;
+    const miniLines: MiniLine[] = [];
+    const captainCache = new Map<string, string | undefined>();
+    const captain = async (id: Id<"users"> | undefined) => {
+      if (!id) return undefined;
+      const key = String(id);
+      if (!captainCache.has(key)) captainCache.set(key, (await ctx.db.get(id))?.displayName);
+      return captainCache.get(key);
+    };
+
+    for (const r of stamps) {
+      const m = byMatch.get(String(r.matchId));
+      // Every ball, juniors included, as the scorecard counts it. Rows stamped
+      // before `real` held boundaries fall back to `bat` until a restamp.
+      const mRuns = r.real?.runs ?? (r.bat?.runs ?? 0) + (r.offJuniors?.runs ?? 0);
+      const mFaced = r.real?.ballsFaced ?? r.bat?.balls ?? 0;
+      const mWkts = r.real?.wickets ?? (r.bowl?.wickets ?? 0) + (r.offJuniors?.wickets ?? 0);
+      const mOut = (r.bat?.dismissals ?? 0) > 0;
+      runs += mRuns;
+      ballsFaced += mFaced;
+      fours += r.real?.fours ?? r.bat?.fours ?? 0;
+      sixes += r.real?.sixes ?? r.bat?.sixes ?? 0;
+      wickets += mWkts;
+      runsConceded += r.bowl?.runs ?? 0;
+      ballsBowled += r.bowl?.legalBalls ?? 0;
+      dotsBowled += r.real?.bowlDots ?? r.bowl?.dots ?? 0;
+      catches += r.real?.catches ?? r.catches + (r.offJuniors?.catches ?? 0);
+      dismissals += r.bat?.dismissals ?? 0;
+      if (mFaced > 0) inningsBattedCount += 1;
+      const over = r.bat ? (r.real?.bestOver ?? r.bat.bestOver) : undefined;
+      if (over !== undefined && (bestBattingOver === null || over > bestBattingOver)) {
+        bestBattingOver = over;
+      }
+      if (m?.potm?.some((p) => String(p.userId) === String(playerId))) potmCount += 1;
+      if (!m) continue;
+
+      const onA = r.work?.onA ?? false;
+      const onB = r.work?.onB ?? false;
+      const side: Side | undefined = onA && !onB ? "A" : onB && !onA ? "B" : undefined;
+      const nameA = captainTeamLabel(m.sideAName, await captain(m.sideACaptainId));
+      const nameB = captainTeamLabel(m.sideBName, await captain(m.sideBCaptainId));
+      const legal = r.bowl?.legalBalls ?? 0;
+      miniLines.push({
+        matchId: r.matchId,
+        opponent: side === "A" ? nameB : side === "B" ? nameA : `${nameA} v ${nameB}`,
+        battingFigure: r.bat ? `${mRuns}${mOut ? "" : "*"}(${mFaced})` : null,
+        bowlingFigure:
+          legal > 0
+            ? `${mWkts}/${r.bowl!.runs} (${legalBallToOverText(legal, STANDARD_BALLS_PER_OVER)})`
+            : null,
+        result:
+          side === undefined || m.winnerSide === undefined
+            ? "none"
+            : m.winnerSide === side
+              ? "won"
+              : "lost",
+      });
+    }
+
+    const matches = stamps.length;
+    const strikeRate = ballsFaced > 0 ? (runs / ballsFaced) * 100 : 0;
+    const economy =
+      ballsBowled > 0 ? runsConceded / (ballsBowled / STANDARD_BALLS_PER_OVER) : null;
+    const headline = buildHeadline({
+      matches,
+      runs,
+      ballsFaced,
+      sixes,
+      wickets,
+      economy,
+      ballsBowled,
+      catches,
+      dismissals,
+      inningsBattedCount,
+      potmCount,
+    });
+    const insights = buildInsights({
+      matches,
+      runs,
+      ballsFaced,
+      strikeRate,
+      fours,
+      sixes,
+      wickets,
+      ballsBowled,
+      dotsBowled,
+      catches,
+      dismissals,
+      bestBattingOver,
+      bestBowlingOver: null,
+      bestEconomyOverRuns: null,
+      teammateWicketsWhileBatting: 0,
+      dismissedNames: [],
+      careerBaseline: null,
+      headline,
+    });
+
+    return {
+      playerId,
+      isYou: String(playerId) === String(viewerId),
+      displayName: player.displayName,
+      dayStart: args.dayStart,
+      headline,
+      insights,
+      numbers: {
+        matches,
+        runs,
+        ballsFaced,
+        strikeRate,
+        fours,
+        sixes,
+        wickets,
+        runsConceded,
+        ballsBowled,
+        economy,
+        catches,
+        dismissals,
+      },
+      miniLines,
+    };
   },
 });

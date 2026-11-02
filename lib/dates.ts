@@ -52,3 +52,19 @@ export function groupByDay<T>(
   }
   return groups;
 }
+
+/** Local-midnight bounds of the day a timestamp falls in, as `hero.*` takes them. */
+export function dayBounds(ts: number) {
+  const d = new Date(ts);
+  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).getTime();
+  return { dayStart: start, dayEnd: start + 24 * 60 * 60 * 1000 };
+}
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "Sat 1 Nov" — the same on every phone, for a one-line summary. */
+export function weekdayDate(ts: number): string {
+  const d = new Date(ts);
+  return `${WEEKDAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+}

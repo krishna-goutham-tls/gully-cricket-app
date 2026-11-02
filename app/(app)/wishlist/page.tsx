@@ -104,15 +104,15 @@ export default function WishlistPage() {
       <header className="sticky top-0 z-30 border-b border-line bg-bg/90 px-5 pb-3 pt-[calc(var(--safe-top)+0.75rem)] backdrop-blur-md">
         <div className="mx-auto flex max-w-md items-center gap-1">
           <Link
-            href="/profile"
-            aria-label="Back to profile"
+            href="/settings"
+            aria-label="Back to Settings"
             className="-ml-2 flex h-11 w-11 items-center justify-center rounded-lg text-muted active:bg-line/60"
           >
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="min-w-0 flex-1">
             <h1 className="text-xl font-semibold leading-tight tracking-tight text-ink">
-              Wishlist
+              Ask for a feature or report a problem
             </h1>
             <p className="text-[13px] text-muted">
               What your community wants next

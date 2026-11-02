@@ -16,7 +16,7 @@ const PILL_TONE: Record<"dark" | "light", string> = {
 };
 
 /**
- * Shares the no-login page for a match or poll — the link, not a poster.
+ * Shares the no-login page for a match — the link, not a poster.
  * The poster (ShareButton) stays the way to share a finished result.
  * `url` is a function so it reads window.location only on tap.
  */

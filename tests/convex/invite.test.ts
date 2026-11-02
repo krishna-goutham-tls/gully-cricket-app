@@ -162,7 +162,7 @@ describe("Is this you?", () => {
     expect(await t.query(api.orgs.inviteNameMatches, { code, name: "Member" })).toEqual([]);
   });
 
-  test("Yes keeps the old row and its visitor tag, and marks it New", async () => {
+  test("Yes keeps the old row, adds no tag, and marks it New", async () => {
     const { t, admin, orgId, code } = await setup();
     const asha = await addedNoPhone(t, orgId, admin, "Asha Rao");
     const phone = newPhone();
@@ -172,7 +172,7 @@ describe("Is this you?", () => {
     expect(u!._id).toBe(asha);
     expect(u!.isGuest).toBe(false);
     const row = await rowOf(t, orgId, asha);
-    expect(row!.playerTags).toContain("visitor");
+    expect(row!.playerTags).toEqual([]);
     expect(row!.joinedByLinkAt).toBeGreaterThan(0);
     await expect(
       t.mutation(api.auth.signIn, { phone, pin: "1234" }),

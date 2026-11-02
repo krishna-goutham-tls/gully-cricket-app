@@ -499,10 +499,10 @@ describe("saved match totals", () => {
     );
     const { players } = await stampsOf(t, matchId);
     for (const r of players) expect(r.real).toBeDefined();
-    expect(row(players, a1)!.real).toEqual({ runs: 10, ballsFaced: 6, wickets: 0, catches: 1 });
-    expect(row(players, a2)!.real).toEqual({ runs: 0, ballsFaced: 0, wickets: 1, catches: 0 });
-    expect(row(players, j)!.real).toEqual({ runs: 2, ballsFaced: 6, wickets: 0, catches: 0 });
-    expect(row(players, b1)!.real).toEqual({ runs: 0, ballsFaced: 0, wickets: 0, catches: 0 });
+    expect(row(players, a1)!.real).toMatchObject({ runs: 10, ballsFaced: 6, wickets: 0, catches: 1 });
+    expect(row(players, a2)!.real).toMatchObject({ runs: 0, ballsFaced: 0, wickets: 1, catches: 0 });
+    expect(row(players, j)!.real).toMatchObject({ runs: 2, ballsFaced: 6, wickets: 0, catches: 0 });
+    expect(row(players, b1)!.real).toMatchObject({ runs: 0, ballsFaced: 0, wickets: 0, catches: 0 });
   });
 
   test("S4: run-outs sit on the fielder's stamp and read from there", async () => {

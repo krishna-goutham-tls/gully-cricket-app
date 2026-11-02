@@ -80,6 +80,12 @@ type AuthContextValue = {
   isSandbox: boolean;
   /** The active community's switches, defaults filled in. */
   features: Features;
+  /**
+   * `features` came from the server, not the auth cache. A cache written by an
+   * older build lacks newer switches and reads them as their defaults, so
+   * anything that resets a choice from a switch waits for this.
+   */
+  featuresLive: boolean;
   loading: boolean;
   setToken: (token: string) => void;
   logout: () => Promise<void>;
@@ -281,6 +287,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isObserver,
     isSandbox,
     features,
+    featuresLive: !!bootstrap,
     loading,
     setToken,
     logout,

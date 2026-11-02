@@ -31,7 +31,7 @@ import type { PlayerTag } from "@/lib/playerLabel";
 import { computeSeasonTrophies, computeTrophies, type Trophy } from "@/lib/trophies";
 import { cn, errorMessage } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
-import { ArrowLeft, ChevronDown, Sparkles } from "lucide-react";
+import { ArrowLeft, ChevronDown, Settings, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useRef, useState } from "react";
@@ -547,7 +547,9 @@ export default function PlayerDetailPage() {
   const params = useParams();
   const router = useRouter();
   const userId = params.id as Id<"users">;
-  const { token, activeOrgId, isAdmin, isSandbox, features } = useAuth();
+  const { token, activeOrgId, isAdmin, isSandbox, features, user } = useAuth();
+  // Your own page is the Profile tab: no way back, Settings in the corner.
+  const own = !!user && String(user._id) === String(userId);
   const togglePlayerTag = useMutation(api.players.togglePlayerTag);
   const [showAll, setShowAll] = useState(false);
   const [labelBusy, setLabelBusy] = useState(false);
@@ -674,14 +676,18 @@ export default function PlayerDetailPage() {
       <header className="bg-ink px-5 pb-4 pt-[calc(var(--safe-top)+0.5rem)] text-bg">
         <div className="mx-auto max-w-md">
           <div className="flex items-center justify-between">
-            <button
-              type="button"
-              aria-label="Back"
-              onClick={() => router.back()}
-              className="-ml-2 flex h-11 w-11 items-center justify-center rounded-lg text-bg/70 active:bg-white/10"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
+            {own ? (
+              <span className="h-11 w-11" />
+            ) : (
+              <button
+                type="button"
+                aria-label="Back"
+                onClick={() => router.back()}
+                className="-ml-2 flex h-11 w-11 items-center justify-center rounded-lg text-bg/70 active:bg-white/10"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+            )}
             <div className="-mr-2 flex items-center gap-1">
               <Link
                 href={`/hero?playerId=${stats.userId}`}
@@ -694,6 +700,15 @@ export default function PlayerDetailPage() {
                 data={shareData}
                 filename={`gully-${shareSlug || "player"}.png`}
               />
+              {own ? (
+                <Link
+                  href="/settings"
+                  aria-label="Settings"
+                  className="flex h-11 w-11 items-center justify-center rounded-xl text-bg/70 active:bg-white/10"
+                >
+                  <Settings className="h-5 w-5" />
+                </Link>
+              ) : null}
             </div>
           </div>
 
