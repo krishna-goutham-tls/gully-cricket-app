@@ -25,7 +25,7 @@ test("an admin reaches Community from Profile and sees every row", async ({ page
   const { token, orgId } = await loginAs(page, "otherOrganiser", ORG_B);
   try {
     await open(page, "/profile");
-    await page.getByRole("link", { name: "Community" }).click();
+    await page.getByRole("link", { name: "Community Settings" }).click();
     await expect(page).toHaveURL(/\/community$/);
     await expect(page.getByText(ORG_B)).toBeVisible();
     await expect(page.getByRole("switch", { name: "Series" })).toBeChecked();
@@ -59,9 +59,9 @@ test("Series off hides the tab and the pages; on brings them back", async ({ pag
     await expect(page.getByText("Series is off")).toBeVisible();
     await open(page, "/tournaments/new");
     await expect(page.getByText("Series is off")).toBeVisible();
-    const box = await page.getByRole("link", { name: "Open Community" }).boundingBox();
+    const box = await page.getByRole("link", { name: "Open Community Settings" }).boundingBox();
     expect(box!.height).toBeGreaterThanOrEqual(44);
-    await page.getByRole("link", { name: "Open Community" }).click();
+    await page.getByRole("link", { name: "Open Community Settings" }).click();
     await page.getByRole("switch", { name: "Series" }).click();
     await expect(page.getByRole("switch", { name: "Series" })).toBeChecked();
     await expect(nav.getByRole("link", { name: "Series" })).toBeVisible();
@@ -113,7 +113,7 @@ test("a player has no Community row and the page says Admins only", async ({ pag
   await loginAs(page, "player", ORG_A);
   await open(page, "/profile");
   await expect(page.getByRole("link", { name: "My stats" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Community" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Community Settings" })).toHaveCount(0);
   await open(page, "/community");
   await expect(page.getByText("Admins only")).toBeVisible();
 });
@@ -128,7 +128,7 @@ test("a player on a series page with Series off has a way back to Home", async (
     await loginAs(page, "player", ORG_A);
     await open(page, "/tournaments/new");
     await expect(page.getByText("Series is off")).toBeVisible();
-    await expect(page.getByRole("link", { name: "Open Community" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Open Community Settings" })).toHaveCount(0);
     await page.getByRole("link", { name: "Go to Home" }).click();
     await expect(page).toHaveURL(/\/home$/);
   } finally {

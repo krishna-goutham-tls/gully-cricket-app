@@ -249,7 +249,7 @@ export default function ProfilePage() {
               href="/community"
               className="flex min-h-12 w-full items-center justify-between border-t border-line px-4 text-[15px] font-semibold text-ink active:bg-bg"
             >
-              Community
+              Community Settings
               <ChevronRight className="h-4 w-4 text-faint" />
             </Link>
           ) : null}

@@ -24,7 +24,7 @@ export default function TournamentsLayout({ children }: { children: React.ReactN
           title="Series is off"
           action={
             <Button href={admin ? "/community" : "/home"}>
-              {admin ? "Open Community" : "Go to Home"}
+              {admin ? "Open Community Settings" : "Go to Home"}
             </Button>
           }
         />

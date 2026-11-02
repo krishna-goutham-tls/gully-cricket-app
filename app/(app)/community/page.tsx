@@ -86,7 +86,7 @@ export default function CommunityPage() {
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <h1 className="min-w-0 flex-1 text-xl font-semibold leading-tight tracking-tight text-ink">
-            Community
+            Community Settings
           </h1>
         </div>
       </header>
