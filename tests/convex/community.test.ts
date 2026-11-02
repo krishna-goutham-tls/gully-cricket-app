@@ -320,6 +320,25 @@ describe("admin, tags and guest names", () => {
     await makeAdmin(t, admin, orgId, a2.userId);
     await expect(tag(t, admin, orgId, a2.userId, "junior")).rejects.toThrow("Remove admin first");
     await expect(tag(t, admin, orgId, a2.userId, "visitor")).rejects.toThrow("Remove admin first");
+    // Old data: an admin who already has a tag can lose it.
+    await t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("orgMembers")
+        .withIndex("by_org_user", (q) => q.eq("orgId", orgId).eq("userId", a2.userId))
+        .unique();
+      await ctx.db.patch(row!._id, { playerTags: ["junior"] });
+    });
+    expect((await tag(t, admin, orgId, a2.userId, "junior")).playerTags).toEqual([]);
+  });
+
+  test("the sandbox makes everyone admin, so tags work there", async () => {
+    const { t, admin, a2, orgId } = await setup();
+    const { orgId: sandboxId } = await t.mutation(api.orgs.enterSandbox, { token: admin.token, orgId });
+    await expect(tag(t, admin, sandboxId, a2.userId, "junior")).resolves.toMatchObject({ ok: true });
+    const { userId: guestId } = await t.mutation(api.players.addGuest, { token: admin.token, orgId, name: "Gary" });
+    await expect(
+      t.mutation(api.players.renameGuest, { token: admin.token, orgId: sandboxId, userId: guestId, name: "G" + "ary K" }),
+    ).rejects.toThrow();
   });
 
   test("a player can be both junior and visitor", async () => {

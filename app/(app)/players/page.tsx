@@ -428,7 +428,7 @@ export default function PlayersPage() {
         />
       ) : null}
 
-      {openPlayer && token && activeOrgId ? (
+      {openPlayer && isAdmin && token && activeOrgId ? (
         <PlayerSheet
           token={token}
           orgId={activeOrgId}

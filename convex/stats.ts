@@ -2040,6 +2040,14 @@ async function playerStatsFor(
     displayName: player.displayName,
     isGuest: player.isGuest ?? false,
     playerTags: labels.get(key) ?? [],
+    // An admin cannot take a tag, so the profile hides the tag buttons.
+    isAdmin:
+      (
+        await ctx.db
+          .query("orgMembers")
+          .withIndex("by_org_user", (q) => q.eq("orgId", args.orgId).eq("userId", args.userId))
+          .unique()
+      )?.roles.includes("admin") ?? false,
     photoUrl: player.photoUrl,
     bio: player.bio,
     primaryRole: player.primaryRole,

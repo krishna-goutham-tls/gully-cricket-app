@@ -321,7 +321,7 @@ function AdminsSheet({
                   {p.displayName}
                   {p.userId === user?._id ? <span className="font-normal text-muted"> (you)</span> : null}
                 </span>
-                {admins.length > 1 ? (
+                {admins.length > 1 && p.userId !== user?._id ? (
                   <button
                     type="button"
                     disabled={busy}

@@ -1,3 +1,6 @@
+"use client";
+
+import { useId } from "react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -37,12 +40,14 @@ export function SwitchRow({
   disabled?: boolean;
   onChange: (on: boolean) => void;
 }) {
+  const lineId = useId();
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
       aria-label={label}
+      aria-describedby={line ? lineId : undefined}
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className="flex min-h-14 w-full items-center gap-3 border-t border-line px-4 py-3 text-left first:border-t-0 active:bg-bg disabled:opacity-60"
@@ -50,7 +55,9 @@ export function SwitchRow({
       <span className="min-w-0 flex-1">
         <span className="block text-[15px] font-semibold text-ink">{label}</span>
         {line ? (
-          <span className="block text-[13px] leading-snug text-muted">{line}</span>
+          <span id={lineId} className="block text-[13px] leading-snug text-muted">
+            {line}
+          </span>
         ) : null}
       </span>
       <SwitchTrack checked={checked} />

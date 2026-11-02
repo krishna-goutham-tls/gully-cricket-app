@@ -196,7 +196,8 @@ test("Admins in Community lists admins and offers only regulars with an account"
     await page.screenshot({ path: `e2e/out/shots/${info.project.name}/admins-add.png` });
     await sheet.getByRole("button", { name: /^E2E Player/ }).click();
     await expect(sheet.getByText("E2E Player")).toBeVisible();
-    await expect(sheet.getByRole("button", { name: "Remove admin" })).toHaveCount(2);
+    // You cannot take your own admin off here, so only the new admin has the button.
+    await expect(sheet.getByRole("button", { name: "Remove admin" })).toHaveCount(1);
   } finally {
     await client().mutation(api.orgs.setRoles, { token, orgId, userId: id("E2E Player"), roles: ["player"] });
   }

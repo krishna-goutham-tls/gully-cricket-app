@@ -67,8 +67,13 @@ export function PlayerSheet({
 
   const tagged = player.playerTags.length > 0;
   const canRename = !player.hasAccount && !isSandbox;
-  // Admin is for a regular player who can sign in. The sandbox makes everyone admin.
-  const showAdmin = !isSandbox && player.hasAccount;
+  // Admin is for a regular player who can sign in. The sandbox makes everyone
+  // admin. Your own admin is not here, so one stray tap cannot lock you out.
+  // An old guest who still holds admin shows it, so it can be taken off.
+  const showAdmin = !isSandbox && !isSelf && (player.hasAccount || player.isAdmin);
+  // Tags show unless the player is an admin. Old data can hold an admin with a
+  // tag; it shows so the tag can come off.
+  const showTags = isSandbox || !player.isAdmin || tagged;
 
   return (
     <div
@@ -146,7 +151,7 @@ export function PlayerSheet({
         ) : null}
 
         <div className="mt-3 border-y border-line">
-          {player.isAdmin && !isSandbox ? null : (
+          {!showTags ? null : (
             <>
               <SwitchRow
                 label="Junior"
