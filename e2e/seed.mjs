@@ -28,7 +28,7 @@ async function organiser(role, orgName) {
   }
   const me = await account(role);
   const found = (await memberships(me.token)).find((m) => m.orgName === orgName);
-  const orgId = found ? found.orgId : (await c.mutation(api.orgs.create, { token: me.token, name: orgName, location: "Test ground" })).orgId;
+  const orgId = found ? found.orgId : (await c.mutation(api.orgs.create, { token: me.token, name: orgName })).orgId;
   return { ...me, orgId };
 }
 

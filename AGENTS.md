@@ -9,7 +9,8 @@ on top of the ball log.
 Any active org member can create matches, score, and ask "Who's in?". An
 **admin** also approves PIN resets, sends the invite link, removes members,
 manages the community's grounds (Profile → Grounds), and runs Profile →
-Community Settings: the name, and the Series, The Roast and junior board switches.
+Community Settings: the name, the Series, The Roast and junior board switches,
+and Visitors (show visitors on Leaders).
 
 **Stack:** Next.js 14 (App Router) · TypeScript · Tailwind · Convex · Netlify
 **Live:** https://gullycricket.space
@@ -186,7 +187,7 @@ numbers do not get a new tab by default.
   two-level board — a new discipline tab is a last resort, not a first
   home for a career stat.
 - **Prefer reading over configuring.** Defaults should match how the group
-  already argues. Toggles are for the exception (Everyone on Leaders),
+  already argues. Toggles are for the exception (Show visitors on Leaders),
   not for the main number.
 - **Copy names the thing people say.** Win–loss, not "attribution rate".
   Visitor, not "uncredited walk-on".

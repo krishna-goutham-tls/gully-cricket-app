@@ -9,12 +9,6 @@ import { Input } from "@/components/ui/Input";
 import { useRouter } from "next/navigation";
 import { setActiveOrgId } from "@/lib/session";
 import { errorMessage } from "@/lib/utils";
-import { Check, X } from "lucide-react";
-import {
-  JUNIOR_RULE_FOOTNOTE,
-  JUNIOR_RULE_HEADING,
-  juniorRuleLabel,
-} from "@/lib/juniorRule";
 
 /**
  * Creating a community is invite-only. The server is the real gate
@@ -31,9 +25,6 @@ export default function NewOrgPage() {
   );
   const router = useRouter();
   const [name, setName] = useState("");
-  const [location, setLocation] = useState("");
-  // "Scorecard only" is selected. It changes numbers, so later only Krishna changes it.
-  const [juniorRule, setJuniorRule] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -42,12 +33,7 @@ export default function NewOrgPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await createOrg({
-        token,
-        name,
-        location: location || undefined,
-        juniorRule,
-      });
+      const res = await createOrg({ token, name });
       setActiveOrgId(res.orgId);
       await selectOrg(res.orgId);
       // Getting players in is the first job, so Home opens the invite sheet.
@@ -122,28 +108,6 @@ export default function NewOrgPage() {
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
-        <Input
-          label="Location"
-          placeholder="Optional"
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
-        />
-        <fieldset>
-          <legend className="text-[13px] font-semibold text-ink">
-            {JUNIOR_RULE_HEADING}
-          </legend>
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            {[true, false].map((on) => (
-              <JuniorRuleCard
-                key={String(on)}
-                on={on}
-                selected={juniorRule === on}
-                onSelect={() => setJuniorRule(on)}
-              />
-            ))}
-          </div>
-          <p className="mt-2 text-[13px] text-muted">{JUNIOR_RULE_FOOTNOTE}</p>
-        </fieldset>
         {error ? <p className="text-[13px] text-danger">{error}</p> : null}
         <Button
           fullWidth
@@ -157,51 +121,5 @@ export default function NewOrgPage() {
         </Button>
       </div>
     </main>
-  );
-}
-
-/** One choice of the junior rule, with what it counts in. */
-function JuniorRuleCard({
-  on,
-  selected,
-  onSelect,
-}: {
-  on: boolean;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  const rows = [
-    { label: "Match scorecard", counts: true },
-    { label: "Leaders, Caps, records, milestones", counts: !on },
-  ];
-  return (
-    <label
-      className={`block cursor-pointer rounded-2xl border p-3 has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-ink ${
-        selected ? "border-ink bg-bg ring-1 ring-ink" : "border-line bg-surface"
-      }`}
-    >
-      <input
-        type="radio"
-        name="juniorRule"
-        className="sr-only"
-        checked={selected}
-        onChange={onSelect}
-      />
-      <span className="block text-[15px] font-semibold leading-snug text-ink">
-        {juniorRuleLabel(on)}
-      </span>
-      <span className="mt-2 block space-y-1.5">
-        {rows.map((r) => (
-          <span key={r.label} className="flex items-start gap-1.5 text-[13px] leading-snug text-muted">
-            {r.counts ? (
-              <Check aria-label="counts" className="mt-0.5 h-4 w-4 shrink-0 text-ink" />
-            ) : (
-              <X aria-label="does not count" className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
-            )}
-            {r.label}
-          </span>
-        ))}
-      </span>
-    </label>
   );
 }

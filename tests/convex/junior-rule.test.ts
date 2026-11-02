@@ -87,38 +87,21 @@ const awards = (t: T, seasonId: Id<"seasons">) =>
   t.run(async (ctx) => (await ctx.db.get(seasonId))!.awards ?? []);
 
 describe("the junior rule", () => {
-  test("a new community picks a rule; absent means Scorecard only", async () => {
+  test("a new community gets the rule on, with no row stored", async () => {
     const t = newTest();
     const owner = await person(t, "Owner");
     await t.run((ctx) => ctx.db.patch(owner.userId, { isPlatformAdmin: true }));
-
-    const { orgId: everywhere } = await t.mutation(api.orgs.create, {
-      token: owner.token,
-      name: "Count All",
-      juniorRule: false,
-    });
-    const { orgId: plain } = await t.mutation(api.orgs.create, {
+    const { orgId } = await t.mutation(api.orgs.create, {
       token: owner.token,
       name: "Default Club",
+      // Older app builds still send a location. It is accepted and ignored.
+      location: "Somewhere",
     });
-    const scorecard = await t.mutation(api.orgs.create, {
-      token: owner.token,
-      name: "Scorecard Club",
-      juniorRule: true,
-    });
-
-    const rule = async (orgId: Id<"orgs">) =>
-      (await t.query(api.orgs.settings, { token: owner.token, orgId }))!.features.juniorRule;
-    expect(await rule(everywhere)).toBe(false);
-    expect(await rule(plain)).toBe(true);
-    expect(await rule(scorecard.orgId)).toBe(true);
-    // The default stores no row, so a later default change reaches it.
-    const stored = await t.run(async (ctx) => (await ctx.db.get(plain))!.features);
-    expect(stored ?? null).toBeNull();
-
-    const boot = await t.query(api.auth.bootstrap, { token: owner.token });
-    const row = boot!.memberships.find((m) => m.orgId === everywhere)!;
-    expect(row.features!.juniorRule).toBe(false);
+    const s = await t.query(api.orgs.settings, { token: owner.token, orgId });
+    expect(s!.features.juniorRule).toBe(true);
+    const org = await t.run(async (ctx) => (await ctx.db.get(orgId))!);
+    expect(org.features ?? null).toBeNull();
+    expect(org.location).toBeUndefined();
   });
 
   test("an admin cannot change the rule; only the agent command can", async () => {
@@ -217,7 +200,7 @@ describe("the junior rule", () => {
     expect(counted).toBe(0);
   });
 
-  test("a match completed under Count everywhere still saves its real juniors", async () => {
+  test("a match completed with the rule off still saves its real juniors", async () => {
     const t = newTest();
     const senior = await person(t, "Senior");
     const junior = await person(t, "Junior");

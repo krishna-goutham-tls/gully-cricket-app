@@ -20,6 +20,7 @@ import {
   DEFAULT_JUNIOR_BOARD_TITLE,
   featureOrg,
   isFeatureOn,
+  orgFeatureOn,
 } from "./lib/features";
 import { legalBallToOverText } from "./lib/scoring";
 import { captainTeamLabel } from "./lib/teams";
@@ -1355,7 +1356,11 @@ async function leaderboardFor(
   args: LeaderboardArgs,
   now: number,
 ) {
-  const includeExtras = args.includeVisitorsAndJuniors === true;
+  // Unset reads the community's "Show visitors on Leaders". Ranking callers
+  // (auto-form teams, the Players list, season caps) pass it.
+  const includeExtras =
+    args.includeVisitorsAndJuniors ??
+    (await orgFeatureOn(ctx, args.orgId, "visitorsOnLeaders"));
   let afterTs: number | undefined;
   let beforeTs: number | undefined;
   let prevAfterTs: number | undefined;
@@ -1491,8 +1496,9 @@ async function leaderboardFor(
 const boardArgs = {
   orgId: v.id("orgs"),
   /**
-   * Default hides visitors and juniors. Pass true for auto-form teams and
-   * the Leaders "Everyone" toggle, so ranks and weekly arrows stay honest.
+   * Unset follows the community's "Show visitors on Leaders" (Leaders and
+   * Records). Pass true for auto-form teams and the Players list, false for
+   * season caps, so those do not move with the setting.
    */
   includeVisitorsAndJuniors: v.optional(v.boolean()),
   seasonId: v.optional(v.id("seasons")),
@@ -1811,15 +1817,16 @@ async function playerStatsFor(
     realCatches += r.catches + (r.offJuniors?.catches ?? 0);
   }
 
-  // Rank against the default Leaders board (regulars only), so "#3 of 14"
-  // cannot disagree with what the tab shows until someone flips Everyone.
+  // Rank against the Leaders board, so "#3 of 14" cannot disagree with what
+  // the tab shows: visitors are in it only when the community shows them.
+  const onBoard = await orgFeatureOn(ctx, args.orgId, "visitorsOnLeaders");
   const battingRows = boardFilter(
     stampTags(buildBattingRows(batting, names), labels),
-    false,
+    onBoard,
   );
   const bowlingRows = boardFilter(
     stampTags(buildBowlingRows(bowling, names), labels),
-    false,
+    onBoard,
   );
   const rankOf = (
     rows: Array<{ userId: Id<"users">; qualified: boolean }>,

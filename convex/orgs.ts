@@ -34,9 +34,8 @@ export const create = mutation({
   args: {
     token: v.string(),
     name: v.string(),
+    /** Ignored. Older app builds still send it; the create screen asks only for the name. */
     location: v.optional(v.string()),
-    /** The junior rule: true is "Scorecard only", false "Count everywhere". Absent means true. */
-    juniorRule: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     // Invite-only: the caller must hold an approved, unspent access request
@@ -50,11 +49,8 @@ export const create = mutation({
     const now = Date.now();
     const orgId = await ctx.db.insert("orgs", {
       name,
-      location: args.location?.trim() || undefined,
       createdBy: user._id,
       isDiscoverable: true,
-      // Only "Count everywhere" is stored. The default needs no row.
-      features: args.juniorRule === false ? { juniorRule: false } : undefined,
       createdAt: now,
     });
 

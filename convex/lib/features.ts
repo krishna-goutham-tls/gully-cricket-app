@@ -15,11 +15,12 @@ export const FEATURE_DEFAULTS = {
   juniorBoard: false,
   /**
    * Seniors earn nothing against juniors on boards, Caps, records and
-   * milestones ("Scorecard only"). Off is "Count everywhere". The organiser
-   * picks it at creation. Only an agent changes it later, because it moves
-   * numbers (`maintenance.setJuniorRule`).
+   * milestones. On for every community. Only an agent changes it, because it
+   * moves numbers (`maintenance.setJuniorRule`).
    */
   juniorRule: true,
+  /** Visitors and juniors on Leaders and Records. Off: regulars only. */
+  visitorsOnLeaders: false,
 } as const;
 
 export type FeatureKey = keyof typeof FEATURE_DEFAULTS;
@@ -56,7 +57,7 @@ export function isAdminSwitch(key: string): key is FeatureKey {
 /**
  * The juniors a match's points leave out. `matches.juniorIds` always holds
  * the real juniors, so turning the rule back on restores them. With the rule
- * off ("Count everywhere") nobody is left out.
+ * off nobody is left out.
  */
 export function countedJuniors(
   juniorIds: readonly Doc<"users">["_id"][] | Set<string> | undefined,

@@ -522,8 +522,6 @@ export default function LeaderboardPage() {
   const [measureKey, setMeasureKey] = useState<MeasureKey>(
     cap === "purple" ? "wickets" : "runs",
   );
-  // Default: visitors and juniors off the board. Anyone can flip Everyone.
-  const [includeExtras, setIncludeExtras] = useState(false);
   // Mixed board is how the community already argues. Tests / ODI is the slice.
   const [format, setFormat] = useState<FormatScope>("all");
   // null = not chosen yet, which resolves to the live season when one is
@@ -562,7 +560,6 @@ export default function LeaderboardPage() {
       ? {
           token,
           orgId: activeOrgId,
-          includeVisitorsAndJuniors: includeExtras,
           ...(selectedSeason ? { seasonId: selectedSeason._id } : {}),
           ...(format === "all" ? {} : { format }),
           ...(ground ? { groundId: ground._id } : {}),
@@ -592,7 +589,8 @@ export default function LeaderboardPage() {
 
   const rows = useMemo(() => {
     const raw = data ? measure.rows(data) : ([] as RankRow[]);
-    if (!data || !includeExtras) return raw;
+    // The community's "Show visitors on Leaders" decides who is on the board.
+    if (!data || !data.includeVisitorsAndJuniors) return raw;
     const byId = new Map<string, PlayerTag[]>();
     for (const r of [
       ...data.batting,
@@ -612,7 +610,7 @@ export default function LeaderboardPage() {
           tags.length === 0 ? undefined : tags.map((t) => PLAYER_TAG_COPY[t]),
       };
     });
-  }, [data, measure, includeExtras]);
+  }, [data, measure]);
 
   const hasData = data && data.matchCount > 0 && rows.length > 0;
   // Arrows read a 7-day lookback. Inside a season that window is clipped to
@@ -769,30 +767,16 @@ export default function LeaderboardPage() {
           </div>
         )}
 
-        {!scrolled ? (
+        {!scrolled && bothFormats ? (
           <div className="mt-1 flex items-center justify-center">
-            {bothFormats ? (
-              <>
-                <WordToggle
-                  ariaLabel="Test or ODI"
-                  value={format}
-                  onChange={setFormat}
-                  options={[
-                    { id: "test", label: "Tests" },
-                    { id: "limited", label: "ODI" },
-                    { id: "all", label: "All" },
-                  ]}
-                />
-                <span className="mx-1 h-4 w-px shrink-0 bg-line" aria-hidden />
-              </>
-            ) : null}
             <WordToggle
-              ariaLabel="Who appears on the board"
-              value={includeExtras ? "everyone" : "regulars"}
-              onChange={(next) => setIncludeExtras(next === "everyone")}
+              ariaLabel="Test or ODI"
+              value={format}
+              onChange={setFormat}
               options={[
-                { id: "regulars", label: "Regulars" },
-                { id: "everyone", label: "Everyone" },
+                { id: "test", label: "Tests" },
+                { id: "limited", label: "ODI" },
+                { id: "all", label: "All" },
               ]}
             />
           </div>

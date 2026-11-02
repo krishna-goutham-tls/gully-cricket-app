@@ -138,14 +138,14 @@ export const addGuest = mutation({
       updatedAt: now,
     });
 
-    const tags: PlayerTag[] = ["visitor"];
-
+    // A regular until an admin tags them. Written as [] so the old
+    // guest-means-Visitor fallback in resolvePlayerTags never applies.
     await ctx.db.insert("orgMembers", {
       orgId: args.orgId,
       userId,
       status: "active",
       roles: ["player"],
-      playerTags: sortTags(tags),
+      playerTags: [],
       requestedAt: now,
       decidedAt: now,
       decidedBy: user._id,

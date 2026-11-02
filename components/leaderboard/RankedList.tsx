@@ -30,7 +30,7 @@ export type RankRow = {
   qualified: boolean;
   /** Where this row sat a week ago; null if it wasn't ranked then. */
   prevRank?: number | null;
-  /** Visitor / Junior chips when the Everyone board is on. Regulars have none. */
+  /** Visitor / Junior chips when the community shows visitors on Leaders. Regulars have none. */
   tags?: string[];
 };
 

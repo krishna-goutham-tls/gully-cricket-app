@@ -77,9 +77,16 @@ describe("community switches", () => {
       roast: true,
       juniorBoard: false,
       juniorRule: true,
+      visitorsOnLeaders: false,
     });
     const s = await t.query(api.orgs.settings, { token: admin.token, orgId });
-    expect(s!.features).toEqual({ series: true, roast: true, juniorBoard: false, juniorRule: true });
+    expect(s!.features).toEqual({
+      series: true,
+      roast: true,
+      juniorBoard: false,
+      juniorRule: true,
+      visitorsOnLeaders: false,
+    });
     expect(s!.admins).toEqual(["Asha"]);
     expect(s!.juniorBoardTitle).toBe("Playground Bullies");
   });
@@ -310,7 +317,6 @@ describe("admin, tags and guest names", () => {
     await tag(t, admin, orgId, a2.userId, "visitor");
     await expect(makeAdmin(t, admin, orgId, a2.userId)).rejects.toThrow("Only a regular player with an account");
     const { userId: guestId } = await t.mutation(api.players.addGuest, { token: admin.token, orgId, name: "Guest Gary" });
-    await tag(t, admin, orgId, guestId, "visitor"); // guests start as Visitor; take it off
     await expect(makeAdmin(t, admin, orgId, guestId)).rejects.toThrow("Only a regular player with an account");
     await tag(t, admin, orgId, a2.userId, "visitor");
     await expect(makeAdmin(t, admin, orgId, a2.userId)).resolves.toMatchObject({ ok: true });
