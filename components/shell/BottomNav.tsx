@@ -15,6 +15,8 @@ import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { cn } from "@/lib/utils";
 
+// Four tabs for every community: Home, Leaders, Players, Profile. Series shows
+// only when an admin turns it on in Settings.
 // Trophy belongs to tournaments everywhere else in the app, so Leaders takes
 // the chart. "Series" over "Tournaments": the long label cannot fit five
 // 44px+ items at 375px without dropping below 12px type.
@@ -54,8 +56,10 @@ export function BottomNav() {
         {items
           .filter((item) => item.href !== "/tournaments" || features.series)
           .map((item) => {
-          const active =
-            pathname === item.href || pathname.startsWith(`${item.href}/`);
+          // Settings opens from Profile, so Profile stays lit there.
+          const active = [item.href, ...(item.href === "/profile" ? ["/settings"] : [])].some(
+            (href) => pathname === href || pathname.startsWith(`${href}/`),
+          );
           const Icon = item.icon;
           const count =
             item.badge === "members"

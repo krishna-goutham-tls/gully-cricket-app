@@ -3,7 +3,7 @@ import { loginAs, open } from "./lib/auth.mjs";
 import { api, client, ORG_A, ORG_B, signIn } from "./lib/env.mjs";
 
 // Switches change in the second test community only, and every test puts them
-// back on, so the other specs see the defaults.
+// back, so the other specs see what the seed left.
 async function setFeature(token: string, orgId: string, key: string, on: boolean) {
   await client().mutation(api.orgs.setFeature, { token, orgId, key, on });
 }
@@ -11,7 +11,7 @@ async function setFeature(token: string, orgId: string, key: string, on: boolean
 async function restore(token: string, orgId: string) {
   await client().mutation(api.orgs.rename, { token, orgId, name: ORG_B });
   for (const key of ["series", "roast"]) await setFeature(token, orgId, key, true);
-  await setFeature(token, orgId, "juniorBoard", false);
+  for (const key of ["juniorBoard", "testMatches"]) await setFeature(token, orgId, key, false);
 }
 
 async function noSidewaysScroll(page: Page) {
@@ -21,22 +21,43 @@ async function noSidewaysScroll(page: Page) {
   expect(over).toBeLessThanOrEqual(1);
 }
 
-test("an admin reaches Community from Profile and sees every row", async ({ page }, info) => {
+const GROUPS = ["Your account", "Community", "Extra features"];
+
+test("an admin reaches Settings from Profile and sees all 3 groups", async ({ page }, info) => {
   const { token, orgId } = await loginAs(page, "otherOrganiser", ORG_B);
   try {
     await open(page, "/profile");
-    await page.getByRole("link", { name: "Community Settings" }).click();
-    await expect(page).toHaveURL(/\/community$/);
+    await expect(page.getByRole("link", { name: "My stats" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Records" })).toHaveCount(0);
+    await expect(page.getByText("Wishlist")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Sign out" })).toHaveCount(0);
+    await page.screenshot({ path: `e2e/out/shots/${info.project.name}/profile.png`, fullPage: true });
+    await page.getByRole("link", { name: "Settings" }).click();
+    await expect(page).toHaveURL(/\/settings$/);
+    for (const g of GROUPS) await expect(page.getByText(g, { exact: true })).toBeVisible();
+    for (const row of ["Name and bio", "Change PIN", "Sign out"]) {
+      await expect(page.getByRole("button", { name: row })).toBeVisible();
+    }
+    await expect(page.getByRole("link", { name: "Ask for a feature or report a problem" })).toBeVisible();
     await expect(page.getByText(ORG_B)).toBeVisible();
+    for (const row of ["Invite link", "Grounds"]) {
+      await expect(page.getByRole("button", { name: row })).toBeVisible();
+    }
+    await expect(page.getByRole("link", { name: "Visitors" })).toBeVisible();
+    await expect(page.getByText("Seasons", { exact: true })).toBeVisible();
     await expect(page.getByRole("switch", { name: "Series" })).toBeChecked();
+    await expect(page.getByRole("switch", { name: "Test matches" })).not.toBeChecked();
     await expect(page.getByRole("switch", { name: "The Roast" })).toBeChecked();
+    await expect(page.getByRole("switch", { name: "Practice mode" })).not.toBeChecked();
+    await expect(page.getByText("Try scoring. Real numbers stay the same.")).toBeVisible();
+    await expect(page.getByText("Hides the Series tab")).toHaveCount(0);
     await expect(page.getByRole("switch", { name: "Junior board" })).not.toBeChecked();
     await expect(page.getByLabel("Board title")).toHaveCount(0);
+    await page.screenshot({ path: `e2e/out/shots/${info.project.name}/settings-admin.png`, fullPage: true });
+    await noSidewaysScroll(page);
 
     await page.getByRole("switch", { name: "Junior board" }).click();
     await expect(page.getByLabel("Board title")).toHaveValue("Playground Bullies");
-    await page.screenshot({ path: `e2e/out/shots/${info.project.name}/community.png`, fullPage: true });
-    await noSidewaysScroll(page);
 
     // The Roast off hides the junior board row with it.
     await page.getByRole("switch", { name: "The Roast" }).click();
@@ -49,7 +70,7 @@ test("an admin reaches Community from Profile and sees every row", async ({ page
 test("Series off hides the tab and the pages; on brings them back", async ({ page }) => {
   const { token, orgId } = await loginAs(page, "otherOrganiser", ORG_B);
   try {
-    await open(page, "/community");
+    await open(page, "/settings");
     await page.getByRole("switch", { name: "Series" }).click();
     await expect(page.getByRole("switch", { name: "Series" })).not.toBeChecked();
 
@@ -59,9 +80,9 @@ test("Series off hides the tab and the pages; on brings them back", async ({ pag
     await expect(page.getByText("Series is off")).toBeVisible();
     await open(page, "/tournaments/new");
     await expect(page.getByText("Series is off")).toBeVisible();
-    const box = await page.getByRole("link", { name: "Open Community Settings" }).boundingBox();
+    const box = await page.getByRole("link", { name: "Open Settings" }).boundingBox();
     expect(box!.height).toBeGreaterThanOrEqual(44);
-    await page.getByRole("link", { name: "Open Community Settings" }).click();
+    await page.getByRole("link", { name: "Open Settings" }).click();
     await page.getByRole("switch", { name: "Series" }).click();
     await expect(page.getByRole("switch", { name: "Series" })).toBeChecked();
     await expect(nav.getByRole("link", { name: "Series" })).toBeVisible();
@@ -82,8 +103,8 @@ test("a phone on the Roast tab lands on Honours when The Roast goes off", async 
     await expect(page.getByRole("button", { name: "The Roast" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Honours" })).toHaveAttribute("aria-current", "true");
 
-    await open(page, "/home");
-    await expect(page.getByText("Honours & roasts")).toHaveCount(0);
+    await open(page, "/leaderboard");
+    await expect(page.getByRole("link", { name: "Records" })).toBeVisible();
 
     await setFeature(token, orgId, "roast", true);
     await open(page, "/records");
@@ -97,7 +118,7 @@ test("an admin renames the community and the header follows", async ({ page }) =
   const { token, orgId } = await loginAs(page, "otherOrganiser", ORG_B);
   const newName = `${ORG_B} Renamed`;
   try {
-    await open(page, "/community");
+    await open(page, "/settings");
     await page.getByRole("button", { name: new RegExp(`^Name\\s*${ORG_B}`) }).click();
     await page.getByLabel("Name").fill(newName);
     await page.getByRole("button", { name: "Save" }).click();
@@ -109,13 +130,20 @@ test("an admin renames the community and the header follows", async ({ page }) =
   }
 });
 
-test("a player has no Community row and the page says Admins only", async ({ page }) => {
+test("a player sees only Your account in Settings, and /community lands there", async ({ page }, info) => {
   await loginAs(page, "player", ORG_A);
   await open(page, "/profile");
   await expect(page.getByRole("link", { name: "My stats" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Community Settings" })).toHaveCount(0);
+  await page.getByRole("link", { name: "Settings" }).click();
+  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page.getByText("Your account", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+  await expect(page.getByText("Community", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Extra features", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("switch")).toHaveCount(0);
+  await page.screenshot({ path: `e2e/out/shots/${info.project.name}/settings-player.png`, fullPage: true });
   await open(page, "/community");
-  await expect(page.getByText("Admins only")).toBeVisible();
+  await expect(page).toHaveURL(/\/settings$/);
 });
 
 test("a player on a series page with Series off has a way back to Home", async ({ page }) => {
@@ -128,7 +156,7 @@ test("a player on a series page with Series off has a way back to Home", async (
     await loginAs(page, "player", ORG_A);
     await open(page, "/tournaments/new");
     await expect(page.getByText("Series is off")).toBeVisible();
-    await expect(page.getByRole("link", { name: "Open Community Settings" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Open Settings" })).toHaveCount(0);
     await page.getByRole("link", { name: "Go to Home" }).click();
     await expect(page).toHaveURL(/\/home$/);
   } finally {
@@ -181,11 +209,11 @@ test("players show full names; an admin tags in 2 taps from a sheet", async ({ p
   }
 });
 
-test("Admins in Community lists admins and offers only regulars with an account", async ({ page }, info) => {
+test("Admins in Settings lists admins and offers only regulars with an account", async ({ page }, info) => {
   const { token, orgId, id } = await orgAAdmin();
   await loginAs(page, "organiser", ORG_A);
   try {
-    await open(page, "/community");
+    await open(page, "/settings");
     await page.getByRole("button", { name: /^Admins/ }).click();
     const sheet = page.getByRole("dialog", { name: "Admins" });
     await expect(sheet.getByText("E2E Organiser")).toBeVisible();

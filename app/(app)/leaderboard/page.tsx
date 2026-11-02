@@ -8,6 +8,7 @@ import {
 } from "@/components/leaderboard/records";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { AppHeader } from "@/components/shell/AppHeader";
+import Link from "next/link";
 import type { LeaderboardShareData } from "@/components/share/ShareCard";
 import { ShareButton } from "@/components/share/ShareButton";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -514,7 +515,7 @@ function emptyCopy(format: FormatScope, season: Season | null) {
 }
 
 export default function LeaderboardPage() {
-  const { token, activeOrgId, user, activeOrg } = useAuth();
+  const { token, activeOrgId, user, activeOrg, features } = useAuth();
   const cap = useSearchParams().get("cap");
   const [tab, setTab] = useState<Tab>(
     cap === "purple" ? "bowling" : "batting",
@@ -567,16 +568,17 @@ export default function LeaderboardPage() {
       : "skip",
   );
 
-  // The Test/ODI filter shows only when this window has both formats. The
-  // last known counts carry over while the next board loads, so it does not
-  // flicker. When it hides, the board goes back to All.
+  // The Test/ODI filter shows only with Test matches on and both formats in
+  // this window. The last known counts carry over while the next board loads,
+  // so it does not flicker. When it hides, the board goes back to All.
   const [bothFormats, setBothFormats] = useState(false);
+  const testsOn = features.testMatches;
   useEffect(() => {
     if (!data) return;
-    const both = data.formats.test > 0 && data.formats.limited > 0;
+    const both = testsOn && data.formats.test > 0 && data.formats.limited > 0;
     setBothFormats(both);
     if (!both) setFormat("all");
-  }, [data]);
+  }, [data, testsOn]);
 
   const chips = useMemo(() => MEASURES.filter((m) => m.tab === tab), [tab]);
   const measure =
@@ -717,13 +719,21 @@ export default function LeaderboardPage() {
           ) : undefined
         }
         trailing={
-          hasData && shareData ? (
-            <ShareButton
-              data={shareData}
-              filename={`gully-leaders-${measure.key}.png`}
-              tone="light"
-            />
-          ) : null
+          <div className="flex items-center gap-1">
+            <Link
+              href="/records"
+              className="flex min-h-11 items-center rounded-lg px-2 text-[13px] font-semibold text-ink active:bg-line/60"
+            >
+              Records
+            </Link>
+            {hasData && shareData ? (
+              <ShareButton
+                data={shareData}
+                filename={`gully-leaders-${measure.key}.png`}
+                tone="light"
+              />
+            ) : null}
+          </div>
         }
         below={disciplineTabs}
       />

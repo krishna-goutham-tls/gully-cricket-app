@@ -70,10 +70,11 @@ const membership = async (t: T, who: Person, orgId: Id<"orgs">) => {
 };
 
 describe("community switches", () => {
-  test("new communities start with Series and The Roast on, junior board off", async () => {
+  test("new communities start with The Roast on; Series, Test matches and junior board off", async () => {
     const { t, admin, orgId } = await setup();
     expect((await membership(t, admin, orgId)).features).toEqual({
-      series: true,
+      series: false,
+      testMatches: false,
       roast: true,
       juniorBoard: false,
       juniorRule: true,
@@ -81,7 +82,8 @@ describe("community switches", () => {
     });
     const s = await t.query(api.orgs.settings, { token: admin.token, orgId });
     expect(s!.features).toEqual({
-      series: true,
+      series: false,
+      testMatches: false,
       roast: true,
       juniorBoard: false,
       juniorRule: true,
@@ -109,7 +111,7 @@ describe("community switches", () => {
       match: await t.run((ctx) => ctx.db.get(matchId)),
     });
     const before = await snapshot();
-    for (const key of ["series", "roast", "juniorBoard"]) {
+    for (const key of ["series", "testMatches", "roast", "juniorBoard"]) {
       for (const on of [false, true, false, true]) {
         await flip(t, admin, orgId, key, on);
         expect(await snapshot()).toEqual(before);
@@ -143,6 +145,7 @@ describe("community switches", () => {
 
   test("Series off stops new series work, and a running series match still finishes", async () => {
     const { t, admin, a2, b1, j1, orgId } = await setup();
+    await flip(t, admin, orgId, "series", true);
     const newSeries = () =>
       t.mutation(api.tournaments.create, {
         token: admin.token,

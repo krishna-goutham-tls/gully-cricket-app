@@ -12,7 +12,7 @@ import { errorMessage } from "@/lib/utils";
 import { juniorRuleChangeMailto } from "@/lib/juniorRule";
 
 /**
- * Visitors and juniors, one level below Community Settings. Most communities
+ * Visitors and juniors, one level below Settings. Most communities
  * have neither. Showing visitors on Leaders is a switch; the junior rule moves
  * numbers, so it is not: Change emails Krishna.
  */
@@ -46,8 +46,8 @@ export default function VisitorsPage() {
       <header className="sticky top-0 z-30 border-b border-line bg-bg/90 px-5 pb-3 pt-[calc(var(--safe-top)+0.75rem)] backdrop-blur-md">
         <div className="mx-auto flex max-w-md items-center gap-1">
           <Link
-            href="/community"
-            aria-label="Back to Community Settings"
+            href="/settings"
+            aria-label="Back to Settings"
             className="-ml-2 flex h-11 w-11 items-center justify-center rounded-lg text-muted active:bg-line/60"
           >
             <ArrowLeft className="h-5 w-5" />

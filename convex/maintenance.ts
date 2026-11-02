@@ -545,3 +545,41 @@ export const setJuniorRule = internalMutation({
     return { was, on, sandboxIds };
   },
 });
+
+/**
+ * Ops, run once before the new defaults go live: Series and Test matches are
+ * off for a new community. A community that already used one keeps it, so
+ * this stores today's value for every real community: `series` on when it has
+ * any series, `testMatches` on when it has any Test. A key the community
+ * already stored is never touched, so a second run changes nothing.
+ */
+export const pinFeatureDefaults = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const orgs = await ctx.db.query("orgs").collect();
+    const out: Array<{ orgId: Id<"orgs">; name: string; set: Record<string, boolean> }> = [];
+    for (const org of orgs) {
+      if (org.isSandbox) continue;
+      const stored = org.features ?? {};
+      const set: Record<string, boolean> = {};
+      if (stored.series === undefined) {
+        const series = await ctx.db
+          .query("tournaments")
+          .withIndex("by_org", (q) => q.eq("orgId", org._id))
+          .first();
+        set.series = series !== null;
+      }
+      if (stored.testMatches === undefined) {
+        const matches = await ctx.db
+          .query("matches")
+          .withIndex("by_org", (q) => q.eq("orgId", org._id))
+          .collect();
+        set.testMatches = matches.some((m) => m.ruleSnapshot.format === "test");
+      }
+      if (Object.keys(set).length === 0) continue;
+      await ctx.db.patch(org._id, { features: { ...stored, ...set } });
+      out.push({ orgId: org._id, name: org.name, set });
+    }
+    return out;
+  },
+});

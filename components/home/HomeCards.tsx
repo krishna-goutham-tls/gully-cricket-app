@@ -570,3 +570,77 @@ export function SeriesCard({
     </Link>
   );
 }
+
+/**
+ * Home's last result, larger than a list card: both scores, who won and by
+ * how much, and the Player of the Match. The whole card opens the scorecard.
+ */
+export function ResultCard({ match }: { match: MatchRow }) {
+  const potm = match.potm ?? [];
+  const sides = [
+    { side: "A" as const, name: match.sideAName, score: match.scoreA },
+    { side: "B" as const, name: match.sideBName, score: match.scoreB },
+  ];
+  return (
+    <Link
+      href={`/matches/${match._id}`}
+      className="mt-3 block rounded-2xl border border-line bg-surface px-4 py-4 shadow-card active:bg-bg"
+    >
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 flex-1 text-[11px] font-semibold uppercase tracking-wide text-faint">
+          Last result
+        </span>
+        {match.tournamentName ? <TournamentChip name={match.tournamentName} /> : null}
+        <span className="tabular shrink-0 text-[13px] text-muted">{matchType(match)}</span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-faint" />
+      </div>
+      <div className="mt-2 space-y-1">
+        {sides.map((s) => {
+          const won = match.winnerSide === s.side;
+          return (
+            <div key={s.side} className="flex items-baseline gap-2">
+              <TruncText
+                lines={2}
+                className={cn(
+                  "flex-1 text-[15px] font-semibold",
+                  won ? "text-ink" : "text-muted",
+                )}
+              >
+                {s.name}
+              </TruncText>
+              {s.score ? (
+                <span
+                  className={cn(
+                    "tabular shrink-0 text-2xl font-semibold tracking-tight",
+                    won ? "text-ink" : "text-muted",
+                  )}
+                >
+                  {s.score}
+                </span>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-2 flex items-center gap-1.5 text-[15px] font-semibold text-ink">
+        {match.winnerSide ? <Trophy className="h-4 w-4 shrink-0 text-accent-deep" /> : null}
+        <span className="min-w-0">{match.resultText ?? "Result pending"}</span>
+      </p>
+      {potm.length > 0 ? (
+        <div className="mt-3 border-t border-line pt-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-accent-deep">
+            Player of the Match
+          </p>
+          <p className="mt-0.5 flex flex-wrap items-baseline justify-between gap-x-2">
+            <span className="text-[15px] font-semibold text-ink [overflow-wrap:anywhere]">
+              {potm.map((p) => p.name).join(" & ")}
+            </span>
+            {potm.length === 1 ? (
+              <span className="tabular text-[13px] text-muted">{potmFigures(potm[0])}</span>
+            ) : null}
+          </p>
+        </div>
+      ) : null}
+    </Link>
+  );
+}

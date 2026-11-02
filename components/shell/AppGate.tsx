@@ -11,8 +11,8 @@ import { useEffect } from "react";
 // live on the domain before an iOS app can ship).
 // /gully-rules and /release-notes are public reading pages — nested slugs
 // stay open too. Only "/" and "/login" bounce signed-in users.
-// /m/[id] and /p/[id] are the no-login match and poll pages people share on
-// WhatsApp (app/(public)) — anyone with the link reads them. /i/[code] is the
+// /m/[id] is the no-login match page people share on WhatsApp
+// (app/(public)) — anyone with the link reads it. /i/[code] is the
 // invite link, open so a new player can join from it.
 const OPEN_PATHS = [
   "/",
@@ -22,7 +22,6 @@ const OPEN_PATHS = [
   "/gully-rules",
   "/release-notes",
   "/m",
-  "/p",
   "/i",
 ];
 
@@ -66,7 +65,7 @@ export function AppGate({ children }: { children: React.ReactNode }) {
 
     // The access queue is the platform owner's, not a community's — it must
     // stay reachable even for an account with no community yet.
-    const needsOrg = !["/join", "/org/new", "/profile", "/admin/requests"].includes(
+    const needsOrg = !["/join", "/org/new", "/profile", "/settings", "/admin/requests"].includes(
       pathname,
     );
     if (activeMemberships.length === 0 && needsOrg) {

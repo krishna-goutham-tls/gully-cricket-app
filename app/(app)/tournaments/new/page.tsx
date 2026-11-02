@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -28,7 +28,8 @@ function matchTimeHint(minutes: number) {
 }
 
 export default function NewTournamentPage() {
-  const { token, activeOrgId } = useAuth();
+  const { token, activeOrgId, features } = useAuth();
+  const testsOn = features.testMatches;
   const router = useRouter();
   const pool = useQuery(
     api.players.listOrgPlayers,
@@ -38,7 +39,13 @@ export default function NewTournamentPage() {
   const addGuest = useMutation(api.players.addGuest);
 
   const [name, setName] = useState("");
-  const [format, setFormat] = useState<"limited" | "test">("test");
+  const [format, setFormat] = useState<"limited" | "test">(() =>
+    testsOn ? "test" : "limited",
+  );
+  // Test matches off: no format choice, every series is limited overs.
+  useEffect(() => {
+    if (!testsOn) setFormat("limited");
+  }, [testsOn]);
   const [durationMinutes, setDurationMinutes] = useState(DEFAULT_TEST_MINUTES);
   const [overs, setOvers] = useState(20);
   const [oversPerPlayer, setOversPerPlayer] = useState(2);
@@ -216,38 +223,40 @@ export default function NewTournamentPage() {
           />
         </div>
 
-        <div className="rounded-2xl border border-line bg-surface p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-[15px] font-medium text-ink">Format</p>
-            <div className="flex rounded-2xl border border-line p-1">
-              {(
-                [
-                  { id: "test", label: "Test" },
-                  { id: "limited", label: "ODI" },
-                ] as const
-              ).map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => setFormat(opt.id)}
-                  aria-pressed={format === opt.id}
-                  className={
-                    format === opt.id
-                      ? "min-h-11 rounded-xl bg-ink px-4 text-[13px] font-semibold text-bg"
-                      : "min-h-11 rounded-xl px-4 text-[13px] font-semibold text-muted"
-                  }
-                >
-                  {opt.label}
-                </button>
-              ))}
+        {testsOn ? (
+          <div className="rounded-2xl border border-line bg-surface p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-[15px] font-medium text-ink">Format</p>
+              <div className="flex rounded-2xl border border-line p-1">
+                {(
+                  [
+                    { id: "test", label: "Test" },
+                    { id: "limited", label: "ODI" },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setFormat(opt.id)}
+                    aria-pressed={format === opt.id}
+                    className={
+                      format === opt.id
+                        ? "min-h-11 rounded-xl bg-ink px-4 text-[13px] font-semibold text-bg"
+                        : "min-h-11 rounded-xl px-4 text-[13px] font-semibold text-muted"
+                    }
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
+            <p className="mt-2 text-[13px] leading-relaxed text-muted">
+              {format === "limited"
+                ? `Every match is ODI — ${oversPerPlayer} over${oversPerPlayer === 1 ? "" : "s"} per player, common players get half.`
+                : "Every match is Test — two innings a side, follow-on, no over quotas."}
+            </p>
           </div>
-          <p className="mt-2 text-[13px] leading-relaxed text-muted">
-            {format === "limited"
-              ? `Every match is ODI — ${oversPerPlayer} over${oversPerPlayer === 1 ? "" : "s"} per player, common players get half.`
-              : "Every match is Test — two innings a side, follow-on, no over quotas."}
-          </p>
-        </div>
+        ) : null}
 
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4">
           <p className="text-[15px] font-medium text-ink">Overs per innings</p>

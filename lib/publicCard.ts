@@ -11,9 +11,6 @@ import { api } from "@/convex/_generated/api";
 export type PublicMatch = NonNullable<
   FunctionReturnType<typeof api.publicView.match>
 >;
-export type PublicPoll = NonNullable<
-  FunctionReturnType<typeof api.publicView.poll>
->;
 
 function client() {
   const url = process.env.NEXT_PUBLIC_CONVEX_URL;
@@ -24,14 +21,6 @@ function client() {
 export async function fetchPublicMatch(id: string): Promise<PublicMatch | null> {
   try {
     return (await client()?.query(api.publicView.match, { matchId: id })) ?? null;
-  } catch {
-    return null;
-  }
-}
-
-export async function fetchPublicPoll(id: string): Promise<PublicPoll | null> {
-  try {
-    return (await client()?.query(api.publicView.poll, { pollId: id })) ?? null;
   } catch {
     return null;
   }
@@ -93,41 +82,4 @@ export function matchLine(m: PublicMatch) {
     }`;
   }
   return "Not started yet";
-}
-
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
-/**
- * "Sun 28 Sep · 7:00 am", from the day and time exactly as the asker typed
- * them. The server has no idea what time zone the ground is in, so this
- * never goes through a timestamp.
- */
-export function pollDayTime(p: Pick<PublicPoll, "date" | "time">) {
-  const [y, mo, d] = p.date.split("-").map(Number);
-  const weekday = WEEKDAYS[new Date(Date.UTC(y, mo - 1, d)).getUTCDay()];
-  const [hh, mm] = p.time.split(":").map(Number);
-  const hour = hh % 12 === 0 ? 12 : hh % 12;
-  const time = `${hour}:${String(mm).padStart(2, "0")} ${hh < 12 ? "am" : "pm"}`;
-  return `${weekday} ${d} ${MONTHS[mo - 1]} · ${time}`;
-}
-
-/** "6 in, 2 maybe" — or the poll's state if it is no longer asking. */
-export function pollCountLine(p: PublicPoll) {
-  const counts = [
-    `${p.counts.in} in`,
-    p.counts.maybe ? `${p.counts.maybe} maybe` : null,
-  ]
-    .filter(Boolean)
-    .join(", ");
-  if (p.status === "cancelled") return "Called off";
-  return p.status === "closed" ? `Closed — ${counts}` : counts;
-}
-
-/** "Sun 28 Sep · 7:00 am · Home ground — 6 in, 2 maybe". */
-export function pollLine(p: PublicPoll) {
-  return `${[pollDayTime(p), p.groundName].filter(Boolean).join(" · ")} — ${pollCountLine(p)}`;
 }

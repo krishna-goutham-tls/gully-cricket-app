@@ -45,6 +45,9 @@ test("the create screen asks only for the community name", async ({ page }, info
   const made = boot.memberships.find((m: Membership) => m.orgName === name);
   expect(made.features.juniorRule).toBe(true);
   expect(made.features.visitorsOnLeaders).toBe(false);
+  // A new community starts with Series and Test matches off.
+  expect(made.features.series).toBe(false);
+  expect(made.features.testMatches).toBe(false);
   convexRun("e2e:forgetOrg", { orgId: made.orgId });
 });
 
@@ -64,7 +67,7 @@ test("the Visitors switch shows and hides a visitor on Leaders", async ({ page }
     await expect(board.getByText(visitor, { exact: true })).toHaveCount(0);
     await page.screenshot({ path: `${shots}/leaders.png`, fullPage: true });
 
-    await open(page, "/community");
+    await open(page, "/settings");
     await expect(page.getByRole("link", { name: "Visitors" })).toBeVisible();
     await expect(page.getByText("Seniors against juniors")).toHaveCount(0);
     await page.screenshot({ path: `${shots}/community.png`, fullPage: true });

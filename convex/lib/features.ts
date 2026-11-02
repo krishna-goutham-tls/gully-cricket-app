@@ -7,8 +7,17 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
  * through `isFeatureOn`, never from the org row.
  */
 export const FEATURE_DEFAULTS = {
-  /** The Series tab, the Home series card and new series. */
-  series: true,
+  /**
+   * The Series tab, the Home series card and new series. Off for a new
+   * community; `maintenance.pinFeatureDefaults` kept it on for the ones that
+   * had played one.
+   */
+  series: false,
+  /**
+   * The Test or ODI choice at match setup and the format filter on Leaders.
+   * Off: every new match is limited overs. Old Tests and their stats stay.
+   */
+  testMatches: false,
   /** The Roast tab, roast cards, roast lines in Story, the Nemesis card. */
   roast: true,
   /** A Roast board of the points regulars did not earn against juniors. */

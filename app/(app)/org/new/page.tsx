@@ -97,7 +97,7 @@ export default function NewOrgPage() {
           Create your community
         </h1>
         <p className="mt-1.5 text-[13px] text-muted">
-          You become admin. Players sign up and you approve them.
+          You become admin. Invite players with a link.
         </p>
       </div>
 
