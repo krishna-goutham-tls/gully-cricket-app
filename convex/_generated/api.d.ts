@@ -33,6 +33,7 @@ import type * as lib_scoring from "../lib/scoring.js";
 import type * as lib_seasons from "../lib/seasons.js";
 import type * as lib_session from "../lib/session.js";
 import type * as lib_teams from "../lib/teams.js";
+import type * as lib_totals from "../lib/totals.js";
 import type * as lib_tournamentLineup from "../lib/tournamentLineup.js";
 import type * as lib_wishlist from "../lib/wishlist.js";
 import type * as maintenance from "../maintenance.js";
@@ -80,6 +81,7 @@ declare const fullApi: ApiFromModules<{
   "lib/seasons": typeof lib_seasons;
   "lib/session": typeof lib_session;
   "lib/teams": typeof lib_teams;
+  "lib/totals": typeof lib_totals;
   "lib/tournamentLineup": typeof lib_tournamentLineup;
   "lib/wishlist": typeof lib_wishlist;
   maintenance: typeof maintenance;

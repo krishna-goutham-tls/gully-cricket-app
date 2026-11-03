@@ -1,9 +1,11 @@
 import { v } from "convex/values";
-import { internalMutation } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { hashPin } from "./lib/crypto";
 import { normalizePhone, isValidPin } from "./lib/phone";
 import { writeTagsBeforeGuestFlip } from "./lib/playerLabel";
+import { getUserBySessionToken, requirePlatformAdmin } from "./lib/session";
+import { communityTotalsRow, moveSiteTotals, pickCounter } from "./lib/totals";
 
 /**
  * One-shot bootstrap: create an org, its admin, and all players in one run.
@@ -770,5 +772,78 @@ export const deleteUnusedPlayer = internalMutation({
       sessions: sessions.length,
       pinResets: resets.length,
     };
+  },
+});
+
+/**
+ * Krishna's New communities list on /admin: every real community, newest
+ * first, with the admin's number so he can WhatsApp them. Platform owner
+ * only; anyone else gets an empty list.
+ */
+export const newCommunities = query({
+  args: { token: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const user = await getUserBySessionToken(ctx, args.token);
+    if (!user || !(user.isPlatformAdmin ?? false)) return [];
+    const orgs = (await ctx.db.query("orgs").collect())
+      .filter((o) => !o.isSandbox)
+      .sort((a, b) => b.createdAt - a.createdAt);
+    return Promise.all(
+      orgs.map(async (o) => {
+        // The person who made it. If they left the admins, the first admin
+        // with a number stands in.
+        let admin = await ctx.db.get(o.createdBy);
+        const own = admin
+          ? await ctx.db
+              .query("orgMembers")
+              .withIndex("by_org_user", (q) => q.eq("orgId", o._id).eq("userId", admin!._id))
+              .unique()
+          : null;
+        if (!admin?.phone || own?.status !== "active" || !own.roles.includes("admin")) {
+          const members = await ctx.db
+            .query("orgMembers")
+            .withIndex("by_org_status", (q) => q.eq("orgId", o._id).eq("status", "active"))
+            .collect();
+          for (const m of members) {
+            if (!m.roles.includes("admin")) continue;
+            const u = await ctx.db.get(m.userId);
+            if (u?.phone) {
+              admin = u;
+              break;
+            }
+          }
+        }
+        const totals = pickCounter(await communityTotalsRow(ctx, o._id));
+        return {
+          orgId: o._id,
+          name: o.name,
+          createdAt: o.createdAt,
+          matches: totals.matches,
+          adminName: admin?.displayName ?? null,
+          adminPhone: admin?.phone ?? null,
+          closed: o.closedAt !== undefined,
+        };
+      }),
+    );
+  },
+});
+
+/**
+ * Close a junk community, or open it again. Members lose it at once
+ * (convex/lib/session.ts) and its numbers leave the landing counter. Nothing
+ * is deleted.
+ */
+export const setClosed = mutation({
+  args: { token: v.string(), orgId: v.id("orgs"), closed: v.boolean() },
+  handler: async (ctx, args) => {
+    await requirePlatformAdmin(ctx, args.token);
+    const org = await ctx.db.get(args.orgId);
+    if (!org || org.isSandbox) throw new Error("Community not found");
+    const wasClosed = org.closedAt !== undefined;
+    if (wasClosed === args.closed) return { closed: wasClosed };
+    await ctx.db.patch(org._id, { closedAt: args.closed ? Date.now() : undefined });
+    const row = pickCounter(await communityTotalsRow(ctx, org._id));
+    await moveSiteTotals(ctx, row, args.closed ? -1 : 1);
+    return { closed: args.closed };
   },
 });

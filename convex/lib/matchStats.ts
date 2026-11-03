@@ -4,6 +4,7 @@ import { CATCH_POINTS, WICKET_POINTS, earnsPoints, matchPoints } from "./points"
 import type { Side } from "./contribution";
 import { tagsForUsers } from "./playerLabel";
 import { countedJuniors, orgFeatureOn } from "./features";
+import { moveMatchTotals, totalsOfBalls } from "./totals";
 
 /**
  * Stat stamps: one completed match's ball log, folded per player, written to
@@ -803,11 +804,21 @@ export function foldMatch(
   };
 }
 
-/** Removes every stamp for one match. Safe to call on a match with none. */
+/**
+ * Removes every stamp for one match. Safe to call on a match with none. The
+ * match's share leaves the counters with its summary row.
+ */
 export async function clearMatchStamps(
   ctx: MutationCtx,
   matchId: Id<"matches">,
 ) {
+  const summaries = await ctx.db
+    .query("matchStats")
+    .withIndex("by_match", (q) => q.eq("matchId", matchId))
+    .collect();
+  for (const r of summaries) {
+    if (r.totals) await moveMatchTotals(ctx, r.orgId, r.totals, -1);
+  }
   const tables = ["matchStats", "playerMatchStats", "playerMatchups"] as const;
   for (const table of tables) {
     const rows = await ctx.db
@@ -846,7 +857,9 @@ export async function restampMatch(
     await orgFeatureOn(ctx, match.orgId, "juniorRule"),
   );
   const folded = foldMatch(match, innings, balls, juniors);
-  await ctx.db.insert("matchStats", folded.match);
+  const totals = totalsOfBalls(balls);
+  await ctx.db.insert("matchStats", { ...folded.match, totals });
+  await moveMatchTotals(ctx, match.orgId, totals, 1);
   for (const row of folded.players) await ctx.db.insert("playerMatchStats", row);
   for (const row of folded.matchups) await ctx.db.insert("playerMatchups", row);
   return true;

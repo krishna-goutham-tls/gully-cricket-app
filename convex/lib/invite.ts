@@ -23,7 +23,7 @@ export async function newInviteCode(ctx: MutationCtx) {
   throw new Error("Could not make a link. Try again.");
 }
 
-/** The community a code opens. A sandbox never opens by link. */
+/** The community a code opens. A sandbox or a closed community never opens by link. */
 export async function orgByInviteCode(ctx: QueryCtx | MutationCtx, raw: string) {
   const code = cleanInviteCode(raw);
   if (!code) return null;
@@ -31,7 +31,7 @@ export async function orgByInviteCode(ctx: QueryCtx | MutationCtx, raw: string) 
     .query("orgs")
     .withIndex("by_invite_code", (q) => q.eq("inviteCode", code))
     .first();
-  return org && !org.isSandbox ? org : null;
+  return org && !org.isSandbox && !org.closedAt ? org : null;
 }
 
 /**

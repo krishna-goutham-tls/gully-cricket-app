@@ -4,8 +4,9 @@ import {
   mutation,
   query,
   MutationCtx,
+  QueryCtx,
 } from "./_generated/server";
-import { Doc } from "./_generated/dataModel";
+import { Doc, Id } from "./_generated/dataModel";
 import { normalizePhone } from "./lib/phone";
 import { isGroupSize, isGroupType } from "./lib/access";
 import {
@@ -33,7 +34,8 @@ function publicRequest(r: Doc<"accessRequests">) {
 }
 
 /**
- * The landing-page form. Unauthenticated by necessity — the person filling it
+ * The old landing-page form. No screen calls it since open sign-up
+ * (2026-11-03); old phones may, until Phase 7 removes it. Unauthenticated by necessity — the person filling it
  * in has no account and must not get one from this call. It creates a request
  * and nothing else: no user, no org, no membership.
  *
@@ -81,8 +83,8 @@ export const submitRequest = mutation({
 });
 
 /**
- * Badge count. Runs on every screen for every player, so it must stay cheap
- * and must never throw — a non-owner simply gets zero.
+ * The old badge count. No screen calls it since open sign-up (2026-11-03);
+ * it stays for old phones until Phase 7. Must never throw — a non-owner gets zero.
  */
 export const pendingCount = query({
   args: { token: v.optional(v.string()) },
@@ -175,12 +177,9 @@ export const dismissRequest = mutation({
 });
 
 /**
- * Whether the signed-in user may create a community right now.
- *
- * Deliberately mirrors `requireCreateOrgAllowance` below: the UI uses this to
- * decide whether to offer the button at all, `orgs.create` uses that to
- * enforce it, and both read the same row through the same index — so the
- * button and the guard cannot drift apart.
+ * Whether the signed-in user may create a community right now. Anyone signed
+ * in may (Krishna, 2026-11-03), up to `MAX_COMMUNITIES`. Mirrors
+ * `requireCreateOrgAllowance` below, so the screen and the guard agree.
  */
 export const canCreateOrg = query({
   args: { token: v.optional(v.string()) },
@@ -190,23 +189,10 @@ export const canCreateOrg = query({
     if (user.isPlatformAdmin ?? false) {
       return { allowed: true, reason: "platform-admin" as const };
     }
-    if (!user.phone) return { allowed: false, reason: "no-phone" as const };
-
-    const req = await ctx.db
-      .query("accessRequests")
-      .withIndex("by_phone", (q) => q.eq("phone", user.phone!))
-      .first();
-
-    if (req && req.status === "approved" && !req.usedAt) {
-      return { allowed: true, reason: "approved" as const };
+    if ((await communitiesMadeBy(ctx, user._id)) >= MAX_COMMUNITIES) {
+      return { allowed: false, reason: "cap" as const };
     }
-    if (req && req.usedAt) {
-      return { allowed: false, reason: "already-used" as const };
-    }
-    if (req && req.status === "pending") {
-      return { allowed: false, reason: "pending" as const };
-    }
-    return { allowed: false, reason: "none" as const };
+    return { allowed: true, reason: "open" as const };
   },
 });
 
@@ -247,28 +233,27 @@ export const amPlatformAdmin = query({
   },
 });
 
+/** A person may create this many communities. The platform owner has no cap. */
+export const MAX_COMMUNITIES = 3;
+
+/** Real communities this person made, closed ones too, so closing frees no slot. */
+async function communitiesMadeBy(ctx: QueryCtx | MutationCtx, userId: Id<"users">) {
+  const made = await ctx.db
+    .query("orgs")
+    .withIndex("by_created_by", (q) => q.eq("createdBy", userId))
+    .collect();
+  return made.filter((o) => !o.isSandbox).length;
+}
+
 /** Guard used by `orgs.create`; exported so the rule lives in one file. */
 export async function requireCreateOrgAllowance(
   ctx: MutationCtx,
   token: string,
 ) {
   const user = await requireUser(ctx, token);
-  if (user.isPlatformAdmin ?? false) return { user, request: null };
-
-  if (!user.phone) {
-    throw new Error("Your account has no phone number on it.");
+  if (user.isPlatformAdmin ?? false) return { user };
+  if ((await communitiesMadeBy(ctx, user._id)) >= MAX_COMMUNITIES) {
+    throw new Error(`You can make ${MAX_COMMUNITIES} communities at most.`);
   }
-
-  const req = await ctx.db
-    .query("accessRequests")
-    .withIndex("by_phone", (q) => q.eq("phone", user.phone!))
-    .first();
-
-  if (!req || req.status !== "approved" || req.usedAt) {
-    throw new Error(
-      "Communities are invite-only. Register yours at gullycricket.space and I'll WhatsApp you.",
-    );
-  }
-
-  return { user, request: req };
+  return { user };
 }
