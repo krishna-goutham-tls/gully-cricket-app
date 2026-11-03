@@ -1,11 +1,12 @@
 "use client";
 
 import { DemoPad } from "@/components/landing/DemoPad";
-import { InviteForm } from "@/components/landing/InviteForm";
 import { RULES, RuleCard } from "@/components/landing/ruleCards";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Logo } from "@/components/ui/Logo";
+import { api } from "@/convex/_generated/api";
+import { useQuery } from "convex/react";
 import { cn, sanitizePhoneInput } from "@/lib/utils";
 import { Home, Trophy, User, Users } from "lucide-react";
 import Link from "next/link";
@@ -316,9 +317,11 @@ function PlayPhoneEntry() {
     router.push(`/login?phone=${encodeURIComponent(cleaned)}`);
   }
 
+  // The one door, for members and new people alike. `/#invite` lands here.
   return (
     <form
-      className="w-full max-w-md space-y-3"
+      id="invite"
+      className="w-full max-w-md scroll-mt-8 space-y-3"
       onSubmit={(e) => {
         e.preventDefault();
         go();
@@ -339,13 +342,40 @@ function PlayPhoneEntry() {
       <Button type="submit" fullWidth size="lg">
         Continue
       </Button>
-      <a
-        href="#invite"
-        className="flex min-h-11 items-center justify-center whitespace-nowrap text-[13px] font-semibold text-accent-deep underline-offset-4 hover:underline"
-      >
-        Register your community
-      </a>
     </form>
+  );
+}
+
+/**
+ * Every match scored on Gully Cricket, all communities together: six numbers,
+ * no names. One stored row (convex/lib/totals.ts), live for anyone on the page.
+ */
+function LiveCounter() {
+  const totals = useQuery(api.stats.siteTotals, {});
+  const cells = [
+    ["Matches", totals?.matches],
+    ["Runs", totals?.runs],
+    ["Wickets", totals?.wickets],
+    ["Sixes", totals?.sixes],
+    ["Fours", totals?.fours],
+    ["Catches", totals?.catches],
+  ] as const;
+  return (
+    <div
+      data-testid="live-counter"
+      className="grid w-full max-w-md grid-cols-3 gap-x-3 gap-y-3"
+    >
+      {cells.map(([label, n]) => (
+        <div key={label} className="min-w-0">
+          <p className="tabular h-8 text-2xl font-bold leading-8 text-ink">
+            {n === undefined ? "" : n.toLocaleString("en-IN")}
+          </p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+            {label}
+          </p>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -485,12 +515,6 @@ function HeroLive() {
             >
               Notes
             </Link>
-            <Link
-              href="/login"
-              className="inline-flex min-h-11 items-center rounded-lg px-2.5 text-[13px] font-semibold text-muted hover:bg-ink/[0.04]"
-            >
-              Sign in
-            </Link>
           </nav>
         </header>
 
@@ -515,9 +539,9 @@ function HeroLive() {
               <div className="mt-6 sm:mt-8">
                 <PlayPhoneEntry />
               </div>
-              <p className="mt-4 text-[13px] font-medium text-muted sm:mt-5">
-                The number your organiser has. Then a 4-digit PIN. No SMS.
-              </p>
+              <div className="mt-6 sm:mt-8">
+                <LiveCounter />
+              </div>
             </div>
 
             {/* The demo's caption — mobile: on the ink under the phone;
@@ -710,7 +734,7 @@ function ChatBubble({
 
 function Closer() {
   return (
-    <section id="invite" className="scroll-mt-8 bg-ink">
+    <section className="bg-ink">
       <div className="mx-auto max-w-6xl px-5 py-20 sm:py-24">
         <div className="grid items-start gap-12 lg:grid-cols-2 lg:gap-16">
           <div className="text-center lg:text-left">
@@ -738,19 +762,16 @@ function Closer() {
               <ChatBubble time="6:07 am" gold tilt="l">
                 Who&apos;s keeping score today?
               </ChatBubble>
-              <p className="max-w-[300px] pt-2 text-sm leading-relaxed text-bg/70">
-                Send these messages?{" "}
-                <span className="font-semibold text-bg">
-                  The form is yours.
-                </span>
-                <br />
-                Only receive them? Your organiser adds you.
-              </p>
             </div>
           </div>
 
-          <div className="mx-auto w-full max-w-md">
-            <InviteForm />
+          <div className="mx-auto w-full max-w-md text-center lg:self-center">
+            <a
+              href="#invite"
+              className="inline-flex min-h-14 items-center justify-center rounded-xl bg-accent px-8 text-base font-semibold text-ink shadow-lift transition hover:bg-accent/90 active:scale-[0.98]"
+            >
+              Start with your number
+            </a>
           </div>
         </div>
         {/* /privacy and /support stay live as routes (Apple needs the URLs

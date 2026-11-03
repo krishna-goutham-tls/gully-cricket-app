@@ -14,6 +14,7 @@ import {
   SeasonScopeMenu,
   type Scope,
 } from "@/components/shelf/SeasonScopeMenu";
+import { CommunityCard } from "@/components/leaderboard/CommunityCard";
 import { MilestoneRaces } from "@/components/leaderboard/MilestoneRaces";
 import { AppHeader } from "@/components/shell/AppHeader";
 import { Button } from "@/components/ui/Button";
@@ -280,6 +281,12 @@ export default function RecordsPage() {
       : "skip",
   );
 
+  // All time on every tab: it ignores the season and ground pickers.
+  const communityCard = useQuery(
+    api.stats.communityCard,
+    token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
+  );
+
   // Milestones are one all-time race across every ground, so their tab
   // ignores the season and ground pickers.
   const onMilestones = tab === "milestones";
@@ -366,6 +373,11 @@ export default function RecordsPage() {
       />
 
       <div className="relative">
+        {communityCard ? (
+          <div className="mx-auto max-w-md px-5 pt-4">
+            <CommunityCard card={communityCard} onInk={onInk} />
+          </div>
+        ) : null}
         {onMilestones ? (
           <main className="mx-auto max-w-md px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-4">
             {milestones === undefined ? (

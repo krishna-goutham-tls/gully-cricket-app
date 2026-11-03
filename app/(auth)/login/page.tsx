@@ -12,14 +12,12 @@ import { getLastPhone, setLastPhone } from "@/lib/session";
 import { errorMessage, sanitizePhoneInput } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 
-type Step =
-  | "phone"
-  | "signin-pin"
-  | "no-account"
-  | "forgot"
-  | "signup-name"
-  | "signup-pin"
-  | "signup-pin-confirm";
+/**
+ * One door: the phone number. The app picks the next step from it — a PIN
+ * for an account, name and PIN for a player an admin added (their stats come
+ * with them), name and PIN for a new number, who then lands on /join.
+ */
+type Step = "phone" | "signin-pin" | "forgot" | "signup-name" | "signup-pin";
 
 export default function LoginPage() {
   const { setToken } = useAuth();
@@ -32,15 +30,11 @@ export default function LoginPage() {
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [pin, setPin] = useState("");
-  const [confirmPin, setConfirmPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [wrongPin, setWrongPin] = useState(false);
   const [resetSent, setResetSent] = useState<string | null>(null);
-  // The number that just failed "no account" — until the digits actually
-  // change, "Try this number" would only replay the same failed sign-in.
-  const [failedPhone, setFailedPhone] = useState("");
   const [lookupPhone, setLookupPhone] = useState<string | null>(null);
 
   const lookup = useQuery(
@@ -108,10 +102,8 @@ export default function LoginPage() {
       const msg = errorMessage(e, "Sign in failed");
       const lower = msg.toLowerCase();
       if (lower.includes("no account")) {
-        // Never slide straight into sign-up: one mistyped digit looks
-        // identical to a new player, and continuing makes a duplicate account.
-        setStep("no-account");
-        setFailedPhone(phone);
+        setNotice(null);
+        setStep("signup-name");
         setPin("");
         setError(null);
       } else if (lower.includes("guest")) {
@@ -161,7 +153,6 @@ export default function LoginPage() {
         setPin("");
       } else {
         setError(msg);
-        setConfirmPin("");
       }
     } finally {
       setBusy(false);
@@ -203,13 +194,6 @@ export default function LoginPage() {
             >
               {lookupPhone ? "…" : "Continue"}
             </Button>
-            <button
-              type="button"
-              className="flex min-h-11 w-full items-center justify-center text-[13px] font-medium text-muted underline-offset-4 hover:text-ink hover:underline"
-              onClick={() => setStep("signup-name")}
-            >
-              New here? Create account
-            </button>
           </div>
         ) : null}
 
@@ -252,59 +236,6 @@ export default function LoginPage() {
                 Change number
               </button>
             </div>
-          </div>
-        ) : null}
-
-        {step === "no-account" ? (
-          <div className="space-y-5">
-            <div className="text-center">
-              <p className="text-[15px] font-semibold text-ink">
-                No account on this number
-              </p>
-              <p className="mt-2 text-[13px] text-muted">
-                Check the number. One digit may be off.
-              </p>
-            </div>
-            <Input
-              label="Phone number"
-              inputMode="tel"
-              autoComplete="tel"
-              placeholder="98765 43210"
-              value={phone}
-              autoFocus
-              onChange={(e) => setPhone(sanitizePhoneInput(e.target.value))}
-              onPaste={(e) => {
-                e.preventDefault();
-                const text = e.clipboardData.getData("text");
-                setPhone(sanitizePhoneInput(text));
-              }}
-            />
-            <Button
-              fullWidth
-              disabled={
-                busy ||
-                !!lookupPhone ||
-                phone.trim().length < 10 ||
-                phone === failedPhone
-              }
-              onClick={() => {
-                setError(null);
-                setPin("");
-                setLookupPhone(phone);
-              }}
-            >
-              {lookupPhone ? "…" : "Try this number"}
-            </Button>
-            <button
-              type="button"
-              className="flex min-h-11 w-full items-center justify-center text-[13px] font-medium text-muted underline-offset-4 hover:text-ink hover:underline"
-              onClick={() => {
-                setError(null);
-                setStep("signup-name");
-              }}
-            >
-              I’m new — create an account
-            </button>
           </div>
         ) : null}
 
@@ -366,27 +297,13 @@ export default function LoginPage() {
         {step === "signup-name" ? (
           <div className="space-y-5">
             <div className="text-center">
-              <p className="text-[15px] font-semibold text-ink">Create account</p>
-              {phone ? <p className="mt-0.5 text-[13px] text-muted">{phone}</p> : null}
+              <p className="text-[15px] font-semibold text-ink">Welcome</p>
+              <p className="mt-0.5 text-[13px] text-muted">{phone}</p>
             </div>
             {notice ? (
               <p className="rounded-2xl bg-accent-soft px-4 py-3 text-[13px] leading-relaxed text-accent-deep">
                 {notice}
               </p>
-            ) : null}
-            {!phone ? (
-              <Input
-                label="Phone number"
-                inputMode="tel"
-                placeholder="98765 43210"
-                value={phone}
-                onChange={(e) => setPhone(sanitizePhoneInput(e.target.value))}
-                onPaste={(e) => {
-                  e.preventDefault();
-                  const text = e.clipboardData.getData("text");
-                  setPhone(sanitizePhoneInput(text));
-                }}
-              />
             ) : null}
             <Input
               label="Your name"
@@ -403,7 +320,7 @@ export default function LoginPage() {
                 setStep("signup-pin");
               }}
             >
-              Set PIN
+              Next
             </Button>
             <button
               type="button"
@@ -422,49 +339,30 @@ export default function LoginPage() {
 
         {step === "signup-pin" ? (
           <div className="space-y-5">
-            <div className="text-center">
-              <p className="text-[15px] font-semibold text-ink">Set a 4-digit PIN</p>
-              <p className="mt-0.5 text-[13px] text-muted">
-                You’ll use this every time.
-              </p>
+            <p className="text-center text-[15px] font-semibold text-ink">
+              Set a 4-digit PIN
+            </p>
+            {/* The digits show, so nobody types the PIN twice. */}
+            <PinPad reveal value={pin} disabled={busy} onChange={setPin} />
+            <div>
+              <Button
+                fullWidth
+                disabled={busy || pin.length !== 4}
+                onClick={() => void doSignUp(pin)}
+              >
+                {busy ? "…" : "Continue"}
+              </Button>
+              <button
+                type="button"
+                className="mt-2 flex min-h-11 w-full items-center justify-center text-[13px] text-muted underline-offset-4 hover:text-ink hover:underline"
+                onClick={() => {
+                  setError(null);
+                  setStep("signup-name");
+                }}
+              >
+                Back
+              </button>
             </div>
-            <PinPad
-              value={pin}
-              disabled={busy}
-              onChange={(next) => {
-                setPin(next);
-                if (next.length === 4) {
-                  setConfirmPin("");
-                  setStep("signup-pin-confirm");
-                }
-              }}
-            />
-          </div>
-        ) : null}
-
-        {step === "signup-pin-confirm" ? (
-          <div className="space-y-5">
-            <div className="text-center">
-              <p className="text-[15px] font-semibold text-ink">Confirm PIN</p>
-              <p className="mt-0.5 text-[13px] text-muted">
-                Enter the same 4 digits again.
-              </p>
-            </div>
-            <PinPad
-              value={confirmPin}
-              disabled={busy}
-              onChange={(next) => {
-                setConfirmPin(next);
-                if (next.length === 4) {
-                  if (next !== pin) {
-                    setError("PINs don’t match");
-                    setConfirmPin("");
-                    return;
-                  }
-                  void doSignUp(next);
-                }
-              }}
-            />
           </div>
         ) : null}
 

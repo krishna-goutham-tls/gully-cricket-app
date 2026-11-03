@@ -63,11 +63,16 @@ export function AppGate({ children }: { children: React.ReactNode }) {
     }
     if (isOpenPath(pathname)) return;
 
-    // The access queue is the platform owner's, not a community's — it must
-    // stay reachable even for an account with no community yet.
-    const needsOrg = !["/join", "/org/new", "/profile", "/settings", "/admin/requests"].includes(
-      pathname,
-    );
+    // The owner's admin pages are not a community's — they must stay
+    // reachable even for an account with no community yet.
+    const needsOrg = ![
+      "/join",
+      "/org/new",
+      "/profile",
+      "/settings",
+      "/admin",
+      "/admin/requests",
+    ].includes(pathname);
     if (activeMemberships.length === 0 && needsOrg) {
       router.replace("/join");
     }

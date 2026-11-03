@@ -11,10 +11,9 @@ import { setActiveOrgId } from "@/lib/session";
 import { errorMessage } from "@/lib/utils";
 
 /**
- * Creating a community is invite-only. The server is the real gate
- * (`orgs.create` → `requireCreateOrgAllowance`); this screen just avoids
- * showing a form that would only fail on submit. Both read the same row, so
- * they cannot disagree.
+ * Anyone signed in may create a community, up to the cap in convex/access.ts.
+ * The server is the real gate (`orgs.create`); this screen just avoids a form
+ * that would only fail on submit.
  */
 export default function NewOrgPage() {
   const { token, selectOrg } = useAuth();
@@ -53,21 +52,10 @@ export default function NewOrgPage() {
   }
 
   if (!allowance.allowed) {
-    const copy =
-      allowance.reason === "pending"
-        ? {
-            title: "You're in the queue",
-            body: "I'll WhatsApp you, then it opens.",
-          }
-        : allowance.reason === "already-used"
-          ? {
-              title: "You've already got one",
-              body: "One per organiser. Open it from your list.",
-            }
-          : {
-              title: "Communities are invite-only",
-              body: "Register at gullycricket.space. I'll WhatsApp you.",
-            };
+    const copy = {
+      title: "You have 3 communities",
+      body: "That is the most one person can make.",
+    };
 
     return (
       <main className="mx-auto max-w-md px-5 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-[calc(var(--safe-top)+1.5rem)]">

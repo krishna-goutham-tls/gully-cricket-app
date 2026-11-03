@@ -129,6 +129,12 @@ export default function HomePage() {
     };
   }, [matches]);
 
+  const emptyCommunity = matches !== undefined && matches.length === 0;
+  const inviteFirst = canInvite && inviteUsed === false && emptyCommunity;
+  // Start match waits as secondary while the invite answer loads, so it does
+  // not flash black first.
+  const startSecondary = !!hero || inviteFirst || (canInvite && inviteUsed === undefined && emptyCommunity);
+
   const series = features.series
     ? ((tournaments ?? []).find((t) => t.status === "active") ?? null)
     : null;
@@ -153,12 +159,27 @@ export default function HomePage() {
 
         {hero ? <LiveHero {...cardProps(hero)} /> : null}
 
+        {/* A new community's first job is getting players in, so Invite
+            players takes the black button until someone joins or plays. */}
+        {inviteFirst ? (
+          <Button
+            type="button"
+            size="lg"
+            fullWidth
+            className="mb-3"
+            onClick={() => setInviteOpen(true)}
+          >
+            <WhatsAppIcon className="h-5 w-5" />
+            Invite players
+          </Button>
+        ) : null}
+
         {isObserver ? null : (
           <Button
             href="/matches/new"
             size="lg"
             fullWidth
-            variant={hero ? "secondary" : "primary"}
+            variant={startSecondary ? "secondary" : "primary"}
             className={cn(hero && "mt-3")}
           >
             <Plus className="h-5 w-5" strokeWidth={2.4} />
@@ -181,7 +202,7 @@ export default function HomePage() {
 
         <SeasonLine label={series ? "Season" : undefined} />
 
-        {canInvite && inviteUsed === false ? (
+        {canInvite && inviteUsed === false && !inviteFirst ? (
           <Button
             type="button"
             variant="secondary"
