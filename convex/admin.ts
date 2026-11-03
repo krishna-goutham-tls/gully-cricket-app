@@ -776,7 +776,7 @@ export const deleteUnusedPlayer = internalMutation({
 });
 
 /**
- * Krishna's New communities list on /admin: every real community, newest
+ * Krishna's All communities list on /admin: every real community, newest
  * first, with the admin's number so he can WhatsApp them. Platform owner
  * only; anyone else gets an empty list.
  */
