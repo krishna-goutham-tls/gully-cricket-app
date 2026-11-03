@@ -35,7 +35,10 @@ test("the tab bar is Home, Leaders, Players, Profile; Series only when it is on"
 
 test("Home reads top to bottom: start, last result, match day, then matches", async ({ page }, info) => {
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  // Safari logs a cancelled background preload (`_rsc`) as an error. Not a bug.
+  page.on("pageerror", (e) => {
+    if (!/_rsc=.*access control checks/.test(e.message)) errors.push(e.message);
+  });
   const { token, orgId } = await loginAs(page, "organiser", ORG_A);
   await open(page, "/home");
 

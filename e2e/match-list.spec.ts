@@ -40,7 +40,10 @@ async function openAs(page: Page, orgId: string, path: string) {
 
 test("a running series has its own block above the season line; the season page has no series", async ({ page }, info) => {
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  // Safari logs a cancelled background preload (`_rsc`) as an error. Not a bug.
+  page.on("pageerror", (e) => {
+    if (!/_rsc=.*access control checks/.test(e.message)) errors.push(e.message);
+  });
   const { token } = await loginAs(page, "owner");
   const c = client();
   const { orgId, sides } = await freshCommunity(token);
@@ -96,7 +99,10 @@ test("a running series has its own block above the season line; the season page 
 
 test("match cards and the last result show the day and date", async ({ page }, info) => {
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  // Safari logs a cancelled background preload (`_rsc`) as an error. Not a bug.
+  page.on("pageerror", (e) => {
+    if (!/_rsc=.*access control checks/.test(e.message)) errors.push(e.message);
+  });
   await loginAs(page, "organiser", ORG_A);
 
   await open(page, "/home");
@@ -119,7 +125,10 @@ test("match cards and the last result show the day and date", async ({ page }, i
 
 test("All matches shows 20, and Load more adds the rest", async ({ page }) => {
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  // Safari logs a cancelled background preload (`_rsc`) as an error. Not a bug.
+  page.on("pageerror", (e) => {
+    if (!/_rsc=.*access control checks/.test(e.message)) errors.push(e.message);
+  });
   const { token } = await loginAs(page, "owner");
   const c = client();
   const { orgId, sides } = await freshCommunity(token);
