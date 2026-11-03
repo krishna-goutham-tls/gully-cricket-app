@@ -131,6 +131,11 @@ values are NOT interchangeable. **Netlify does not push Convex.** A push to
    `stats:checkStamps` — empty `mismatches` is a pass — before merging to `main`.
    Until the backfill runs, boards on prod read empty. The first stamp of a
    match also freezes its juniors (`matches.juniorIds`) from today's tags.
+   The landing counter and the Records community card read stored totals
+   (`siteTotals`, `communityTotals`, `matchStats.totals`), moved where stamps
+   are written. After a deploy that adds them, run `stats:backfillTotals` per
+   community (repeat with `cursor` until `isDone`; `dryRun` first), then
+   `stats:checkTotals` per community and once with no `orgId` for the site row.
 9. **Krishna does not run CLI.** Never ask him to run a deploy, query or key
    command. His "ship" in the session is the go-ahead; the agent does the rest.
 10. **Schema changes only add.** New fields go in as `v.optional`. To remove or
