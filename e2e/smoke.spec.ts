@@ -11,7 +11,10 @@ async function noSidewaysScroll(page) {
 
 test("public pages render", async ({ page }) => {
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  // Safari logs a cancelled background preload (`_rsc`) as an error. Not a bug.
+  page.on("pageerror", (e) => {
+    if (!/_rsc=.*access control checks/.test(e.message)) errors.push(e.message);
+  });
   for (const path of ["/", "/login", "/gully-rules"]) {
     await page.goto(path);
     await page.waitForLoadState("networkidle");
@@ -24,7 +27,10 @@ const SCREENS = ["/home", "/matches", "/leaderboard", "/players", "/profile", "/
 
 test("signed-in screens render for an admin", async ({ page }, info) => {
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  // Safari logs a cancelled background preload (`_rsc`) as an error. Not a bug.
+  page.on("pageerror", (e) => {
+    if (!/_rsc=.*access control checks/.test(e.message)) errors.push(e.message);
+  });
   await loginAs(page, "organiser", ORG_A);
   for (const path of SCREENS) {
     await open(page, path);

@@ -1,5 +1,12 @@
+// Netlify sets COMMIT_REF. A local build falls back to the build time, pinned
+// in the environment so every config load in the same build agrees.
+process.env.APP_VERSION ||= process.env.COMMIT_REF || String(Date.now());
+const APP_VERSION = process.env.APP_VERSION;
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Each deploy's version, so a saved app can tell a newer build is live.
+  env: { NEXT_PUBLIC_APP_VERSION: APP_VERSION },
   // Shared match links are public by link only — never indexed.
   // The pages also say so in a meta tag; this covers their preview images.
   async headers() {

@@ -567,6 +567,15 @@ export default defineSchema({
     updatedAt: v.number(),
   }),
 
+  /**
+   * One row: the app version that is live now. Set by the agent after each
+   * release, so open apps learn of the new build over their live connection.
+   */
+  appVersion: defineTable({
+    version: v.string(),
+    setAt: v.number(),
+  }),
+
   playerMatchStats: defineTable({
     orgId: v.id("orgs"),
     matchId: v.id("matches"),

@@ -20,7 +20,10 @@ async function noSidewaysScroll(page: Page) {
 
 test("a new series opens split by rank; one tap moves, takes out or crowns a player", async ({ page }, info) => {
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  // Safari logs a cancelled background preload (`_rsc`) as an error. Not a bug.
+  page.on("pageerror", (e) => {
+    if (!/_rsc=.*access control checks/.test(e.message)) errors.push(e.message);
+  });
   const { token, orgId } = await loginAs(page, "organiser", ORG_A);
   const restore = await seriesOn(token, orgId);
   const shots = `e2e/out/shots/${info.project.name}`;
@@ -96,7 +99,10 @@ test("a new series opens split by rank; one tap moves, takes out or crowns a pla
 
 test("captains change on the series page, and starting a match has no Core step", async ({ page }) => {
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  // Safari logs a cancelled background preload (`_rsc`) as an error. Not a bug.
+  page.on("pageerror", (e) => {
+    if (!/_rsc=.*access control checks/.test(e.message)) errors.push(e.message);
+  });
   const { token, orgId } = await loginAs(page, "organiser", ORG_A);
   const restore = await seriesOn(token, orgId);
   const players = await client().query(api.players.listOrgPlayers, { token, orgId });
@@ -136,7 +142,10 @@ test("captains change on the series page, and starting a match has no Core step"
 
 test("Reuse last series fills the teams and settings in one tap", async ({ page }) => {
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  // Safari logs a cancelled background preload (`_rsc`) as an error. Not a bug.
+  page.on("pageerror", (e) => {
+    if (!/_rsc=.*access control checks/.test(e.message)) errors.push(e.message);
+  });
   const { token, orgId } = await loginAs(page, "organiser", ORG_A);
   const restore = await seriesOn(token, orgId);
   const players = await client().query(api.players.listOrgPlayers, { token, orgId });

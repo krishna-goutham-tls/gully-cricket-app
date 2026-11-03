@@ -23,7 +23,10 @@ async function pickHere(page: Page, names: string[]) {
 
 test("a new match with an odd count: teams open split, one player on Both", async ({ page }, info) => {
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  // Safari logs a cancelled background preload (`_rsc`) as an error. Not a bug.
+  page.on("pageerror", (e) => {
+    if (!/_rsc=.*access control checks/.test(e.message)) errors.push(e.message);
+  });
   const { token } = await loginAs(page, "organiser", ORG_A);
   await open(page, "/matches/new");
   const shots = `e2e/out/shots/${info.project.name}`;
@@ -71,7 +74,10 @@ test("a new match with an odd count: teams open split, one player on Both", asyn
 
 test("a repeat match takes 3 taps from this screen, on settings from the last match", async ({ page }) => {
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  // Safari logs a cancelled background preload (`_rsc`) as an error. Not a bug.
+  page.on("pageerror", (e) => {
+    if (!/_rsc=.*access control checks/.test(e.message)) errors.push(e.message);
+  });
   // A new browser has nothing saved on the phone, so it copies a second phone.
   const { token, orgId } = await loginAs(page, "player", ORG_A);
   const players = await client().query(api.players.listOrgPlayers, { token, orgId });
@@ -96,7 +102,10 @@ test("a repeat match takes 3 taps from this screen, on settings from the last ma
 
 test("moving an opener to the other team and going back keeps a valid start", async ({ page }) => {
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  // Safari logs a cancelled background preload (`_rsc`) as an error. Not a bug.
+  page.on("pageerror", (e) => {
+    if (!/_rsc=.*access control checks/.test(e.message)) errors.push(e.message);
+  });
   const { token } = await loginAs(page, "organiser", ORG_A);
   await open(page, "/matches/new");
   await pickHere(page, [NAMES.organiser, NAMES.admin2, NAMES.player, NAMES.junior, NAMES.visitor]);
@@ -149,7 +158,10 @@ test("one batter at a time starts with no non-striker", async ({ page }) => {
 
 test("a late player joins mid-match in 3 taps, and Done is always in view", async ({ page }, info) => {
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  // Safari logs a cancelled background preload (`_rsc`) as an error. Not a bug.
+  page.on("pageerror", (e) => {
+    if (!/_rsc=.*access control checks/.test(e.message)) errors.push(e.message);
+  });
   const { token, orgId } = await loginAs(page, "organiser", ORG_A);
   const players = await client().query(api.players.listOrgPlayers, { token, orgId });
   const id = (n: string) => players.find((p) => p.displayName === n).userId;

@@ -45,7 +45,10 @@ test.beforeEach(async () => {
 
 test("a new player joins by link and lands on Home, and the admin sees New", async ({ page, browser }, info) => {
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  // Safari logs a cancelled background preload (`_rsc`) as an error. Not a bug.
+  page.on("pageerror", (e) => {
+    if (!/_rsc=.*access control checks/.test(e.message)) errors.push(e.message);
+  });
   const code = await inviteCode();
   const shots = `e2e/out/shots/${info.project.name}`;
 

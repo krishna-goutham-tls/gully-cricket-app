@@ -4,7 +4,10 @@ import { api, client, ORG_A } from "./lib/env.mjs";
 
 test("a finished match opens on Scorecard, and Story loads on one tap", async ({ page }, info) => {
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  // Safari logs a cancelled background preload (`_rsc`) as an error. Not a bug.
+  page.on("pageerror", (e) => {
+    if (!/_rsc=.*access control checks/.test(e.message)) errors.push(e.message);
+  });
   const { token, orgId } = await loginAs(page, "player", ORG_A);
   const list = await client().query(api.matches.list, { token, orgId });
   const done = list.find((m) => m.status === "completed");
@@ -27,7 +30,10 @@ test("a finished match opens on Scorecard, and Story loads on one tap", async ({
 
 test("Hero, Leaders and Records open and show the economy winner", async ({ page }, info) => {
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  // Safari logs a cancelled background preload (`_rsc`) as an error. Not a bug.
+  page.on("pageerror", (e) => {
+    if (!/_rsc=.*access control checks/.test(e.message)) errors.push(e.message);
+  });
   const { token, orgId } = await loginAs(page, "organiser", ORG_A);
   const shots = `e2e/out/shots/${info.project.name}`;
   await open(page, "/hero");
@@ -53,7 +59,10 @@ test("Hero, Leaders and Records open and show the economy winner", async ({ page
 
 test("the Bowling card on a profile adds up", async ({ page }, info) => {
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  // Safari logs a cancelled background preload (`_rsc`) as an error. Not a bug.
+  page.on("pageerror", (e) => {
+    if (!/_rsc=.*access control checks/.test(e.message)) errors.push(e.message);
+  });
   const { token, orgId } = await loginAs(page, "organiser", ORG_A);
   const players = await client().query(api.players.listOrgPlayers, { token, orgId });
   // E2E Player bowled the seeded match, so the Bowling card has numbers.

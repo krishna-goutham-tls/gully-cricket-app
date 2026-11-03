@@ -3,6 +3,7 @@
 import { useAuth } from "@/components/providers/AuthProvider";
 import { BottomNav } from "@/components/shell/BottomNav";
 import { SandboxChrome } from "@/components/shell/SandboxChrome";
+import { UpdateBar } from "@/components/shell/UpdateBar";
 import { cn } from "@/lib/utils";
 import { usePathname } from "next/navigation";
 
@@ -39,6 +40,7 @@ export default function AppSectionLayout({ children }: { children: React.ReactNo
       >
         {children}
       </div>
+      {showNav ? <UpdateBar /> : null}
       {showNav ? <BottomNav /> : null}
     </div>
   );
