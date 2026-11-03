@@ -162,7 +162,7 @@ export const bootstrapOrg = internalMutation({
 
 /**
  * One-shot bulk player seeding. Run via CLI, e.g.:
- *   npx convex run admin:seedPlayers --prod '{ "orgId": "...", "players": [{"phone":"9916024894","name":"Naman"}] }'
+ *   npx convex run admin:seedPlayers --prod '{ "orgId": "...", "players": [{"phone":"9999999999","name":"Player Name"}] }'
  *
  * - Default PIN is "0000" (players change it later).
  * - Existing phones are not recreated; they are still ensured into the org.
