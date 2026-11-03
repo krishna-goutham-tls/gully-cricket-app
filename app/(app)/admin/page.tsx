@@ -24,6 +24,8 @@ export default function AdminPage() {
   const { token } = useAuth();
   const isPlatformAdmin = useQuery(api.access.amPlatformAdmin, token ? { token } : "skip");
   const rows = useQuery(api.admin.newCommunities, token ? { token } : "skip");
+  // Old phones can still send access requests. Only this page counts them.
+  const oldRequests = useQuery(api.access.pendingCount, token ? { token } : "skip") ?? 0;
   const setClosed = useMutation(api.admin.setClosed);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -115,6 +117,11 @@ export default function AdminPage() {
             className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-line bg-surface px-4 py-3 active:bg-bg"
           >
             <span className="text-[15px] font-semibold text-ink">Old access requests</span>
+            {oldRequests > 0 ? (
+              <span className="tabular ml-auto rounded-full bg-ink px-2 py-0.5 text-[12px] font-semibold text-bg">
+                {oldRequests}
+              </span>
+            ) : null}
             <ChevronRight className="h-5 w-5 shrink-0 text-faint" />
           </Link>
         ) : null}
