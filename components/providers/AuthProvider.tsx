@@ -45,7 +45,8 @@ type Membership = {
   orgId: Id<"orgs">;
   orgName: string;
   location?: string;
-  status: "pending" | "active" | "rejected" | "left" | "removed";
+  /** "closed": the platform owner closed this community. */
+  status: "pending" | "active" | "rejected" | "left" | "removed" | "closed";
   roles: Array<"admin" | "umpire" | "player">;
   requestedAt: number;
   /** Platform owner watching a community they have not joined. */

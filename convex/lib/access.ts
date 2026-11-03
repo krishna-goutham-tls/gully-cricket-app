@@ -1,9 +1,7 @@
 /**
- * The four things the landing-page form asks, in one place.
- *
- * Imported by BOTH the Convex mutation and `components/landing/InviteForm.tsx`
- * on purpose: the server rejects anything not in these lists, so a chip label
- * edited on only one side would start failing submissions silently.
+ * The chips the old landing-page form asked. The form is gone since open
+ * sign-up (2026-11-03); `access.submitRequest` still checks them for old
+ * phones until Phase 7.
  */
 export const GROUP_TYPES = [
   "Friends",

@@ -1,6 +1,7 @@
 import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { normalizePhone } from "./lib/phone";
+import { clearMatchStamps } from "./lib/matchStats";
 
 /**
  * Test scripts ask this first. Only Convex dev has E2E_ALLOWED set, so the
@@ -61,6 +62,12 @@ export const forgetOrg = internalMutation({
       }
       await ctx.db.delete(r._id);
     }
+    // Stamps go first, so the counters give the matches back.
+    const matches = await ctx.db
+      .query("matches")
+      .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
+      .collect();
+    for (const m of matches) await clearMatchStamps(ctx, m._id);
     for (const table of ["matches", "seasons", "tournaments"] as const) {
       const docs = await ctx.db
         .query(table)
@@ -68,6 +75,11 @@ export const forgetOrg = internalMutation({
         .collect();
       for (const d of docs) await ctx.db.delete(d._id);
     }
+    const totals = await ctx.db
+      .query("communityTotals")
+      .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
+      .unique();
+    if (totals) await ctx.db.delete(totals._id);
     await ctx.db.delete(args.orgId);
     return { forgotten: true };
   },

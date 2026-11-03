@@ -128,7 +128,7 @@ export default function GullyRulesPage() {
               href="/#invite"
               className="inline-flex min-h-14 items-center justify-center rounded-xl bg-accent px-8 text-base font-semibold text-ink shadow-lift transition hover:bg-accent/90 active:scale-[0.98]"
             >
-              Register your community
+              Start with your number
             </Link>
           </div>
           <footer className="mt-14 flex flex-col items-center gap-3 border-t border-white/10 pt-8">

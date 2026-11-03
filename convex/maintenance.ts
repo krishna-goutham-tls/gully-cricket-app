@@ -453,6 +453,9 @@ const WIPE_TABLES = [
   "matchStats",
   "playerMatchStats",
   "playerMatchups",
+  // The counters are sums of matchStats, so they go with them.
+  "communityTotals",
+  "siteTotals",
 ] as const;
 
 /**

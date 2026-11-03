@@ -20,20 +20,18 @@ import { cn } from "@/lib/utils";
 // Trophy belongs to tournaments everywhere else in the app, so Leaders takes
 // the chart. "Series" over "Tournaments": the long label cannot fit five
 // 44px+ items at 375px without dropping below 12px type.
-// `badge` names which count rides on the item. Access requests hang off
-// Profile → Settings rather than a sixth nav item: five 44px+ targets already fill the
-// row at 375px, and only the platform owner would ever see the sixth.
+// `badge` names which count rides on the item: members waiting on Players.
 const items: Array<{
   href: string;
   label: string;
   icon: LucideIcon;
-  badge?: "members" | "access";
+  badge?: "members";
 }> = [
   { href: "/home", label: "Home", icon: Home },
   { href: "/tournaments", label: "Series", icon: Trophy },
   { href: "/leaderboard", label: "Leaders", icon: BarChart3 },
   { href: "/players", label: "Players", icon: Users, badge: "members" },
-  { href: "/profile", label: "Profile", icon: UserRound, badge: "access" },
+  { href: "/profile", label: "Profile", icon: UserRound },
 ];
 
 export function BottomNav() {
@@ -47,10 +45,6 @@ export function BottomNav() {
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
   );
   const waiting = pending?.total ?? 0;
-  // Returns 0 for everyone who isn't the platform owner, so this is one cheap
-  // indexed read rather than a permission check on the client.
-  const accessWaiting =
-    useQuery(api.access.pendingCount, token ? { token } : "skip") ?? 0;
 
   return (
     <nav className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 backdrop-blur-md">
@@ -70,12 +64,7 @@ export function BottomNav() {
               (pathname === item.href || pathname.startsWith(`${item.href}/`));
           const href = isProfile && ownPage ? ownPage : item.href;
           const Icon = item.icon;
-          const count =
-            item.badge === "members"
-              ? waiting
-              : item.badge === "access"
-                ? accessWaiting
-                : 0;
+          const count = item.badge === "members" ? waiting : 0;
           return (
             <Link
               key={item.href}

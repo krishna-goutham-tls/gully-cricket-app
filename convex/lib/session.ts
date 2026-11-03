@@ -1,5 +1,5 @@
 import { QueryCtx, MutationCtx } from "../_generated/server";
-import { Id } from "../_generated/dataModel";
+import { Doc, Id } from "../_generated/dataModel";
 import { hashToken } from "./crypto";
 
 const SESSION_MS = 1000 * 60 * 60 * 24 * 60; // 60 days
@@ -33,11 +33,28 @@ export async function requireUser(
   return user;
 }
 
+/**
+ * A community the platform owner closed, or a sandbox of one. Its members get
+ * nothing: no reads, no writes. The owner still watches it as an observer.
+ */
+export async function isOrgClosed(
+  ctx: QueryCtx | MutationCtx,
+  org: Doc<"orgs"> | null,
+) {
+  if (!org) return false;
+  if (org.closedAt) return true;
+  if (!org.sandboxForOrgId) return false;
+  const parent = await ctx.db.get(org.sandboxForOrgId);
+  return Boolean(parent?.closedAt);
+}
+
+/** An active membership in an open community, or null. Every member gate reads this. */
 export async function getActiveMembership(
   ctx: QueryCtx | MutationCtx,
   orgId: Id<"orgs">,
   userId: Id<"users">,
 ) {
+  if (await isOrgClosed(ctx, await ctx.db.get(orgId))) return null;
   const membership = await ctx.db
     .query("orgMembers")
     .withIndex("by_org_user", (q) => q.eq("orgId", orgId).eq("userId", userId))

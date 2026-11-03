@@ -1,79 +1,42 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useState } from "react";
+import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { EmptyState } from "@/components/ui/EmptyState";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Clock } from "lucide-react";
+import { Clock, Link2 } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
-import { errorMessage } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
+/**
+ * A signed-in person with no community lands here. Two cards: start one, or
+ * get the link from the admin who already did. Nobody searches for a
+ * community any more, so a mistyped name can no longer start a second one.
+ */
 export default function JoinPage() {
-  const { token, user, pendingMemberships, activeMemberships, logout, selectOrg } =
+  const { token, memberships, pendingMemberships, activeMemberships, logout, selectOrg } =
     useAuth();
   const router = useRouter();
-  const [search, setSearch] = useState("");
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [askOpen, setAskOpen] = useState(false);
 
-  const orgs = useQuery(
-    api.orgs.listDiscoverable,
-    token ? { token, search: search || undefined } : "skip",
-  );
-  const requestJoin = useMutation(api.orgs.requestJoin);
-  // Creating a community is invite-only, so the entry points below only exist
-  // for a vetted organiser. The server enforces it either way.
-  const allowance = useQuery(
-    api.access.canCreateOrg,
-    token ? { token } : "skip",
-  );
-  const canCreate = allowance?.allowed ?? false;
-  const isPlatformAdmin =
-    useQuery(api.access.amPlatformAdmin, token ? { token } : "skip") ?? false;
-
-  const list = useMemo(() => orgs ?? [], [orgs]);
-  const waiting = pendingMemberships.length > 0;
+  // Only the platform owner gets rows back.
+  const orgs = useQuery(api.orgs.listDiscoverable, token ? { token } : "skip");
+  const list = orgs ?? [];
   const waitingOn = pendingMemberships.map((m) => m.orgName).join(", ");
+  const closed = (memberships ?? []).filter((m) => m.status === "closed" && !m.isSandbox);
 
-  async function onWatch(orgId: Id<"orgs">) {
+  async function onOpen(orgId: Id<"orgs">) {
     await selectOrg(orgId);
     router.push("/home");
   }
 
-  async function onRequest(orgId: Id<"orgs">) {
-    if (!token) return;
-    setBusyId(orgId);
-    setError(null);
-    try {
-      await requestJoin({ token, orgId });
-      if (isPlatformAdmin) {
-        await selectOrg(orgId);
-        router.push("/home");
-      }
-    } catch (e) {
-      setError(errorMessage(e, "Could not request join"));
-    } finally {
-      setBusyId(null);
-    }
-  }
-
   return (
     <main className="mx-auto max-w-md px-5 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-[calc(var(--safe-top)+1.5rem)]">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">
-          {waiting ? "You’re in the queue" : "Join your community"}
-        </h1>
-        <p className="mt-1.5 text-[13px] text-muted">
-          {waiting
-            ? "One tap from an admin and you’re in."
-            : "Pick your society or organiser. An admin approves you."}
-        </p>
-      </div>
+      <h1 className="mb-6 text-2xl font-semibold tracking-tight text-ink">
+        Your community
+      </h1>
 
       {activeMemberships.length > 0 ? (
         <Button
@@ -86,153 +49,92 @@ export default function JoinPage() {
         </Button>
       ) : null}
 
-      {waiting ? (
-        <section className="mb-6 rounded-2xl border border-accent/30 bg-accent-soft p-5">
-          <div className="flex items-center gap-2.5">
-            <Clock className="h-5 w-5 shrink-0 text-accent-deep" />
-            <p className="text-[15px] font-semibold text-accent-deep">
-              Request sent to {waitingOn}
-            </p>
-          </div>
-          <ol className="mt-3.5 space-y-3 text-[13px] leading-relaxed text-ink">
-            {[
-              "Whoever runs the community has to approve you — usually the person who organises the matches.",
-              "Playing today? Give them a nudge on WhatsApp. It’s one tap at their end.",
-              "Nothing else to do here — this screen opens up the moment they say yes.",
-            ].map((line, i) => (
-              <li key={line} className="flex gap-2.5">
-                <span
-                  aria-hidden
-                  className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent/40 text-[11px] font-bold text-accent-deep"
-                >
-                  {i + 1}
-                </span>
-                <span>{line}</span>
-              </li>
-            ))}
-          </ol>
-        </section>
-      ) : null}
-
-      {waiting ? (
-        <p className="mb-3 text-[13px] font-semibold text-ink">Other communities</p>
-      ) : null}
-
-      <div className="mb-4 space-y-3">
-        <Input
-          placeholder="Search by name or location"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
-
-      {error ? (
-        <p className="mb-3 rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-[13px] text-danger">
-          {error}
+      {closed.length > 0 && activeMemberships.length === 0 ? (
+        <p className="mb-4 rounded-2xl border border-line bg-surface px-4 py-3 text-[13px] text-muted">
+          {closed.map((m) => m.orgName).join(", ")} is closed.
         </p>
       ) : null}
 
+      {pendingMemberships.length > 0 ? (
+        <section className="mb-4 flex items-center gap-2.5 rounded-2xl border border-accent/30 bg-accent-soft px-4 py-4">
+          <Clock className="h-5 w-5 shrink-0 text-accent-deep" />
+          <p className="text-[15px] font-semibold text-accent-deep">
+            Waiting for {waitingOn}
+          </p>
+        </section>
+      ) : null}
+
       <div className="space-y-3">
-        {orgs === undefined ? (
-          <div className="space-y-3">
-            {[0, 1].map((i) => (
-              <div key={i} className="h-20 animate-pulse rounded-2xl bg-line/60" />
-            ))}
-          </div>
-        ) : list.length === 0 ? (
-          <>
-            <EmptyState
-              title="No communities found"
-              body={
-                search.trim()
-                  ? "Nothing matches that name. Try the first word, or ask your organiser for the exact spelling."
-                  : canCreate
-                    ? "Nothing listed yet. Create yours and share the app link with the players you turn up with."
-                    : "Ask whoever organises your matches to add you. Search for the name they used."
-              }
-              action={
-                canCreate ? (
-                  <Button onClick={() => router.push("/org/new")}>
-                    Create your community
-                  </Button>
-                ) : undefined
-              }
-            />
-            {!canCreate ? (
-              <RegisterCommunityOnJoin
-                name={user?.displayName ?? ""}
-                phone={user?.phone ?? ""}
-                requestPending={allowance?.reason === "pending"}
-              />
-            ) : null}
-          </>
-        ) : (
-          list.map((org) => (
-            <div
-              key={org._id}
-              className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4"
-            >
-              <div className="min-w-0 flex-1">
-                <h2 className="truncate text-[15px] font-semibold text-ink">
-                  {org.name}
-                </h2>
-                {org.location ? (
-                  <p className="mt-0.5 truncate text-[13px] text-muted">{org.location}</p>
-                ) : null}
-              </div>
-              {org.membershipStatus === "active" ? (
-                <Button
-                  variant="secondary"
-                  className="shrink-0"
-                  onClick={() => void onWatch(org._id)}
-                >
-                  Open
-                </Button>
-              ) : org.membershipStatus === "pending" ? (
-                <span className="shrink-0 rounded-full border border-accent/30 bg-accent-soft px-3 py-1.5 text-[11px] font-semibold text-accent-deep">
-                  Waiting
+        <button
+          type="button"
+          onClick={() => router.push("/org/new")}
+          className="flex min-h-24 w-full items-center gap-4 rounded-2xl border border-line bg-surface px-5 py-5 text-left shadow-card transition active:scale-[0.98] active:bg-bg"
+        >
+          <span aria-hidden className="text-3xl">
+            🏏
+          </span>
+          <span className="min-w-0">
+            <span className="block text-xl font-semibold tracking-tight text-ink">
+              I&apos;m the admin
+            </span>
+            <span className="mt-0.5 block text-[13px] text-muted">
+              Create your community
+            </span>
+          </span>
+        </button>
+
+        <button
+          type="button"
+          aria-expanded={askOpen}
+          onClick={() => setAskOpen((o) => !o)}
+          className={cn(
+            "w-full rounded-2xl border bg-surface px-5 py-5 text-left shadow-card transition active:bg-bg",
+            askOpen ? "border-ink/20" : "border-line",
+          )}
+        >
+          <span className="flex min-h-14 items-center gap-4">
+            <span aria-hidden className="text-3xl">
+              👥
+            </span>
+            <span className="min-w-0">
+              <span className="block text-xl font-semibold tracking-tight text-ink">
+                My team is already on Gully Cricket
+              </span>
+              {askOpen ? null : (
+                <span className="mt-0.5 block text-[13px] text-muted">
+                  Ask your admin for the community link
                 </span>
-              ) : isPlatformAdmin || org.observing ? (
-                <div className="flex shrink-0 flex-col items-end gap-1">
-                  <Button
-                    variant="secondary"
-                    className="shrink-0"
-                    onClick={() => void onWatch(org._id)}
-                  >
-                    Open
-                  </Button>
-                  <button
-                    type="button"
-                    disabled={busyId === org._id}
-                    onClick={() => void onRequest(org._id)}
-                    className="min-h-11 px-1 text-[11px] font-medium text-muted underline-offset-4 hover:underline"
-                  >
-                    {busyId === org._id ? "…" : "Join as player"}
-                  </button>
-                </div>
-              ) : (
-                <Button
-                  className="shrink-0"
-                  disabled={busyId === org._id}
-                  onClick={() => void onRequest(org._id)}
-                >
-                  {busyId === org._id ? "…" : "Join"}
-                </Button>
               )}
-            </div>
-          ))
-        )}
+            </span>
+          </span>
+          {askOpen ? <AskForLink /> : null}
+        </button>
       </div>
 
+      {list.length > 0 ? (
+        <section className="mt-8">
+          <p className="px-1 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-faint">
+            All communities
+          </p>
+          <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+            {list.map((org) => (
+              <button
+                key={org._id}
+                type="button"
+                onClick={() => void onOpen(org._id)}
+                className="flex min-h-12 w-full items-center justify-between gap-3 border-b border-line/60 px-4 py-3 text-left last:border-b-0 active:bg-bg"
+              >
+                <span className="min-w-0 truncate text-[15px] font-semibold text-ink">
+                  {org.name}
+                </span>
+                <span className="shrink-0 text-[13px] font-semibold text-muted">Open</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <div className="mt-6 flex flex-col items-center">
-        {canCreate ? (
-          <Link
-            href="/org/new"
-            className="flex min-h-11 items-center text-[13px] font-semibold text-accent-deep underline-offset-4 hover:underline"
-          >
-            Create your community
-          </Link>
-        ) : null}
         <button
           type="button"
           onClick={() => void logout().then(() => router.replace("/login"))}
@@ -245,73 +147,22 @@ export default function JoinPage() {
   );
 }
 
-function RegisterCommunityOnJoin({
-  name,
-  phone,
-  requestPending,
-}: {
-  name: string;
-  phone: string;
-  requestPending: boolean;
-}) {
-  const submitRequest = useMutation(api.access.submitRequest);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] = useState(false);
-
-  async function onRegister() {
-    if (!phone) {
-      setError("This account has no phone number on it.");
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      await submitRequest({
-        name: name.trim() || "Organiser",
-        phone,
-      });
-      setSent(true);
-    } catch (e) {
-      setError(errorMessage(e, "Could not send that"));
-      setBusy(false);
-    }
-  }
-
-  if (sent || requestPending) {
-    return (
-      <div className="mt-4 rounded-2xl border border-accent/30 bg-accent-soft p-5">
-        <p className="text-[15px] font-semibold text-accent-deep">
-          Request sent
-        </p>
-        <p className="mt-1.5 text-[13px] leading-relaxed text-ink">
-          I&apos;ll WhatsApp you within a day. Your community opens after that
-          hello.
-        </p>
-      </div>
-    );
-  }
-
+/** The line again, with a picture of the link the admin sends on WhatsApp. */
+function AskForLink() {
   return (
-    <div className="mt-4 rounded-2xl border border-line bg-surface p-5">
-      <p className="text-[13px] leading-relaxed text-muted">
-        Don&apos;t see yours? Ask your organiser for the exact name.
-      </p>
-      <p className="mt-2 text-[13px] leading-relaxed text-ink">
-        If you organise the matches and it is not in the app yet, register the
-        community here.
-      </p>
-      {error ? (
-        <p className="mt-3 text-[13px] text-danger">{error}</p>
-      ) : null}
-      <Button
-        fullWidth
-        className="mt-4"
-        disabled={busy || !phone}
-        onClick={() => void onRegister()}
+    <span className="mt-4 block">
+      <span className="block text-[15px] font-semibold text-ink">
+        Ask your admin for the community link
+      </span>
+      <span
+        aria-hidden
+        className="mt-3 flex w-fit max-w-full items-center gap-2 rounded-2xl rounded-tl-md bg-accent-soft px-4 py-3"
       >
-        {busy ? "Sending…" : "Register your community"}
-      </Button>
-    </div>
+        <Link2 className="h-4 w-4 shrink-0 text-accent-deep" />
+        <span className="truncate text-[13px] font-semibold text-accent-deep underline underline-offset-4">
+          gullycricket.space/i/…
+        </span>
+      </span>
+    </span>
   );
 }

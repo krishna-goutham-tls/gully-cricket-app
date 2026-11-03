@@ -5,7 +5,9 @@ import { Doc } from "./_generated/dataModel";
 import { hashPin, hashToken, randomToken, verifyPin } from "./lib/crypto";
 import { isValidPin, normalizePhone } from "./lib/phone";
 import {
+  getActiveMembership,
   getUserBySessionToken,
+  isOrgClosed,
   requireOrgAdmin,
   sessionTtlMs,
 } from "./lib/session";
@@ -69,18 +71,27 @@ export const bootstrap = query({
         memberships.map(async (m) => {
           const org = await ctx.db.get(m.orgId);
           if (!org) return null;
+          // A closed community: its members see only that it is closed. The
+          // platform owner keeps watching the real one, without a seat.
+          const closed = await isOrgClosed(ctx, org);
+          const watching = closed && (user.isPlatformAdmin ?? false);
+          if (watching && org.isSandbox) return null;
           const featured = await featuredSeasonForOrg(ctx, org._id);
           return {
-            membershipId: m._id as typeof m._id | undefined,
+            membershipId: watching ? undefined : (m._id as typeof m._id | undefined),
             // What the community has switched on. A sandbox follows its parent.
             features: resolveFeatures(await featureOrg(ctx, org)),
             orgId: org._id,
             orgName: org.name,
             location: org.location,
-            status: m.status,
-            roles: m.roles,
+            status: watching
+              ? ("active" as const)
+              : closed && m.status === "active"
+                ? ("closed" as const)
+                : m.status,
+            roles: watching ? [] : m.roles,
             requestedAt: m.requestedAt,
-            isObserver: false,
+            isObserver: watching,
             // Lets the shell flag sandbox mode without a second round trip,
             // and works off the localStorage cache on a warm start.
             isSandbox: org.isSandbox ?? false,
@@ -459,17 +470,8 @@ export const listPinResets = query({
     const user = await getUserBySessionToken(ctx, args.token);
     if (!user) return [];
 
-    const membership = await ctx.db
-      .query("orgMembers")
-      .withIndex("by_org_user", (q) =>
-        q.eq("orgId", args.orgId).eq("userId", user._id),
-      )
-      .unique();
-    if (
-      !membership ||
-      membership.status !== "active" ||
-      !membership.roles.includes("admin")
-    ) {
+    const membership = await getActiveMembership(ctx, args.orgId, user._id);
+    if (!membership || !membership.roles.includes("admin")) {
       return [];
     }
 
@@ -671,11 +673,7 @@ export const setPreferredOrg = mutation({
     const org = await ctx.db.get(args.orgId);
     if (!org) throw new Error("Community not found");
 
-    const membership = await ctx.db
-      .query("orgMembers")
-      .withIndex("by_org_user", (q) => q.eq("orgId", args.orgId).eq("userId", user._id))
-      .unique();
-    const isMember = membership?.status === "active";
+    const isMember = !!(await getActiveMembership(ctx, args.orgId, user._id));
     const canWatch = (user.isPlatformAdmin ?? false) && !org.isSandbox;
     if (!isMember && !canWatch) {
       throw new Error("Not an active member of this org");

@@ -8,6 +8,16 @@ import {
 } from "./_generated/server";
 import { restampMatch } from "./lib/matchStats";
 import {
+  COUNTER_KEYS,
+  ZERO,
+  communityTotalsRow,
+  moveMatchTotals,
+  pickCounter,
+  siteTotalsRow,
+  totalsOfBalls,
+  type Counter,
+} from "./lib/totals";
+import {
   climbOf,
   racesOf,
   rungsAround,
@@ -2352,5 +2362,189 @@ export const checkStamps = internalQuery({
         mismatches.push(`match ${m.matchId}: stamped before the current fold`);
     }
     return { matchesCompleted: completed.length, mismatches };
+  },
+});
+
+// ─── The counters ─────────────────────────────────────────────
+
+/**
+ * The landing page's live counter. Public: six numbers and nothing else, off
+ * one stored row (convex/lib/totals.ts).
+ */
+export const siteTotals = query({
+  args: {},
+  handler: async (ctx) => pickCounter(await siteTotalsRow(ctx)),
+});
+
+/**
+ * The card on top of Records: "<Community> in numbers", all time. The six
+ * numbers come off one stored row. Player of the community is the top of the
+ * all-time Players board, the same points and population as Leaders.
+ */
+export const communityCard = query({
+  args: { token: v.optional(v.string()), orgId: v.id("orgs") },
+  handler: async (ctx, { token, orgId }) => {
+    try {
+      await requireOrgViewer(ctx, token, orgId);
+    } catch {
+      return null;
+    }
+    const org = await ctx.db.get(orgId);
+    if (!org) return null;
+    const totals = pickCounter(await communityTotalsRow(ctx, orgId));
+    const players = (
+      await ctx.db
+        .query("orgMembers")
+        .withIndex("by_org_status", (q) => q.eq("orgId", orgId).eq("status", "active"))
+        .collect()
+    ).length;
+
+    let top: { userId: Id<"users">; displayName: string; points: number } | null = null;
+    type Leader = { userId: Id<"users">; displayName: string; value: number };
+    let leaders: { batting: Leader[]; bowling: Leader[]; fielding: Leader[] } = {
+      batting: [],
+      bowling: [],
+      fielding: [],
+    };
+    if (totals.matches > 0) {
+      const snap = aggregateStamps(await loadStampSet(ctx, orgId, {}), {});
+      const keys = [
+        ...Array.from(snap.batting.keys()),
+        ...Array.from(snap.bowling.keys()),
+        ...Array.from(snap.catches.keys()),
+      ];
+      const names = await resolveNames(ctx, keys);
+      const tags = await tagsForUsers(ctx, orgId, keys);
+      const rows = boardFilter(
+        stampTags(
+          buildAllRoundRows(
+            snap.points,
+            snap.batting,
+            snap.bowling,
+            snap.catches,
+            snap.allRoundMatches,
+            names,
+          ),
+          tags,
+        ),
+        await orgFeatureOn(ctx, orgId, "visitorsOnLeaders"),
+      );
+      const first = rows[0];
+      if (first) {
+        top = { userId: first.userId, displayName: first.displayName, points: first.points };
+      }
+      const top3 = (pick: (r: (typeof rows)[number]) => number) =>
+        rows
+          .filter((r) => pick(r) > 0)
+          .sort((x, y) => pick(y) - pick(x) || x.displayName.localeCompare(y.displayName))
+          .slice(0, 3)
+          .map((r) => ({ userId: r.userId, displayName: r.displayName, value: pick(r) }));
+      leaders = {
+        batting: top3((r) => r.runs),
+        bowling: top3((r) => r.wickets),
+        fielding: top3((r) => r.catches),
+      };
+    }
+    return { name: org.name, ...totals, players, top, leaders };
+  },
+});
+
+/**
+ * Gives every stamped match of a community its share of the counters, once.
+ * Stamps that already carry `totals` are skipped, so a rerun adds nothing.
+ * Rerun with `continueCursor` until `isDone`. `dryRun` counts and writes
+ * nothing.
+ */
+export const backfillTotals = internalMutation({
+  args: {
+    orgId: v.id("orgs"),
+    cursor: v.optional(v.union(v.string(), v.null())),
+    batchSize: v.optional(v.number()),
+    dryRun: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const page = await ctx.db
+      .query("matchStats")
+      .withIndex("by_org_date", (q) => q.eq("orgId", args.orgId))
+      .paginate({ cursor: args.cursor ?? null, numItems: args.batchSize ?? 20 });
+    let filled = 0;
+    for (const m of page.page) {
+      if (m.totals) continue;
+      filled += 1;
+      if (args.dryRun) continue;
+      const balls = await ctx.db
+        .query("balls")
+        .withIndex("by_match", (q) => q.eq("matchId", m.matchId))
+        .collect();
+      const totals = totalsOfBalls(balls);
+      await ctx.db.patch(m._id, { totals });
+      await moveMatchTotals(ctx, m.orgId, totals, 1);
+    }
+    return {
+      scanned: page.page.length,
+      filled,
+      dryRun: args.dryRun ?? false,
+      isDone: page.isDone,
+      continueCursor: page.continueCursor,
+    };
+  },
+});
+
+/**
+ * Stored counters against a full recount of the ball log. Per community:
+ * every completed, non-practice match. With no `orgId`: the site row against
+ * the sum of open, real communities' rows. Empty `mismatches` is a pass.
+ */
+export const checkTotals = internalQuery({
+  args: { orgId: v.optional(v.id("orgs")) },
+  handler: async (ctx, { orgId }) => {
+    const mismatches: string[] = [];
+    const diff = (label: string, stored: Counter, want: Counter) => {
+      for (const k of COUNTER_KEYS) {
+        if (stored[k] !== want[k]) {
+          mismatches.push(`${label}: ${k} stored ${stored[k]}, recount ${want[k]}`);
+        }
+      }
+    };
+
+    if (!orgId) {
+      const want = { ...ZERO };
+      for (const org of await ctx.db.query("orgs").collect()) {
+        if (org.isSandbox || org.closedAt) continue;
+        const row = pickCounter(await communityTotalsRow(ctx, org._id));
+        for (const k of COUNTER_KEYS) want[k] += row[k];
+      }
+      const stored = pickCounter(await siteTotalsRow(ctx));
+      diff("site", stored, want);
+      return { stored, recount: want, mismatches };
+    }
+
+    const org = await ctx.db.get(orgId);
+    const want = { ...ZERO };
+    const completed = (
+      await ctx.db
+        .query("matches")
+        .withIndex("by_org_status", (q) => q.eq("orgId", orgId).eq("status", "completed"))
+        .collect()
+    ).filter((m) => !m.practice);
+    if (!org?.isSandbox) {
+      for (const m of completed) {
+        const balls = await ctx.db
+          .query("balls")
+          .withIndex("by_match", (q) => q.eq("matchId", m._id))
+          .collect();
+        const t = totalsOfBalls(balls);
+        want.matches += 1;
+        for (const k of COUNTER_KEYS) if (k !== "matches") want[k] += t[k];
+        const stamp = await ctx.db
+          .query("matchStats")
+          .withIndex("by_match", (q) => q.eq("matchId", m._id))
+          .first();
+        if (!stamp?.totals) mismatches.push(`match ${m._id}: no totals on its stamp`);
+      }
+    }
+    const stored = pickCounter(await communityTotalsRow(ctx, orgId));
+    diff(`community ${orgId}`, stored, want);
+    return { stored, recount: want, mismatches };
   },
 });

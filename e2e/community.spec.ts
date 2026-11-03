@@ -153,10 +153,12 @@ test("the Profile tab is your own player page, with Settings in the header", asy
   await profileLoaded(page, NAMES.player);
 });
 
-test("the platform owner finds Access requests in Settings", async ({ page }) => {
+test("the platform owner finds New communities in Settings", async ({ page }) => {
   await loginAs(page, "owner");
   await open(page, "/settings");
-  await expect(page.getByRole("link", { name: /^Access requests/ })).toBeVisible();
+  await page.getByRole("link", { name: "New communities" }).click();
+  await expect(page).toHaveURL(/\/admin$/);
+  await expect(page.getByTestId("new-community").first()).toBeVisible();
 });
 
 test("a player sees only Your account in Settings, and /community lands there", async ({ page }, info) => {
@@ -172,7 +174,7 @@ test("a player sees only Your account in Settings, and /community lands there", 
   // Practice mode is every player's: the one switch a player sees.
   await expect(page.getByRole("switch")).toHaveCount(1);
   await expect(page.getByRole("switch", { name: "Practice mode" })).toBeVisible();
-  await expect(page.getByText("Access requests")).toHaveCount(0);
+  await expect(page.getByText("New communities")).toHaveCount(0);
   await page.screenshot({ path: `e2e/out/shots/${info.project.name}/settings-player.png`, fullPage: true });
   await open(page, "/community");
   await expect(page).toHaveURL(/\/settings$/);

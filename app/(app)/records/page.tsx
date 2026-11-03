@@ -14,6 +14,7 @@ import {
   SeasonScopeMenu,
   type Scope,
 } from "@/components/shelf/SeasonScopeMenu";
+import { CommunityCard, CommunityLeaders } from "@/components/leaderboard/CommunityCard";
 import { MilestoneRaces } from "@/components/leaderboard/MilestoneRaces";
 import { AppHeader } from "@/components/shell/AppHeader";
 import { Button } from "@/components/ui/Button";
@@ -28,12 +29,13 @@ import { ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-const TABS = ["honour", "milestones", "roast"] as const;
+const TABS = ["honour", "milestones", "roast", "community"] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABEL: Record<Tab, string> = {
   honour: "Honours",
   milestones: "Milestones",
   roast: "The Roast",
+  community: "Community",
 };
 
 /**
@@ -280,6 +282,13 @@ export default function RecordsPage() {
       : "skip",
   );
 
+  // The Community tab is all time: it ignores the season and ground pickers.
+  const onCommunity = tab === "community";
+  const communityCard = useQuery(
+    api.stats.communityCard,
+    token && activeOrgId && onCommunity ? { token, orgId: activeOrgId } : "skip",
+  );
+
   // Milestones are one all-time race across every ground, so their tab
   // ignores the season and ground pickers.
   const onMilestones = tab === "milestones";
@@ -326,7 +335,7 @@ export default function RecordsPage() {
           onClick={() => setTab(t)}
           aria-current={tab === t}
           className={cn(
-            "min-h-11 flex-1 rounded-lg text-[13px] font-semibold transition",
+            "min-h-11 min-w-0 flex-1 rounded-lg px-1 text-[12px] font-semibold transition",
             tab === t ? "bg-ink text-bg" : "text-muted active:bg-line/60",
           )}
         >
@@ -349,7 +358,7 @@ export default function RecordsPage() {
       <AppHeader
         title="Records"
         subtitle={
-          onMilestones ? (
+          onMilestones || onCommunity ? (
             <span className="text-[13px] font-semibold text-muted">
               All time
             </span>
@@ -366,7 +375,23 @@ export default function RecordsPage() {
       />
 
       <div className="relative">
-        {onMilestones ? (
+        {onCommunity ? (
+          <main className="mx-auto max-w-md px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-4">
+            {communityCard === undefined ? (
+              <div className="h-64 animate-pulse rounded-2xl bg-line" />
+            ) : communityCard === null ? (
+              <EmptyState
+                title="No numbers yet"
+                body="They build up as matches finish."
+              />
+            ) : (
+              <div className="space-y-3">
+                <CommunityCard card={communityCard} onInk={false} />
+                <CommunityLeaders leaders={communityCard.leaders} />
+              </div>
+            )}
+          </main>
+        ) : onMilestones ? (
           <main className="mx-auto max-w-md px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-4">
             {milestones === undefined ? (
               <div className="space-y-3">

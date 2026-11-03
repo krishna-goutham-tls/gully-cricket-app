@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query, MutationCtx, QueryCtx } from "./_generated/server";
 import { Id, Doc } from "./_generated/dataModel";
-import { getUserBySessionToken } from "./lib/session";
+import { getActiveMembership, getUserBySessionToken } from "./lib/session";
 import {
   recomputeFromBalls,
   validateBallEvent,
@@ -227,13 +227,9 @@ export async function loadMatchAccess(
   const match = await ctx.db.get(matchId);
   if (!match) return null;
 
-  const membership = await ctx.db
-    .query("orgMembers")
-    .withIndex("by_org_user", (q) =>
-      q.eq("orgId", match.orgId).eq("userId", user._id),
-    )
-    .unique();
-  if (membership && membership.status === "active") {
+  // A closed community reads as no membership.
+  const membership = await getActiveMembership(ctx, match.orgId, user._id);
+  if (membership) {
     // Gully cricket: umpires rotate — any active org member can score.
     return { user, match, membership, canScore: true };
   }

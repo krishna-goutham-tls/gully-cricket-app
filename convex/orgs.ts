@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, MutationCtx, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import {
+  getActiveMembership,
   getUserBySessionToken,
   requireActiveMembership,
   requireOrgAdmin,
@@ -38,10 +39,9 @@ export const create = mutation({
     location: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // Invite-only: the caller must hold an approved, unspent access request
-    // (or be the platform owner). Without this the landing page's promise is
-    // decoration — anyone who signs up could still mint their own community.
-    const { user, request } = await requireCreateOrgAllowance(ctx, args.token);
+    // Open to anyone signed in, up to the cap (convex/access.ts). Krishna
+    // closes junk ones from his admin page.
+    const { user } = await requireCreateOrgAllowance(ctx, args.token);
     const name = args.name.trim();
     if (name.length < 2) throw new Error("Community name is too short");
     if (name.length > 60) throw new Error("Community name is too long");
@@ -68,12 +68,6 @@ export const create = mutation({
       preferredOrgId: orgId,
       updatedAt: now,
     });
-
-    // Spend the approval: one vetted organiser gets one community. Null only
-    // for the platform owner, who is not rate-limited by a request row.
-    if (request) {
-      await ctx.db.patch(request._id, { usedAt: now, usedOrgId: orgId });
-    }
 
     return { orgId };
   },
@@ -220,8 +214,9 @@ export const listDiscoverable = query({
     search: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // Strangers cannot list communities. Only the platform owner gets rows.
     const user = await getUserBySessionToken(ctx, args.token);
-    if (!user) return [];
+    if (!user || !(user.isPlatformAdmin ?? false)) return [];
 
     const orgs = (
       await ctx.db
@@ -302,7 +297,7 @@ export const requestJoin = mutation({
   handler: async (ctx, args) => {
     const user = await requireUser(ctx, args.token);
     const org = await ctx.db.get(args.orgId);
-    if (!org || !org.isDiscoverable) throw new Error("Org not found");
+    if (!org || !org.isDiscoverable || org.closedAt) throw new Error("Org not found");
 
     const existing = await ctx.db
       .query("orgMembers")
@@ -357,14 +352,9 @@ export const listPending = query({
     const user = await getUserBySessionToken(ctx, args.token);
     if (!user) return [];
 
-    const membership = await ctx.db
-      .query("orgMembers")
-      .withIndex("by_org_user", (q) => q.eq("orgId", args.orgId).eq("userId", user._id))
-      .unique();
-    const isAdmin =
-      membership?.status === "active" && membership.roles.includes("admin");
-    const isObserver =
-      (user.isPlatformAdmin ?? false) && membership?.status !== "active";
+    const membership = await getActiveMembership(ctx, args.orgId, user._id);
+    const isAdmin = membership?.roles.includes("admin") ?? false;
+    const isObserver = (user.isPlatformAdmin ?? false) && !membership;
     if (!isAdmin && !isObserver) {
       return [];
     }
@@ -593,9 +583,8 @@ export const inviteUsed = query({
       .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
       .collect();
     const user = await getUserBySessionToken(ctx, args.token);
-    const isMember = members.some(
-      (m) => m.userId === user?._id && m.status === "active",
-    );
+    const isMember =
+      !!user && !!(await getActiveMembership(ctx, args.orgId, user._id));
     if (!isMember) return true;
     return members.some((m) => m.joinedByLinkAt !== undefined);
   },
@@ -691,11 +680,7 @@ export const listActiveMembers = query({
     const user = await getUserBySessionToken(ctx, args.token);
     if (!user) return [];
 
-    const me = await ctx.db
-      .query("orgMembers")
-      .withIndex("by_org_user", (q) => q.eq("orgId", args.orgId).eq("userId", user._id))
-      .unique();
-    const isMember = me?.status === "active";
+    const isMember = !!(await getActiveMembership(ctx, args.orgId, user._id));
     const isObserver = (user.isPlatformAdmin ?? false) && !isMember;
     if (!isMember && !isObserver) return [];
 
@@ -739,11 +724,8 @@ export const getOrg = query({
     if (!user) return null;
     const org = await ctx.db.get(args.orgId);
     if (!org) return null;
-    const membership = await ctx.db
-      .query("orgMembers")
-      .withIndex("by_org_user", (q) => q.eq("orgId", args.orgId).eq("userId", user._id))
-      .unique();
-    const isMember = membership?.status === "active";
+    const membership = await getActiveMembership(ctx, args.orgId, user._id);
+    const isMember = !!membership;
     const isObserver = (user.isPlatformAdmin ?? false) && !isMember;
     if (!isMember && !isObserver) return null;
     return {
@@ -764,11 +746,8 @@ export const settings = query({
     if (!user) return null;
     const org = await ctx.db.get(args.orgId);
     if (!org || org.isSandbox) return null;
-    const me = await ctx.db
-      .query("orgMembers")
-      .withIndex("by_org_user", (q) => q.eq("orgId", args.orgId).eq("userId", user._id))
-      .unique();
-    if (me?.status !== "active" || !me.roles.includes("admin")) return null;
+    const me = await getActiveMembership(ctx, args.orgId, user._id);
+    if (!me || !me.roles.includes("admin")) return null;
 
     const members = await ctx.db
       .query("orgMembers")

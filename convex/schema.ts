@@ -164,6 +164,15 @@ const headToHead = v.object({
   seq: v.number(),
 });
 
+/** The five counted numbers of a match. `matches` is added where they are summed. */
+export const matchTotals = v.object({
+  runs: v.number(),
+  wickets: v.number(),
+  sixes: v.number(),
+  fours: v.number(),
+  catches: v.number(),
+});
+
 export default defineSchema({
   users: defineTable({
     // Guests have no PIN (and possibly no phone) until they claim the account.
@@ -180,8 +189,8 @@ export default defineSchema({
     secondaryRole: v.optional(playerRole),
     preferredOrgId: v.optional(v.id("orgs")),
     /**
-     * Platform owner — vets access requests, may create communities without
-     * one, and may watch any community without a membership row. Deliberately
+     * Platform owner — creates any number of communities, closes junk ones,
+     * and may watch any community without a membership row. Deliberately
      * a flag on the row rather than a phone number hardcoded in source: a
      * second owner needs no deploy, and no personal number enters git
      * history. Set via `access:setPlatformAdmin`.
@@ -222,9 +231,16 @@ export default defineSchema({
     juniorBoardTitle: v.optional(v.string()),
     /** The code in this community's invite link. Made on first use. */
     inviteCode: v.optional(v.string()),
+    /**
+     * Set when the platform owner closes a junk community. Every member read
+     * and write is refused (convex/lib/session.ts) and its numbers leave the
+     * landing counter. The data stays, so it can open again.
+     */
+    closedAt: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_invite_code", ["inviteCode"])
+    .index("by_created_by", ["createdBy"])
     .index("by_discoverable", ["isDiscoverable"])
     .index("by_name", ["name"])
     .index("by_sandbox_for", ["sandboxForOrgId"]),
@@ -520,9 +536,36 @@ export default defineSchema({
         }),
       ),
     ),
+    /**
+     * This match's share of the counters, as a scorecard counts it: every
+     * ball, juniors too, runs off the bat. Absent on stamps from before the
+     * counters; `stats:backfillTotals` fills them.
+     */
+    totals: v.optional(matchTotals),
   })
     .index("by_org_date", ["orgId", "date"])
     .index("by_match", ["matchId"]),
+
+  /**
+   * One row per community: the sum of its stamped `totals`, so the Records
+   * card reads one row. Written with the stamps (convex/lib/totals.ts).
+   */
+  communityTotals: defineTable({
+    orgId: v.id("orgs"),
+    ...matchTotals.fields,
+    matches: v.number(),
+    updatedAt: v.number(),
+  }).index("by_org", ["orgId"]),
+
+  /**
+   * One row for the landing counter: every open, real community added up.
+   * Sandboxes and practice matches never reach it; a closed community leaves.
+   */
+  siteTotals: defineTable({
+    ...matchTotals.fields,
+    matches: v.number(),
+    updatedAt: v.number(),
+  }),
 
   playerMatchStats: defineTable({
     orgId: v.id("orgs"),
