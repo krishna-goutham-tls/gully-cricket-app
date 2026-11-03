@@ -2400,6 +2400,12 @@ export const communityCard = query({
     ).length;
 
     let top: { userId: Id<"users">; displayName: string; points: number } | null = null;
+    type Leader = { userId: Id<"users">; displayName: string; value: number };
+    let leaders: { batting: Leader[]; bowling: Leader[]; fielding: Leader[] } = {
+      batting: [],
+      bowling: [],
+      fielding: [],
+    };
     if (totals.matches > 0) {
       const snap = aggregateStamps(await loadStampSet(ctx, orgId, {}), {});
       const keys = [
@@ -2427,8 +2433,19 @@ export const communityCard = query({
       if (first) {
         top = { userId: first.userId, displayName: first.displayName, points: first.points };
       }
+      const top3 = (pick: (r: (typeof rows)[number]) => number) =>
+        rows
+          .filter((r) => pick(r) > 0)
+          .sort((x, y) => pick(y) - pick(x) || x.displayName.localeCompare(y.displayName))
+          .slice(0, 3)
+          .map((r) => ({ userId: r.userId, displayName: r.displayName, value: pick(r) }));
+      leaders = {
+        batting: top3((r) => r.runs),
+        bowling: top3((r) => r.wickets),
+        fielding: top3((r) => r.catches),
+      };
     }
-    return { name: org.name, ...totals, players, top };
+    return { name: org.name, ...totals, players, top, leaders };
   },
 });
 

@@ -150,6 +150,9 @@ test("Records has a Community tab with the card, all time; other tabs do not sho
   }
   await expect(card.getByText("Player of the community")).toBeVisible();
   await expect(page.getByText("All time")).toBeVisible();
+  const leaders = page.getByTestId("community-leaders");
+  await expect(leaders.getByText("Batting")).toBeVisible();
+  await expect(leaders.getByRole("link").first()).toBeVisible();
   await noSidewaysScroll(page);
   await page.screenshot({ path: `${shots}/records-community.png` });
   await page.getByRole("button", { name: "Milestones" }).click();

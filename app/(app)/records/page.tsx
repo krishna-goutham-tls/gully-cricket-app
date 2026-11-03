@@ -14,7 +14,7 @@ import {
   SeasonScopeMenu,
   type Scope,
 } from "@/components/shelf/SeasonScopeMenu";
-import { CommunityCard } from "@/components/leaderboard/CommunityCard";
+import { CommunityCard, CommunityLeaders } from "@/components/leaderboard/CommunityCard";
 import { MilestoneRaces } from "@/components/leaderboard/MilestoneRaces";
 import { AppHeader } from "@/components/shell/AppHeader";
 import { Button } from "@/components/ui/Button";
@@ -385,7 +385,10 @@ export default function RecordsPage() {
                 body="They build up as matches finish."
               />
             ) : (
-              <CommunityCard card={communityCard} onInk={false} />
+              <div className="space-y-3">
+                <CommunityCard card={communityCard} onInk={false} />
+                <CommunityLeaders leaders={communityCard.leaders} />
+              </div>
             )}
           </main>
         ) : onMilestones ? (

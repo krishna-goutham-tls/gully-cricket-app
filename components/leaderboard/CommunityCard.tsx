@@ -10,7 +10,7 @@ type Card = NonNullable<FunctionReturnType<typeof api.stats.communityCard>>;
 const fmt = (n: number) => n.toLocaleString("en-IN");
 
 /**
- * Top of Records, on every tab: the community all time, whatever the season
+ * Records, Community tab: the community all time, whatever the season
  * picker says. Same counting as the landing counter, for one community.
  */
 export function CommunityCard({ card, onInk }: { card: Card; onInk?: boolean }) {
@@ -71,5 +71,55 @@ export function CommunityCard({ card, onInk }: { card: Card; onInk?: boolean }) 
         ) : null}
       </div>
     </section>
+  );
+}
+
+type Leader = Card["leaders"]["batting"][number];
+
+/** The top 3 all time in one discipline, under the numbers card. */
+function TopThree({ title, unit, rows }: { title: string; unit: string; rows: Leader[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <section className="rounded-2xl border border-line bg-surface p-4 shadow-card">
+      <div className="flex items-baseline justify-between">
+        <h3 className="text-[15px] font-semibold text-ink">{title}</h3>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-faint">{unit}</span>
+      </div>
+      <ol className="mt-2">
+        {rows.map((r, i) => (
+          <li key={r.userId}>
+            <Link
+              href={`/players/${r.userId}`}
+              className="-mx-2 flex min-h-11 items-center gap-3 rounded-xl px-2 active:bg-bg"
+            >
+              <span
+                className={cn(
+                  "tabular flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold",
+                  i === 0 ? "bg-accent-soft text-accent-deep" : "bg-bg text-muted",
+                )}
+              >
+                {i + 1}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-ink">
+                {r.displayName}
+              </span>
+              <span className="tabular shrink-0 text-[17px] font-semibold text-ink">
+                {fmt(r.value)}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+export function CommunityLeaders({ leaders }: { leaders: Card["leaders"] }) {
+  return (
+    <div className="space-y-3" data-testid="community-leaders">
+      <TopThree title="Batting" unit="Runs" rows={leaders.batting} />
+      <TopThree title="Bowling" unit="Wickets" rows={leaders.bowling} />
+      <TopThree title="Fielding" unit="Catches" rows={leaders.fielding} />
+    </div>
   );
 }
