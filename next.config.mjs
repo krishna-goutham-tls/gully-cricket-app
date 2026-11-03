@@ -33,6 +33,12 @@ const nextConfig = {
         destination: "/settings",
         permanent: false,
       },
+      // Who's in? polls left the app. Old poll links in WhatsApp land on Home.
+      {
+        source: "/p/:path*",
+        destination: "/home",
+        permanent: false,
+      },
       {
         source: "/match-stories",
         destination: "/release-notes",
