@@ -2,13 +2,14 @@
 
 import { MatchCard, type MatchRow } from "@/components/home/HomeCards";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { groupByDay } from "@/lib/dates";
 import { errorMessage } from "@/lib/utils";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, usePaginatedQuery } from "convex/react";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -25,17 +26,24 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+const PAGE_SIZE = 20;
+
 /**
  * The full match history, moved off Home so the hub stays scannable. Same
  * day-grouped reading as before — live and unfinished setups first (they are
  * to-dos, not history), then every completed match by the day it was played.
+ * It loads 20 at a time; the grouping runs over everything loaded so far, so
+ * a day split across two pages joins up once the next page lands.
  */
 export default function MatchesPage() {
   const { token, activeOrgId } = useAuth();
-  const matches = useQuery(
-    api.matches.list,
+  const { results, status, loadMore } = usePaginatedQuery(
+    api.matches.listPage,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
+    { initialNumItems: PAGE_SIZE },
   );
+  const matches = status === "LoadingFirstPage" ? undefined : results;
+  const more = status === "CanLoadMore" || status === "LoadingMore";
   const abandonMatch = useMutation(api.matches.abandon);
   const removeMatch = useMutation(api.matches.remove);
   const [menuFor, setMenuFor] = useState<string | null>(null);
@@ -127,7 +135,7 @@ export default function MatchesPage() {
             <p className="tabular text-[11px] text-muted">
               {matches === undefined
                 ? "Loading…"
-                : `${doneCount} played${active.length > 0 ? ` · ${active.length} in play` : ""}`}
+                : `${doneCount}${more ? "+" : ""} played${active.length > 0 ? ` · ${active.length} in play` : ""}`}
             </p>
           </div>
         </div>
@@ -176,6 +184,19 @@ export default function MatchesPage() {
                 </div>
               </div>
             ))}
+
+            {more ? (
+              <Button
+                type="button"
+                variant="secondary"
+                fullWidth
+                className="mt-4"
+                disabled={status === "LoadingMore"}
+                onClick={() => loadMore(PAGE_SIZE)}
+              >
+                {status === "LoadingMore" ? "Loading…" : "Load more"}
+              </Button>
+            ) : null}
           </>
         )}
       </main>

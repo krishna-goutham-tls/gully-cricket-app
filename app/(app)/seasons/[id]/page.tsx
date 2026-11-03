@@ -1,6 +1,6 @@
 "use client";
 
-import { MatchCard, SeriesCard, type MatchRow } from "@/components/home/HomeCards";
+import { MatchCard, type MatchRow } from "@/components/home/HomeCards";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -59,7 +59,7 @@ function inSeason(
 export default function SeasonPage() {
   const { id } = useParams<{ id: string }>();
   const seasonId = id as Id<"seasons">;
-  const { token, activeOrgId, features } = useAuth();
+  const { token, activeOrgId } = useAuth();
   const season = useQuery(
     api.seasons.get,
     token && activeOrgId ? { token, orgId: activeOrgId, seasonId } : "skip",
@@ -67,10 +67,6 @@ export default function SeasonPage() {
   const matches = useQuery(
     api.matches.list,
     token && activeOrgId ? { token, orgId: activeOrgId } : "skip",
-  );
-  const tournaments = useQuery(
-    api.tournaments.list,
-    token && activeOrgId && features.series ? { token, orgId: activeOrgId } : "skip",
   );
   const board = useQuery(
     api.stats.leaderboard,
@@ -97,21 +93,6 @@ export default function SeasonPage() {
       inSeason(m.createdAt, season.startedAt, season.endedAt),
     );
   }, [matches, season]);
-
-  const series = useMemo(() => {
-    if (!tournaments || !features.series) return [];
-    const ids = new Set(
-      seasonMatches
-        .map((m) => m.tournamentId)
-        .filter((x): x is NonNullable<typeof x> => !!x)
-        .map(String),
-    );
-    return tournaments.filter(
-      (t) =>
-        t.status === "active" ||
-        ids.has(String(t._id)),
-    );
-  }, [tournaments, seasonMatches, features.series]);
 
   const { days, doneCount } = useMemo(() => {
     const done = seasonMatches.filter(
@@ -308,14 +289,6 @@ export default function SeasonPage() {
               </li>
             ))}
           </ul>
-        ) : null}
-
-        {series.length > 0 ? (
-          <div className="mt-3 space-y-2">
-            {series.map((s) => (
-              <SeriesCard key={s._id} series={s} />
-            ))}
-          </div>
         ) : null}
 
         {matches === undefined || season === undefined ? (

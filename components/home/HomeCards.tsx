@@ -4,6 +4,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { TruncText } from "@/components/ui/TruncText";
 import { api } from "@/convex/_generated/api";
+import { matchDate } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import type { FunctionReturnType } from "convex/server";
 import { ChevronRight, Eye, MoreVertical, Pencil, Trophy } from "lucide-react";
@@ -453,6 +454,9 @@ export function MatchCard({
                   <ThrillerChip />
                 ) : null}
                 <span className="tabular shrink-0 text-[13px] text-muted">
+                  {/* A live card already carries its score here, and it is
+                      today's game; the date would only crowd it. */}
+                  {isLive ? "" : `${matchDate(match.createdAt)} · `}
                   {matchType(match)}
                 </span>
               </div>
@@ -498,23 +502,12 @@ export function MatchCard({
  * inline as "A 0 — 1 B", which put two team names on one line, and the pips
  * make "how far in are we" a shape instead of a sentence.
  */
-export function SeriesCard({
-  series,
-  nested,
-}: {
-  series: SeriesRow;
-  /** Inside a season card — same anatomy, no second outer border. */
-  nested?: boolean;
-}) {
+export function SeriesCard({ series }: { series: SeriesRow }) {
   const left = Math.max(0, series.matchCount - series.played);
   return (
     <Link
       href={`/tournaments/${series._id}`}
-      className={
-        nested
-          ? "block min-h-12 rounded-xl bg-bg px-3 py-2.5 transition active:opacity-70"
-          : "block min-h-12 rounded-2xl border border-line bg-surface px-4 py-3 transition active:opacity-70"
-      }
+      className="block min-h-12 rounded-2xl border border-line bg-surface px-4 py-3 transition active:opacity-70"
     >
       <div className="flex items-center gap-2">
         <Trophy className="h-4 w-4 shrink-0 text-accent-deep" />
@@ -591,7 +584,9 @@ export function ResultCard({ match }: { match: MatchRow }) {
           Last result
         </span>
         {match.tournamentName ? <TournamentChip name={match.tournamentName} /> : null}
-        <span className="tabular shrink-0 text-[13px] text-muted">{matchType(match)}</span>
+        <span className="tabular shrink-0 text-[13px] text-muted">
+          {matchDate(match.createdAt)} · {matchType(match)}
+        </span>
         <ChevronRight className="h-4 w-4 shrink-0 text-faint" />
       </div>
       <div className="mt-2 space-y-1">

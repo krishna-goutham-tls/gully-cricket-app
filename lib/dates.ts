@@ -1,8 +1,9 @@
 /**
  * Match lists group by the day they were played — gully cricket happens in
- * sessions, so three games share one evening and a per-card date would just
- * repeat itself. Everything here is local time: the day a match belongs to is
- * the day the people who played it were standing on the pitch.
+ * sessions, so three games share one evening. Each card still carries its own
+ * date (`matchDate`), so a card read alone says when it was played. Everything
+ * here is local time: the day a match belongs to is the day the people who
+ * played it were standing on the pitch.
  */
 
 /** Local-calendar-day bucket. Not for display. */
@@ -67,4 +68,12 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 export function weekdayDate(ts: number): string {
   const d = new Date(ts);
   return `${WEEKDAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+}
+
+/** "Sat 1 Nov", or "Sat 1 Nov 2025" once the year stops being obvious. */
+export function matchDate(ts: number, now: number = Date.now()): string {
+  const year = new Date(ts).getFullYear();
+  return year === new Date(now).getFullYear()
+    ? weekdayDate(ts)
+    : `${weekdayDate(ts)} ${year}`;
 }

@@ -170,13 +170,16 @@ export default function HomePage() {
 
         {lastResult ? <MatchDayCard playedAt={lastResult.createdAt} /> : null}
 
-        <SeasonLine />
-
+        {/* A series is its own thing, not a part of the season: it can run
+            across two seasons. Its own label, above the season line. */}
         {series ? (
-          <div className="mt-3">
+          <section data-testid="home-series">
+            <SectionLabel>Series</SectionLabel>
             <SeriesCard series={series} />
-          </div>
+          </section>
         ) : null}
+
+        <SeasonLine label={series ? "Season" : undefined} />
 
         {canInvite && inviteUsed === false ? (
           <Button

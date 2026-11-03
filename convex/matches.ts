@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query, MutationCtx } from "./_generated/server";
+import { paginationOptsValidator } from "convex/server";
+import { mutation, query, MutationCtx, QueryCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
 import { requireActiveMembership, requireOrgViewer } from "./lib/session";
 import { captainTeamLabel } from "./lib/teams";
@@ -135,154 +136,186 @@ export const list = query({
       .order("desc")
       .take(MAX_LIST);
 
-    // First player of each side is its captain; resolve default "Team A/B"
-    // labels to the captain's name for a readable scoreboard.
-    const captainName = async (id: typeof matches[number]["sideAPlayerIds"][number] | undefined) => {
-      const u = id ? await ctx.db.get(id) : null;
-      return u && "displayName" in u ? (u.displayName as string) : undefined;
-    };
-
-    return Promise.all(
-      matches.map(async (m) => {
-        const live =
-          m.status === "live"
-            ? await ctx.db
-                .query("matchLiveState")
-                .withIndex("by_match", (q) => q.eq("matchId", m._id))
-                .unique()
-            : null;
-
-        // Finished matches carry their scorelines: innings totals are already
-        // persisted on the innings docs, so this is one indexed read — no
-        // ball replay. A Test's two innings join as "98 & 104/6"; an innings
-        // that never got a ball (opened then abandoned) is skipped so a card
-        // never shows a phantom "0/0".
-        let scoreA: string | null = null;
-        let scoreB: string | null = null;
-        if (m.status === "completed" || m.status === "abandoned") {
-          const innings = await ctx.db
-            .query("innings")
-            .withIndex("by_match", (q) => q.eq("matchId", m._id))
-            .collect();
-          innings.sort((a, b) => a.inningsNo - b.inningsNo);
-          const lineFor = (side: "A" | "B") => {
-            const parts = innings
-              .filter(
-                (i) =>
-                  i.battingSide === side &&
-                  (i.legalBalls > 0 || i.totalRuns > 0 || i.wickets > 0),
-              )
-              .map((i) => `${i.totalRuns}/${i.wickets}`);
-            return parts.length > 0 ? parts.join(" & ") : null;
-          };
-          scoreA = lineFor("A");
-          scoreB = lineFor("B");
-        }
-
-        // Player of the Match off the stat stamps — the same points and the
-        // same tie rule the Records count uses. Ties share it. Nothing until
-        // the match is stamped, and nobody for a scoreless day.
-        let potm: Array<{
-          userId: Id<"users">;
-          name: string;
-          runs: number;
-          wickets: number;
-          catches: number;
-        }> = [];
-        const savedPotm =
-          m.status === "completed"
-            ? (
-                await ctx.db
-                  .query("matchStats")
-                  .withIndex("by_match", (q) => q.eq("matchId", m._id))
-                  .first()
-              )?.potm
-            : undefined;
-        if (savedPotm) {
-          potm = await Promise.all(
-            savedPotm.map(async (r) => ({
-              ...r,
-              name: (await captainName(r.userId)) ?? "Player",
-            })),
-          );
-        } else if (m.status === "completed") {
-          // A row stamped before `potm` was saved. Remove after the backfill.
-          const stamps = await ctx.db
-            .query("playerMatchStats")
-            .withIndex("by_match", (q) => q.eq("matchId", m._id))
-            .collect();
-          let best = 0;
-          let top: typeof stamps = [];
-          for (const r of stamps) {
-            const p = matchPoints(r);
-            if (p > best) {
-              best = p;
-              top = [r];
-            } else if (p === best && p > 0) {
-              top.push(r);
-            }
-          }
-          potm = await Promise.all(
-            top.map(async (r) => ({
-              userId: r.userId,
-              name: (await captainName(r.userId)) ?? "Player",
-              // A match card is a scoreboard, so it shows every run and wicket.
-              runs: (r.bat?.runs ?? 0) + (r.offJuniors?.runs ?? 0),
-              wickets: (r.bowl?.wickets ?? 0) + (r.offJuniors?.wickets ?? 0),
-              catches: r.catches + (r.offJuniors?.catches ?? 0),
-            })),
-          );
-        }
-
-        return {
-          scoreA,
-          scoreB,
-          potm,
-          _id: m._id,
-          status: m.status,
-          sideAName: captainTeamLabel(
-            m.sideAName,
-            await captainName(m.sideAPlayerIds[0]),
-          ),
-          sideBName: captainTeamLabel(
-            m.sideBName,
-            await captainName(m.sideBPlayerIds[0]),
-          ),
-          sideACount: m.sideAPlayerIds.length,
-          sideBCount: m.sideBPlayerIds.length,
-          // Overs alone can't describe a match: a Test carries whatever overs
-          // cap was typed at create (often 100), which says nothing about the
-          // game. Callers need the format to label it honestly.
-          format: m.ruleSnapshot.format,
-          overs: m.ruleSnapshot.maxOversInnings,
-          resultText: m.resultText,
-          winnerSide: m.winnerSide,
-          tournamentId: m.tournamentId,
-          tournamentName: m.tournamentId
-            ? (await ctx.db.get(m.tournamentId))?.name
-            : undefined,
-          createdAt: m.createdAt,
-          live: live
-            ? {
-                inningsNo: live.inningsNo,
-                battingSide: live.battingSide,
-                totalRuns: live.totalRuns,
-                wickets: live.wickets,
-                oversText: live.oversText,
-                target: live.target,
-                // Between innings, currentInningsId is cleared while
-                // totalRuns/wickets/oversText/target still describe the
-                // innings that just ended, and battingSide already points
-                // at whoever bats next — so consumers must not attribute
-                // that score line to battingSide while inBreak is true.
-                inBreak: live.currentInningsId === undefined,
-              }
-            : null,
-        };
-      }),
-    );
+    return Promise.all(matches.map((m) => listRow(ctx, m)));
   },
 });
+
+/**
+ * The whole history, a page at a time, newest first: `/matches` shows 20 and
+ * a "Load more". Same rows and access as `list`, which stays as it is for
+ * Home and phones still on an older build.
+ */
+export const listPage = query({
+  args: {
+    token: v.optional(v.string()),
+    orgId: v.id("orgs"),
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, args) => {
+    try {
+      await requireOrgViewer(ctx, args.token, args.orgId);
+    } catch {
+      return { page: [], isDone: true, continueCursor: "" };
+    }
+
+    const result = await ctx.db
+      .query("matches")
+      .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
+      .order("desc")
+      .paginate(args.paginationOpts);
+
+    return {
+      ...result,
+      page: await Promise.all(result.page.map((m) => listRow(ctx, m))),
+    };
+  },
+});
+
+/** One match card's row: names, scorelines, POTM and the live score. */
+async function listRow(ctx: QueryCtx, m: Doc<"matches">) {
+  // First player of each side is its captain; resolve default "Team A/B"
+  // labels to the captain's name for a readable scoreboard.
+  const captainName = async (id: Id<"users"> | undefined) => {
+    const u = id ? await ctx.db.get(id) : null;
+    return u && "displayName" in u ? (u.displayName as string) : undefined;
+  };
+
+  const live =
+    m.status === "live"
+      ? await ctx.db
+          .query("matchLiveState")
+          .withIndex("by_match", (q) => q.eq("matchId", m._id))
+          .unique()
+      : null;
+
+  // Finished matches carry their scorelines: innings totals are already
+  // persisted on the innings docs, so this is one indexed read — no
+  // ball replay. A Test's two innings join as "98 & 104/6"; an innings
+  // that never got a ball (opened then abandoned) is skipped so a card
+  // never shows a phantom "0/0".
+  let scoreA: string | null = null;
+  let scoreB: string | null = null;
+  if (m.status === "completed" || m.status === "abandoned") {
+    const innings = await ctx.db
+      .query("innings")
+      .withIndex("by_match", (q) => q.eq("matchId", m._id))
+      .collect();
+    innings.sort((a, b) => a.inningsNo - b.inningsNo);
+    const lineFor = (side: "A" | "B") => {
+      const parts = innings
+        .filter(
+          (i) =>
+            i.battingSide === side &&
+            (i.legalBalls > 0 || i.totalRuns > 0 || i.wickets > 0),
+        )
+        .map((i) => `${i.totalRuns}/${i.wickets}`);
+      return parts.length > 0 ? parts.join(" & ") : null;
+    };
+    scoreA = lineFor("A");
+    scoreB = lineFor("B");
+  }
+
+  // Player of the Match off the stat stamps — the same points and the
+  // same tie rule the Records count uses. Ties share it. Nothing until
+  // the match is stamped, and nobody for a scoreless day.
+  let potm: Array<{
+    userId: Id<"users">;
+    name: string;
+    runs: number;
+    wickets: number;
+    catches: number;
+  }> = [];
+  const savedPotm =
+    m.status === "completed"
+      ? (
+          await ctx.db
+            .query("matchStats")
+            .withIndex("by_match", (q) => q.eq("matchId", m._id))
+            .first()
+        )?.potm
+      : undefined;
+  if (savedPotm) {
+    potm = await Promise.all(
+      savedPotm.map(async (r) => ({
+        ...r,
+        name: (await captainName(r.userId)) ?? "Player",
+      })),
+    );
+  } else if (m.status === "completed") {
+    // A row stamped before `potm` was saved. Remove after the backfill.
+    const stamps = await ctx.db
+      .query("playerMatchStats")
+      .withIndex("by_match", (q) => q.eq("matchId", m._id))
+      .collect();
+    let best = 0;
+    let top: typeof stamps = [];
+    for (const r of stamps) {
+      const p = matchPoints(r);
+      if (p > best) {
+        best = p;
+        top = [r];
+      } else if (p === best && p > 0) {
+        top.push(r);
+      }
+    }
+    potm = await Promise.all(
+      top.map(async (r) => ({
+        userId: r.userId,
+        name: (await captainName(r.userId)) ?? "Player",
+        // A match card is a scoreboard, so it shows every run and wicket.
+        runs: (r.bat?.runs ?? 0) + (r.offJuniors?.runs ?? 0),
+        wickets: (r.bowl?.wickets ?? 0) + (r.offJuniors?.wickets ?? 0),
+        catches: r.catches + (r.offJuniors?.catches ?? 0),
+      })),
+    );
+  }
+
+  return {
+    scoreA,
+    scoreB,
+    potm,
+    _id: m._id,
+    status: m.status,
+    sideAName: captainTeamLabel(
+      m.sideAName,
+      await captainName(m.sideAPlayerIds[0]),
+    ),
+    sideBName: captainTeamLabel(
+      m.sideBName,
+      await captainName(m.sideBPlayerIds[0]),
+    ),
+    sideACount: m.sideAPlayerIds.length,
+    sideBCount: m.sideBPlayerIds.length,
+    // Overs alone can't describe a match: a Test carries whatever overs
+    // cap was typed at create (often 100), which says nothing about the
+    // game. Callers need the format to label it honestly.
+    format: m.ruleSnapshot.format,
+    overs: m.ruleSnapshot.maxOversInnings,
+    resultText: m.resultText,
+    winnerSide: m.winnerSide,
+    tournamentId: m.tournamentId,
+    tournamentName: m.tournamentId
+      ? (await ctx.db.get(m.tournamentId))?.name
+      : undefined,
+    createdAt: m.createdAt,
+    live: live
+      ? {
+          inningsNo: live.inningsNo,
+          battingSide: live.battingSide,
+          totalRuns: live.totalRuns,
+          wickets: live.wickets,
+          oversText: live.oversText,
+          target: live.target,
+          // Between innings, currentInningsId is cleared while
+          // totalRuns/wickets/oversText/target still describe the
+          // innings that just ended, and battingSide already points
+          // at whoever bats next — so consumers must not attribute
+          // that score line to battingSide while inBreak is true.
+          inBreak: live.currentInningsId === undefined,
+        }
+      : null,
+  };
+}
 
 export const get = query({
   args: {
