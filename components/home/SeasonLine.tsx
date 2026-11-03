@@ -2,6 +2,7 @@
 
 import { useAuth } from "@/components/providers/AuthProvider";
 import { api } from "@/convex/_generated/api";
+import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
@@ -38,9 +39,10 @@ function Cap({
 
 /**
  * Home's season line, only while a season runs: its name and both caps on
- * one line. Starting and ending a season live in Settings.
+ * one line. Starting and ending a season live in Settings. `label` heads it
+ * when another block (the running series) sits right above it.
  */
-export function SeasonLine() {
+export function SeasonLine({ label }: { label?: string }) {
   const { token, activeOrgId, activeOrg } = useAuth();
   // Login already loaded this.
   const featured =
@@ -64,10 +66,14 @@ export function SeasonLine() {
   const orange = board?.batting[0] ?? null;
   const purple = board?.bowling[0] ?? null;
 
-  return (
+  const line = (
     <Link
       href={`/seasons/${current.id}`}
-      className="mt-3 flex min-h-12 items-center gap-2 rounded-2xl border border-line bg-surface px-4 py-2.5 active:bg-bg"
+      data-testid="home-season-line"
+      className={cn(
+        "flex min-h-12 items-center gap-2 rounded-2xl border border-line bg-surface px-4 py-2.5 active:bg-bg",
+        !label && "mt-3",
+      )}
     >
       <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1.5 text-[13px] leading-snug">
         <span className="whitespace-nowrap text-[15px] font-semibold text-ink">{current.name}</span>
@@ -88,5 +94,15 @@ export function SeasonLine() {
       </span>
       <ChevronRight className="h-4 w-4 shrink-0 text-faint" />
     </Link>
+  );
+
+  if (!label) return line;
+  return (
+    <section>
+      <p className="px-1 pb-1.5 pt-4 text-[11px] font-semibold uppercase tracking-wide text-faint">
+        {label}
+      </p>
+      {line}
+    </section>
   );
 }

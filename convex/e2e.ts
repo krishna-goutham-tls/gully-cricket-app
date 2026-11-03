@@ -40,7 +40,10 @@ export const forgetPhone = internalMutation({
   },
 });
 
-/** Takes away a community a test made through the screens. */
+/**
+ * Takes away a community a test made, with its seasons, series and matches.
+ * Only the match docs go: tests that use it make matches but score no balls.
+ */
 export const forgetOrg = internalMutation({
   args: { orgId: v.id("orgs") },
   handler: async (ctx, args) => {
@@ -57,6 +60,13 @@ export const forgetOrg = internalMutation({
         await ctx.db.patch(r.userId, { preferredOrgId: undefined });
       }
       await ctx.db.delete(r._id);
+    }
+    for (const table of ["matches", "seasons", "tournaments"] as const) {
+      const docs = await ctx.db
+        .query(table)
+        .withIndex("by_org", (q) => q.eq("orgId", args.orgId))
+        .collect();
+      for (const d of docs) await ctx.db.delete(d._id);
     }
     await ctx.db.delete(args.orgId);
     return { forgotten: true };

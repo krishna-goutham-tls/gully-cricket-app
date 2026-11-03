@@ -13,7 +13,7 @@ Status checked against the code on 2026-10-11 only where it says "checked". The 
 - [x] G2, partly: wide and no-ball open a runs sheet (`9b52b16`, `886f351`). Runs on a wicket not checked
 
 ## Next
-- [ ] UX, community and sign-up build. Phase 1, 1b and 2 live (2026-10-31). Phase 3 live (2026-11-02, PR #40). Phase 4 in progress. Phases 5 to 7 not started. Phases and results: `../implementation/ux-community-signup-2026-10-31.md`
+- [ ] UX, community and sign-up build. Phase 1, 1b and 2 live (2026-10-31). Phase 3 live (2026-11-02, PR #40). Phase 4 (Visitors and juniors) and the screen sweep live (2026-11-02, PR #41). Batch 3: series squads, Records, copy live (2026-11-03, PR #42). Phase 6 (stranger route) waits for the spare number. Phase 7 cleanup (polls server code) from 2026-11-10. Phases and results: `../implementation/ux-community-signup-2026-10-31.md`
 - [ ] B7: Orange and Purple Caps on raw most runs and wickets. Named as next in the LOG on 2026-09-19
 - [ ] B8: one tie-break for Player of the Season on Leaders, the end stamp and the wrap
 - [ ] B3: catch-drop tags the retire marker after a retire
