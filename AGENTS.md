@@ -146,7 +146,10 @@ values are NOT interchangeable. **Netlify does not push Convex.** A push to
 11. **Prod release order:** dev push + typecheck + lint + build pass → Convex
     prod deploy → rule 8 backfill and check → merge `staging` → `main` → after
     Netlify finishes, load the public pages (landing, a public live link) and
-    confirm they render. Logged-in screens stay "not browser-verified"; name
+    confirm they render. Then push the new version to open apps, so they show
+    "Gully has an update": `npx convex run appVersion:set '{"version":"<main
+    merge commit sha>"}'` with the prod key. Netlify bakes `COMMIT_REF` into
+    the build, so the value is the full sha of the commit on `main`. Logged-in screens stay "not browser-verified"; name
     what Krishna should eyeball.
 12. **Rollback:** revert the commit on `dev`, redeploy Convex prod from it, and
     ship the revert through the same PR path. Never delete prod data to undo a

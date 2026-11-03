@@ -1,45 +1,25 @@
 "use client";
 
+import { api } from "@/convex/_generated/api";
+import { useQuery } from "convex/react";
 import { RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
 
 const RUNNING = process.env.NEXT_PUBLIC_APP_VERSION ?? "";
-const EVERY_MS = 15 * 60 * 1000;
 
 /**
  * "Gully has an update" when a newer build is live. A saved home-screen app
  * can run an old build for days; this gets phones onto the new one, so old
- * server functions can go sooner. It checks when the app comes back to the
- * front and every 15 minutes. The layout leaves it out of full-screen flows,
- * so nobody reloads mid-over.
+ * server functions can go sooner. The live version arrives over the Convex
+ * connection the app already holds, so nothing polls. The layout leaves the
+ * bar out of full-screen flows, so nobody reloads mid-over.
  */
 export function UpdateBar() {
-  const [stale, setStale] = useState(false);
-
-  useEffect(() => {
-    if (!RUNNING || process.env.NODE_ENV !== "production") return;
-    let stop = false;
-    const check = async (always = false) => {
-      if (!always && document.visibilityState === "hidden") return;
-      try {
-        const res = await fetch(`/api/version?t=${Date.now()}`, { cache: "no-store" });
-        if (!res.ok) return;
-        const { v } = (await res.json()) as { v?: string };
-        if (!stop && v && v !== RUNNING) setStale(true);
-      } catch {
-        /* offline at the ground: try again later */
-      }
-    };
-    const onShow = () => void check();
-    void check(true);
-    const timer = window.setInterval(onShow, EVERY_MS);
-    document.addEventListener("visibilitychange", onShow);
-    return () => {
-      stop = true;
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", onShow);
-    };
-  }, []);
+  const live = useQuery(api.appVersion.live);
+  const stale =
+    process.env.NODE_ENV === "production" &&
+    Boolean(RUNNING) &&
+    Boolean(live) &&
+    live !== RUNNING;
 
   if (!stale) return null;
   return (
