@@ -4,6 +4,9 @@ import { ORG_A } from "./lib/env.mjs";
 
 // The bar runs only in a production build, so this runs on staging.
 test.skip(!process.env.E2E_BASE_URL, "needs a production build (staging)");
+// The fake version below is a test route. Safari's engine lets the service
+// worker take the request first, so the route never sees it.
+test.use({ serviceWorkers: "block" });
 
 test("a newer live version shows the update bar; tapping it reloads", async ({ page }, info) => {
   await loginAs(page, "organiser", ORG_A);

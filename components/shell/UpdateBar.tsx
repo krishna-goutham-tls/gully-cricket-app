@@ -19,8 +19,8 @@ export function UpdateBar() {
   useEffect(() => {
     if (!RUNNING || process.env.NODE_ENV !== "production") return;
     let stop = false;
-    const check = async () => {
-      if (document.visibilityState !== "visible") return;
+    const check = async (always = false) => {
+      if (!always && document.visibilityState === "hidden") return;
       try {
         const res = await fetch(`/api/version?t=${Date.now()}`, { cache: "no-store" });
         if (!res.ok) return;
@@ -30,13 +30,14 @@ export function UpdateBar() {
         /* offline at the ground: try again later */
       }
     };
-    void check();
-    const timer = window.setInterval(check, EVERY_MS);
-    document.addEventListener("visibilitychange", check);
+    const onShow = () => void check();
+    void check(true);
+    const timer = window.setInterval(onShow, EVERY_MS);
+    document.addEventListener("visibilitychange", onShow);
     return () => {
       stop = true;
       window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", check);
+      document.removeEventListener("visibilitychange", onShow);
     };
   }, []);
 
