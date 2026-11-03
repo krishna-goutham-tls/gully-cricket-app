@@ -676,7 +676,7 @@ function PracticeRow() {
   );
 }
 
-/** The platform owner's New communities list. Renders nothing for everyone else. */
+/** The platform owner's All communities list. Renders nothing for everyone else. */
 function AccessRequestsRow() {
   const { token } = useAuth();
   const isPlatformAdmin =
@@ -689,7 +689,7 @@ function AccessRequestsRow() {
       href="/admin"
       className="mt-3 flex min-h-14 items-center justify-between gap-3 rounded-2xl border border-line bg-surface px-4 py-3 active:bg-bg"
     >
-      <span className="text-[15px] font-semibold text-ink">New communities</span>
+      <span className="text-[15px] font-semibold text-ink">All communities</span>
       <ChevronRight className="h-5 w-5 shrink-0 text-faint" />
     </Link>
   );

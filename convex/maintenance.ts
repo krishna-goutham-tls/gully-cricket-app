@@ -633,3 +633,25 @@ export const copySandboxTags = internalMutation({
     return { sandboxes: sandboxes.length, copied, noRealRow };
   },
 });
+
+/**
+ * Rejects every waiting join request, in one community or in all of them.
+ * Marks them "rejected"; deletes nothing. Used once on 2026-11-03 for the
+ * requests left by the old community search, when nobody would approve them.
+ *   npx convex run maintenance:rejectPendingMembers '{"dryRun":true}'
+ */
+export const rejectPendingMembers = internalMutation({
+  args: { orgId: v.optional(v.id("orgs")), dryRun: v.optional(v.boolean()) },
+  handler: async (ctx, { orgId, dryRun }) => {
+    const pending = (await ctx.db.query("orgMembers").collect()).filter(
+      (m) => m.status === "pending" && (!orgId || m.orgId === orgId),
+    );
+    if (!dryRun) {
+      const now = Date.now();
+      for (const m of pending) {
+        await ctx.db.patch(m._id, { status: "rejected", decidedAt: now });
+      }
+    }
+    return { rejected: pending.length, dryRun: Boolean(dryRun) };
+  },
+});

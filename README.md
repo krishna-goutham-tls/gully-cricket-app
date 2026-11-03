@@ -10,7 +10,7 @@ You are at the crease with one free thumb. Four, six, wide, out — tap it, it i
 
 **[Play it live](https://gullycricket.space)** · **[Read the rules](https://gullycricket.space/gully-rules)**
 
-The live site is invite-only (a community organiser registers, then gets vetted). Forking this repo does **not** log you into that site or its data. It gives you the scorebook, empty, for your own group.
+The live site has open sign-up: anyone can create a community there, and players join by their admin's link. Forking this repo does **not** log you into that site or its data. It gives you the scorebook, empty, for your own group.
 
 ## Why this exists
 

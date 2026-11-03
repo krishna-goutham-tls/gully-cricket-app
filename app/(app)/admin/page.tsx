@@ -16,7 +16,7 @@ import { shortDate } from "@/lib/dates";
 import { errorMessage } from "@/lib/utils";
 
 /**
- * The platform owner's page. New communities, newest first, so Krishna can
+ * The platform owner's page. All communities, newest first, so Krishna can
  * message each new admin and close a junk one. Close hides it from its
  * members and the landing counter; nothing is deleted.
  */
@@ -45,7 +45,7 @@ export default function AdminPage() {
 
   return (
     <div>
-      <AppHeader title="New communities" subtitle={null} />
+      <AppHeader title="All communities" subtitle={null} />
       <main className="mx-auto max-w-md space-y-4 px-5 py-5">
         {error ? (
           <p className="rounded-2xl border border-danger/20 bg-danger-soft px-4 py-2.5 text-[13px] text-danger">
