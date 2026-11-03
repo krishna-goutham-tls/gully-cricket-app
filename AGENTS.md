@@ -11,7 +11,8 @@ Any active org member can create matches, score, and use Practice mode
 link, removes members, and runs the Community and Extra features groups in
 Settings: the name, admins, invite link, Visitors (show visitors on Leaders),
 seasons, grounds, and the Series, Test matches, The Roast and junior board
-switches.
+switches. The platform owner (`users.isPlatformAdmin`) also sees All
+communities on `/admin`, where a community can be closed or opened again.
 
 **Stack:** Next.js 14 (App Router) · TypeScript · Tailwind · Convex · Netlify
 **Live:** https://gullycricket.space
