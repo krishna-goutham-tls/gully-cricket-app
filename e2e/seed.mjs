@@ -16,16 +16,11 @@ async function account(role) {
 const memberships = async (token) =>
   (await c.query(api.auth.bootstrap, { token })).memberships;
 
-const owner = await account("owner");
+await account("owner");
 convexRun("access:setPlatformAdmin", { phone: phone("owner"), value: true });
 
+// Anyone may create a community since open sign-up, so no approval step.
 async function organiser(role, orgName) {
-  await c.mutation(api.access.submitRequest, { name: NAMES[role], phone: phone(role) });
-  const { pending, decided } = await c.query(api.access.listRequests, { token: owner.token });
-  const req = [...pending, ...decided].find((r) => r.phone.endsWith(phone(role)));
-  if (req.status !== "approved" && !req.used) {
-    await c.mutation(api.access.approveRequest, { token: owner.token, requestId: req.requestId });
-  }
   const me = await account(role);
   const found = (await memberships(me.token)).find((m) => m.orgName === orgName);
   const orgId = found ? found.orgId : (await c.mutation(api.orgs.create, { token: me.token, name: orgName })).orgId;
