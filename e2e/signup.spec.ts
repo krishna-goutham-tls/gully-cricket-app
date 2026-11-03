@@ -136,21 +136,22 @@ test("the landing hero shows the phone field and the live counter in the first f
   }
 });
 
-test("Records opens on the community card, all time, on every tab", async ({ page }, info) => {
+test("Records has a Community tab with the card, all time; other tabs do not show it", async ({ page }, info) => {
   const shots = `e2e/out/shots/${info.project.name}`;
   await loginAs(page, "organiser", ORG_A);
   await open(page, "/records");
   const card = page.getByTestId("community-card");
+  await expect(page.getByRole("button", { name: "Honours" })).toBeVisible();
+  await expect(card).toHaveCount(0);
+  await page.getByRole("button", { name: "Community" }).click();
   await expect(card.getByText(`${ORG_A} in numbers`)).toBeVisible();
   for (const label of ["Matches", "Runs", "Wickets", "Sixes", "Fours", "Catches", "Players"]) {
     await expect(card.getByText(label, { exact: true })).toBeVisible();
   }
   await expect(card.getByText("Player of the community")).toBeVisible();
+  await expect(page.getByText("All time")).toBeVisible();
   await noSidewaysScroll(page);
-  await page.screenshot({ path: `${shots}/records-card.png` });
+  await page.screenshot({ path: `${shots}/records-community.png` });
   await page.getByRole("button", { name: "Milestones" }).click();
-  await expect(card).toBeVisible();
-  await page.getByRole("button", { name: "The Roast" }).click();
-  await expect(card).toBeVisible();
-  await page.screenshot({ path: `${shots}/records-card-roast.png` });
+  await expect(card).toHaveCount(0);
 });
