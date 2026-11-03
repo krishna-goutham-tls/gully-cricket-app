@@ -12,23 +12,14 @@ export function dayKey(ts: number): string {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 }
 
-/** "Today" · "Yesterday" · "Sat, 19 Jul" · "Sat, 19 Jul 2025". */
+/** "Today" · "Yesterday" · "Sat 19 Jul" · "Sat 19 Jul 2025". */
 export function dayLabel(ts: number, now: number = Date.now()): string {
   if (dayKey(ts) === dayKey(now)) return "Today";
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
   if (dayKey(ts) === dayKey(yesterday.getTime())) return "Yesterday";
 
-  const d = new Date(ts);
-  return d.toLocaleDateString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    // Only spell out the year once it stops being obvious.
-    ...(d.getFullYear() === new Date(now).getFullYear()
-      ? {}
-      : { year: "numeric" }),
-  });
+  return matchDate(ts, now);
 }
 
 /** "22 Jul" — for dense log rows where the year is noise. */
