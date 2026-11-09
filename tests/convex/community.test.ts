@@ -70,7 +70,7 @@ const membership = async (t: T, who: Person, orgId: Id<"orgs">) => {
 };
 
 describe("community switches", () => {
-  test("new communities start with The Roast on; Series, Test matches and junior board off", async () => {
+  test("new communities start with The Roast and Impact players on; Series, Test matches and junior board off", async () => {
     const { t, admin, orgId } = await setup();
     expect((await membership(t, admin, orgId)).features).toEqual({
       series: false,
@@ -79,6 +79,7 @@ describe("community switches", () => {
       juniorBoard: false,
       juniorRule: true,
       visitorsOnLeaders: false,
+      impactPlayers: true,
     });
     const s = await t.query(api.orgs.settings, { token: admin.token, orgId });
     expect(s!.features).toEqual({
@@ -88,6 +89,7 @@ describe("community switches", () => {
       juniorBoard: false,
       juniorRule: true,
       visitorsOnLeaders: false,
+      impactPlayers: true,
     });
     expect(s!.admins).toEqual(["Asha"]);
     expect(s!.juniorBoardTitle).toBe("Playground Bullies");

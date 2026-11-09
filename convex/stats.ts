@@ -25,12 +25,12 @@ import {
 } from "./lib/milestones";
 import { homeGroundOf } from "./lib/grounds";
 import {
-  emptyMvpTotals,
-  mvpBaseline,
-  mvpMinMatches,
-  mvpScore,
-  type MvpTotals,
-} from "./lib/mvp";
+  emptyImpactTotals,
+  impactBaseline,
+  impactMinMatches,
+  impactScore,
+  type ImpactTotals,
+} from "./lib/impact";
 import { Doc, Id } from "./_generated/dataModel";
 import { requireOrgViewer } from "./lib/session";
 import {
@@ -1542,15 +1542,17 @@ export const leaderboard = query({
 });
 
 /**
- * MVP board: impact per match against the window's average player
- * (`lib/mvp.ts`). Season or all time, every format and ground — the board is
- * meant to settle "who is the best player", so it carries no slices.
+ * Impact players: value per match against the window's average player
+ * (`lib/impact.ts`). Season or all time, every format and ground — the board
+ * is meant to settle "who adds the most", so it carries no slices. Null when
+ * the community has switched Impact players off.
  */
-export async function mvpBoardFor(
+export async function impactBoardFor(
   ctx: QueryCtx,
   args: { orgId: Id<"orgs">; seasonId?: Id<"seasons"> },
   now: number,
 ) {
+  if (!(await orgFeatureOn(ctx, args.orgId, "impactPlayers"))) return null;
   let window: Window = {};
   if (args.seasonId) {
     const season = await ctx.db.get(args.seasonId);
@@ -1563,13 +1565,13 @@ export async function mvpBoardFor(
   const set = await loadStampSet(ctx, args.orgId, window);
   const matchCount = set.matches.filter((m) => inWindow(m, window)).length;
 
-  const totals = new Map<string, MvpTotals>();
+  const totals = new Map<string, ImpactTotals>();
   for (const r of set.players) {
     if (!inWindow(r, window)) continue;
     const key = String(r.userId);
     let t = totals.get(key);
     if (!t) {
-      t = emptyMvpTotals();
+      t = emptyImpactTotals();
       totals.set(key, t);
     }
     if (r.named) t.matches += 1;
@@ -1577,6 +1579,10 @@ export async function mvpBoardFor(
       t.runs += r.bat.runs;
       t.ballsFaced += r.bat.balls;
       t.outs += r.bat.dismissals;
+      // An innings only off juniors counted nothing, so it is not an innings here.
+      t.innings += r.bat.innings.filter(
+        (i) => i.runs > 0 || i.balls > 0 || i.outs > 0,
+      ).length;
     }
     if (r.bowl) {
       t.legalBalls += r.bowl.counted?.legalBalls ?? r.bowl.legalBalls;
@@ -1590,8 +1596,8 @@ export async function mvpBoardFor(
 
   // The average is everyone's balls, visitors included: they bowled and
   // faced those balls against the regulars being ranked.
-  const base = mvpBaseline(totals.values());
-  const minMatches = mvpMinMatches(matchCount);
+  const base = impactBaseline(totals.values());
+  const minMatches = impactMinMatches(matchCount);
   const includeExtras = await orgFeatureOn(ctx, args.orgId, "visitorsOnLeaders");
   const keys = Array.from(totals.keys());
   const [names, tags] = await Promise.all([
@@ -1602,7 +1608,7 @@ export async function mvpBoardFor(
   const rows = keys
     .map((key) => {
       const t = totals.get(key)!;
-      const score = mvpScore(t, base);
+      const score = impactScore(t, base);
       return {
         userId: key as Id<"users">,
         displayName: names.get(key) ?? "Player",
@@ -1627,26 +1633,42 @@ export async function mvpBoardFor(
     /** SR and economy of the average player, for the how-it-works sheet. */
     strikeRate: base.runsPerBall * 100,
     economy: base.givenPerBall * 6,
+    /** What a wicket and a catch are worth on this board, in runs. */
+    wicketValue: base.wicketValue,
+    catchValue: base.catchValue,
     includeVisitorsAndJuniors: includeExtras,
     rows,
   };
 }
 
-export const mvp = query({
-  args: {
-    token: v.optional(v.string()),
-    orgId: v.id("orgs"),
-    seasonId: v.optional(v.id("seasons")),
-  },
-  handler: async (ctx, { token, ...args }) => {
-    try {
-      await requireOrgViewer(ctx, token, args.orgId);
-    } catch {
-      return null;
-    }
-    return mvpBoardFor(ctx, args, Date.now());
-  },
-});
+const impactArgs = {
+  token: v.optional(v.string()),
+  orgId: v.id("orgs"),
+  seasonId: v.optional(v.id("seasons")),
+};
+
+async function impactHandler(
+  ctx: QueryCtx,
+  {
+    token,
+    ...args
+  }: { token?: string; orgId: Id<"orgs">; seasonId?: Id<"seasons"> },
+) {
+  try {
+    await requireOrgViewer(ctx, token, args.orgId);
+  } catch {
+    return null;
+  }
+  return impactBoardFor(ctx, args, Date.now());
+}
+
+export const impact = query({ args: impactArgs, handler: impactHandler });
+
+/**
+ * The 2026-11-09 build called this board `mvp`. Kept for one release so an
+ * app still on that build keeps working until it reloads. Remove after.
+ */
+export const mvp = query({ args: impactArgs, handler: impactHandler });
 
 /**
  * True when a junior played on the other side. A common player is on both

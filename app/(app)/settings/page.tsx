@@ -440,6 +440,13 @@ function AdminGroups() {
           onChange={(on) => flip("testMatches", on)}
         />
         <SwitchRow
+          label="Impact players"
+          line="A Leaders tab of who adds the most per match"
+          checked={features.impactPlayers}
+          disabled={busy !== null}
+          onChange={(on) => flip("impactPlayers", on)}
+        />
+        <SwitchRow
           label="The Roast"
           line="Joke awards for ducks, drops and Nemesis"
           checked={features.roast}

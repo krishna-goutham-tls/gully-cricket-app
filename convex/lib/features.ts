@@ -30,6 +30,8 @@ export const FEATURE_DEFAULTS = {
   juniorRule: true,
   /** Visitors and juniors on Leaders and Records. Off: regulars only. */
   visitorsOnLeaders: false,
+  /** The Impact tab on Leaders: value per match against the average player. */
+  impactPlayers: true,
 } as const;
 
 export type FeatureKey = keyof typeof FEATURE_DEFAULTS;

@@ -4,7 +4,10 @@ import {
   GroundChips,
   usePlayableGrounds,
 } from "@/components/ground/GroundChips";
-import { MvpBoardView, mvpShareRows } from "@/components/leaderboard/MvpBoard";
+import {
+  ImpactBoardView,
+  impactShareRows,
+} from "@/components/leaderboard/ImpactBoard";
 import { RankedList, type RankRow } from "@/components/leaderboard/RankedList";
 import {
   RECORD_MIN_BALLS,
@@ -51,13 +54,13 @@ const inns = (n: number) => `${n} inn${n === 1 ? "" : "s"}`;
  * tab bar at four on a phone. Folding it into Batting's chips restores one
  * consistent model and leaves room for nine boards without a scrolling rail.
  */
-const TABS = ["batting", "bowling", "players", "mvp"] as const;
+const TABS = ["batting", "bowling", "players", "impact"] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABEL: Record<Tab, string> = {
   batting: "Batting",
   bowling: "Bowling",
   players: "All-round",
-  mvp: "MVP",
+  impact: "Impact",
 };
 
 type MeasureKey =
@@ -343,12 +346,12 @@ const MEASURES: Measure[] = [
   },
 ];
 
-// MVP is its own table with no chips; its entry is never read as a measure.
+// Impact is its own table with no chips; its entry is never read as a measure.
 const DEFAULT_MEASURE: Record<Tab, MeasureKey> = {
   batting: "runs",
   bowling: "wickets",
   players: "points",
-  mvp: "points",
+  impact: "points",
 };
 
 type FormatScope = "all" | "test" | "limited";
@@ -526,7 +529,7 @@ export default function LeaderboardPage() {
   const cap = useSearchParams().get("cap");
   const tabParam = useSearchParams().get("tab");
   const [tab, setTab] = useState<Tab>(
-    cap === "purple" ? "bowling" : tabParam === "mvp" ? "mvp" : "batting",
+    cap === "purple" ? "bowling" : tabParam === "impact" ? "impact" : "batting",
   );
   const [measureKey, setMeasureKey] = useState<MeasureKey>(
     cap === "purple" ? "wickets" : "runs",
@@ -563,12 +566,15 @@ export default function LeaderboardPage() {
     grounds.length >= 2
       ? (grounds.find((g) => g._id === groundPick) ?? null)
       : null;
-  const isMvp = tab === "mvp";
-  // Season or all time only: the MVP board settles "who is best", so the
-  // format and ground slices do not apply to it.
-  const mvp = useQuery(
-    api.stats.mvp,
-    isMvp && token && activeOrgId && seasons !== undefined
+  // The community can switch Impact players off. Then the tab is gone, and a
+  // link to it lands on Batting.
+  const impactOn = features.impactPlayers;
+  const isImpact = tab === "impact" && impactOn;
+  // Season or all time only: the Impact board settles "who adds the most", so
+  // the format and ground slices do not apply to it.
+  const impact = useQuery(
+    api.stats.impact,
+    isImpact && token && activeOrgId && seasons !== undefined
       ? {
           token,
           orgId: activeOrgId,
@@ -611,6 +617,13 @@ export default function LeaderboardPage() {
     setTab(t);
     setMeasureKey(DEFAULT_MEASURE[t]);
   };
+  // Switched off while open, or a link from before: back to Batting.
+  useEffect(() => {
+    if (!impactOn && tab === "impact") {
+      setTab("batting");
+      setMeasureKey(DEFAULT_MEASURE.batting);
+    }
+  }, [impactOn, tab]);
 
   const rows = useMemo(() => {
     const raw = data ? measure.rows(data) : ([] as RankRow[]);
@@ -671,20 +684,20 @@ export default function LeaderboardPage() {
     };
   }, [data, rows, measure, activeOrg, selectedSeason, format, ground]);
 
-  const mvpShare: LeaderboardShareData | null = useMemo(() => {
-    if (!mvp) return null;
-    const rows = mvpShareRows(mvp);
+  const impactShare: LeaderboardShareData | null = useMemo(() => {
+    if (!impact) return null;
+    const rows = impactShareRows(impact);
     if (rows.length === 0) return null;
-    const count = `${mvp.matchCount} match${mvp.matchCount === 1 ? "" : "es"}`;
+    const count = `${impact.matchCount} match${impact.matchCount === 1 ? "" : "es"}`;
     return {
       kind: "leaderboard" as const,
-      title: "MVP",
+      title: "Impact players",
       subtitle: [activeOrg?.orgName ?? "Gully", selectedSeason?.name, count]
         .filter(Boolean)
         .join(" · "),
       rows,
     };
-  }, [mvp, activeOrg, selectedSeason]);
+  }, [impact, activeOrg, selectedSeason]);
 
   const [scrolled, setScrolled] = useState(false);
   const [chipsOpen, setChipsOpen] = useState(false);
@@ -716,7 +729,7 @@ export default function LeaderboardPage() {
 
   const disciplineTabs = (
     <div className="flex rounded-xl border border-line bg-surface p-1">
-      {TABS.map((t) => (
+      {TABS.filter((t) => t !== "impact" || impactOn).map((t) => (
         <button
           key={t}
           type="button"
@@ -754,11 +767,11 @@ export default function LeaderboardPage() {
             >
               Records
             </Link>
-            {isMvp ? (
-              mvpShare ? (
+            {isImpact ? (
+              impactShare ? (
                 <ShareButton
-                  data={mvpShare}
-                  filename="gully-leaders-mvp.png"
+                  data={impactShare}
+                  filename="gully-leaders-impact.png"
                   tone="light"
                 />
               ) : null
@@ -774,8 +787,8 @@ export default function LeaderboardPage() {
         below={disciplineTabs}
       />
       <main className="mx-auto max-w-md px-5 py-3">
-        {isMvp ? (
-          mvp === undefined ? (
+        {isImpact ? (
+          impact === undefined ? (
             <div className="space-y-2">
               {[0, 1, 2, 3].map((i) => (
                 <div
@@ -784,16 +797,16 @@ export default function LeaderboardPage() {
                 />
               ))}
             </div>
-          ) : mvp === null ? (
+          ) : impact === null ? (
             <EmptyState
               title="Leaders unavailable"
               body="Sign in to this community to see its boards."
             />
-          ) : mvp.rows.length === 0 ? (
+          ) : impact.rows.length === 0 ? (
             <EmptyState title={empty.title} body={empty.body} />
           ) : (
-            <MvpBoardView
-              board={mvp}
+            <ImpactBoardView
+              board={impact}
               youId={user?._id ? String(user._id) : undefined}
             />
           )
