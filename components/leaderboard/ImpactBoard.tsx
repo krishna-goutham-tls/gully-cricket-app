@@ -23,11 +23,22 @@ export type ImpactBoard = NonNullable<
 >;
 type Row = ImpactBoard["rows"][number];
 
-/** "+6.1", "−3.4", "0.0". A real minus sign, so columns line up. */
-function signed(n: number): string {
+/**
+ * A part (Bat, Bowl, Field) shows only as a strength: "+6.1". Average or
+ * below is a dash, so no player reads a minus number next to their name.
+ */
+function strength(n: number): string | null {
   const r = Math.round(n * 10) / 10;
-  if (r === 0) return "0.0";
-  return `${r > 0 ? "+" : "−"}${Math.abs(r).toFixed(1)}`;
+  return r > 0 ? `+${r.toFixed(1)}` : null;
+}
+
+/**
+ * Impact on a scale where 100 is this community's average player, like a
+ * strike rate. Each point is one run per match above or below. The ranking
+ * is the same; only the reading changes.
+ */
+export function impactScore100(total: number): number {
+  return Math.round(100 + total);
 }
 
 const NUM = "tabular w-10 shrink-0 text-right text-[13px]";
@@ -52,7 +63,10 @@ function HowItWorks({
       "Runs saved against average economy. Taking wickets more often than average earns a wicket each time.",
     ],
     ["Field", "Half a wicket per catch. The same off per drop."],
-    ["Impact", "Bat + Bowl + Field, divided by matches played."],
+    [
+      "Impact",
+      "100 is the average player. Each point is one run per match above or below it.",
+    ],
   ];
   return (
     <div
@@ -64,13 +78,13 @@ function HowItWorks({
           role="dialog"
           aria-modal="true"
           aria-label="How Impact works"
-          className="mb-4 rounded-2xl bg-surface p-5 shadow-card sm:mb-0"
+          className="mb-4 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain rounded-2xl bg-surface p-5 shadow-card sm:mb-0"
           onClick={(e) => e.stopPropagation()}
         >
           <p className="text-[15px] font-semibold text-ink">How Impact works</p>
           <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
-            Points are runs per match, against the average player in this
-            community.
+            Runs per match, against the average player in this community. Only
+            strengths show a number. Average or below shows a dash.
           </p>
           <dl className="mt-4 space-y-2.5">
             {lines.map(([k, v]) => (
@@ -132,11 +146,14 @@ function ImpactTable({ rows, youId }: { rows: Row[]; youId?: string }) {
       {rows.map((r, i) => {
         const first = i === 0;
         const you = youId != null && String(r.userId) === youId;
-        const part = (n: number) => (
-          <span className={cn(NUM, n < 0 ? "text-muted" : "text-ink")}>
-            {signed(n)}
-          </span>
-        );
+        const part = (n: number) => {
+          const v = strength(n);
+          return (
+            <span className={cn(NUM, v ? "text-ink" : "text-faint")}>
+              {v ?? "–"}
+            </span>
+          );
+        };
         return (
           <Link
             key={String(r.userId)}
@@ -173,7 +190,7 @@ function ImpactTable({ rows, youId }: { rows: Row[]; youId?: string }) {
                 "ml-1 flex items-center justify-end text-[15px] font-semibold text-ink",
               )}
             >
-              {signed(r.total)}
+              {impactScore100(r.total)}
             </span>
           </Link>
         );
@@ -190,7 +207,7 @@ export function impactShareRows(board: ImpactBoard): LeaderboardShareRow[] {
     .map((r, i) => ({
       rank: i + 1,
       name: r.displayName,
-      value: signed(r.total),
+      value: String(impactScore100(r.total)),
     }));
 }
 
@@ -216,7 +233,7 @@ export function ImpactBoardView({
         onClick={() => setInfoOpen(true)}
         className="-mx-1 flex min-h-11 w-[calc(100%+0.5rem)] items-center justify-between gap-2 rounded-lg px-1 text-left text-[13px] font-semibold text-muted active:bg-line/50"
       >
-        <span>Runs per match vs the average player</span>
+        <span>100 is the average player</span>
         <Info
           className="h-5 w-5 shrink-0 text-ink"
           aria-label="How Impact works"

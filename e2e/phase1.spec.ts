@@ -106,10 +106,14 @@ test("Leaders has an Impact tab: a table, and the how-it-works sheet on the i", 
     () => document.documentElement.scrollWidth <= window.innerWidth,
   );
   expect(noScroll).toBe(true);
+  // No minus number anywhere on the board.
+  await expect(page.locator("main").getByText(/[−-]\d/)).toHaveCount(0);
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${shots}-leaders-impact.png` });
-  await page.getByText("Runs per match vs the average player").click();
+  await page.getByText("100 is the average player", { exact: true }).click();
   await expect(page.getByRole("dialog", { name: "How Impact works" })).toBeVisible();
+  // The sheet fits the screen: its title is not cut off on a small phone.
+  await expect(page.getByText("How Impact works", { exact: true })).toBeInViewport();
   await expect(page.getByText(/A wicket here is worth/)).toBeVisible();
   await page.screenshot({ path: `${shots}-leaders-impact-info.png` });
   await page.getByRole("button", { name: "Got it" }).click();
