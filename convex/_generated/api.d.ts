@@ -26,6 +26,7 @@ import type * as lib_invite from "../lib/invite.js";
 import type * as lib_matchStats from "../lib/matchStats.js";
 import type * as lib_matches from "../lib/matches.js";
 import type * as lib_milestones from "../lib/milestones.js";
+import type * as lib_mvp from "../lib/mvp.js";
 import type * as lib_phone from "../lib/phone.js";
 import type * as lib_playerLabel from "../lib/playerLabel.js";
 import type * as lib_points from "../lib/points.js";
@@ -75,6 +76,7 @@ declare const fullApi: ApiFromModules<{
   "lib/matchStats": typeof lib_matchStats;
   "lib/matches": typeof lib_matches;
   "lib/milestones": typeof lib_milestones;
+  "lib/mvp": typeof lib_mvp;
   "lib/phone": typeof lib_phone;
   "lib/playerLabel": typeof lib_playerLabel;
   "lib/points": typeof lib_points;
