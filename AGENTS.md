@@ -1,5 +1,24 @@
 # Gully Cricket (app repo)
 
+## Working rule - read first: build for every community
+
+Many communities use this app, each with its own ground, rules and scoring.
+One community's data is a test case, never the source of a rule.
+
+1. **Never hardcode a number taken from one community's data** (for
+   example "a wicket is worth 12 runs"). Derive it from each community's own
+   data in the window, or make it a setting with a default that fits most
+   communities.
+2. **Every major feature gets an on/off switch** in Settings, Extra features
+   (`convex/lib/features.ts`). The default fits most communities.
+3. **Plan for scale:** hundreds of communities and years of matches. Name the
+   read cost of every new board or query.
+
+Before you build, list every number in the design. Mark each one as derived
+per community, a setting, or a true constant with a one-line reason.
+
+---
+
 Mobile-first **gully cricket scoring app**. Public name **Gully Cricket**;
 repo/package still `cricket-scoring`. The product is the scoring UX — score
 an over with one thumb: tap ball outcome → instant register → next ball.
@@ -10,7 +29,7 @@ Any active org member can create matches, score, and use Practice mode
 (Profile → Settings). An **admin** also approves PIN resets, sends the invite
 link, removes members, and runs the Community and Extra features groups in
 Settings: the name, admins, invite link, Visitors (show visitors on Leaders),
-seasons, grounds, and the Series, Test matches, The Roast and junior board
+seasons, grounds, and the Series, Test matches, Impact players, The Roast and junior board
 switches. The platform owner (`users.isPlatformAdmin`) also sees All
 communities on `/admin`, where a community can be closed or opened again.
 

@@ -89,17 +89,17 @@ test("the Bowling card on a profile adds up", async ({ page }, info) => {
   expect(errors).toEqual([]);
 });
 
-test("Leaders has an MVP tab: a table, and the how-it-works sheet on the i", async ({ page }, info) => {
+test("Leaders has an Impact tab: a table, and the how-it-works sheet on the i", async ({ page }, info) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => {
     if (!/_rsc=.*access control checks/.test(e.message)) errors.push(e.message);
   });
   const { token, orgId } = await loginAs(page, "organiser", ORG_A);
   const shots = `e2e/out/shots/${info.project.name}`;
-  const board = await client().query(api.stats.mvp, { token, orgId });
+  const board = await client().query(api.stats.impact, { token, orgId });
   await open(page, "/leaderboard");
-  await page.getByRole("button", { name: "MVP", exact: true }).click();
-  if (board.rows.some((r) => r.qualified)) {
+  await page.getByRole("button", { name: "Impact", exact: true }).click();
+  if (board && board.rows.some((r) => r.qualified)) {
     await expect(page.getByText("Bowl", { exact: true })).toBeVisible();
   }
   const noScroll = await page.evaluate(
@@ -107,10 +107,11 @@ test("Leaders has an MVP tab: a table, and the how-it-works sheet on the i", asy
   );
   expect(noScroll).toBe(true);
   await page.waitForTimeout(500);
-  await page.screenshot({ path: `${shots}-leaders-mvp.png` });
+  await page.screenshot({ path: `${shots}-leaders-impact.png` });
   await page.getByText("Runs per match vs the average player").click();
-  await expect(page.getByRole("dialog", { name: "How MVP works" })).toBeVisible();
-  await page.screenshot({ path: `${shots}-leaders-mvp-info.png` });
+  await expect(page.getByRole("dialog", { name: "How Impact works" })).toBeVisible();
+  await expect(page.getByText(/A wicket here is worth/)).toBeVisible();
+  await page.screenshot({ path: `${shots}-leaders-impact-info.png` });
   await page.getByRole("button", { name: "Got it" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(errors).toEqual([]);
