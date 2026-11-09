@@ -24,6 +24,13 @@ import {
   type MilestoneKind,
 } from "./lib/milestones";
 import { homeGroundOf } from "./lib/grounds";
+import {
+  emptyMvpTotals,
+  mvpBaseline,
+  mvpMinMatches,
+  mvpScore,
+  type MvpTotals,
+} from "./lib/mvp";
 import { Doc, Id } from "./_generated/dataModel";
 import { requireOrgViewer } from "./lib/session";
 import {
@@ -1531,6 +1538,113 @@ export const leaderboard = query({
       return null;
     }
     return leaderboardFor(ctx, args, Date.now());
+  },
+});
+
+/**
+ * MVP board: impact per match against the window's average player
+ * (`lib/mvp.ts`). Season or all time, every format and ground — the board is
+ * meant to settle "who is the best player", so it carries no slices.
+ */
+export async function mvpBoardFor(
+  ctx: QueryCtx,
+  args: { orgId: Id<"orgs">; seasonId?: Id<"seasons"> },
+  now: number,
+) {
+  let window: Window = {};
+  if (args.seasonId) {
+    const season = await ctx.db.get(args.seasonId);
+    if (!season || String(season.orgId) !== String(args.orgId)) return null;
+    window = {
+      afterTs: season.startedAt,
+      beforeTs: Math.min(now, season.endedAt ?? now),
+    };
+  }
+  const set = await loadStampSet(ctx, args.orgId, window);
+  const matchCount = set.matches.filter((m) => inWindow(m, window)).length;
+
+  const totals = new Map<string, MvpTotals>();
+  for (const r of set.players) {
+    if (!inWindow(r, window)) continue;
+    const key = String(r.userId);
+    let t = totals.get(key);
+    if (!t) {
+      t = emptyMvpTotals();
+      totals.set(key, t);
+    }
+    if (r.named) t.matches += 1;
+    if (r.bat) {
+      t.runs += r.bat.runs;
+      t.ballsFaced += r.bat.balls;
+      t.outs += r.bat.dismissals;
+    }
+    if (r.bowl) {
+      t.legalBalls += r.bowl.counted?.legalBalls ?? r.bowl.legalBalls;
+      t.runsGiven += r.bowl.counted?.runs ?? r.bowl.runs;
+    }
+    // A row stamped before the junior rule has no `pts`: real numbers, as then.
+    t.wickets += r.pts?.wickets ?? r.bowl?.wickets ?? 0;
+    t.catches += r.pts?.catches ?? r.catches;
+    t.drops += r.drops;
+  }
+
+  // The average is everyone's balls, visitors included: they bowled and
+  // faced those balls against the regulars being ranked.
+  const base = mvpBaseline(totals.values());
+  const minMatches = mvpMinMatches(matchCount);
+  const includeExtras = await orgFeatureOn(ctx, args.orgId, "visitorsOnLeaders");
+  const keys = Array.from(totals.keys());
+  const [names, tags] = await Promise.all([
+    resolveNames(ctx, keys),
+    tagsForUsers(ctx, args.orgId, keys),
+  ]);
+
+  const rows = keys
+    .map((key) => {
+      const t = totals.get(key)!;
+      const score = mvpScore(t, base);
+      return {
+        userId: key as Id<"users">,
+        displayName: names.get(key) ?? "Player",
+        playerTags: tags.get(key) ?? [],
+        matches: t.matches,
+        qualified: t.matches >= minMatches,
+        ...score,
+      };
+    })
+    .filter((r) => r.matches > 0)
+    .filter((r) => includeExtras || isBoardRegular(r.playerTags))
+    .sort(
+      (a, b) =>
+        Number(b.qualified) - Number(a.qualified) ||
+        (a.qualified ? b.total - a.total : b.matches - a.matches) ||
+        a.displayName.localeCompare(b.displayName),
+    );
+
+  return {
+    matchCount,
+    minMatches,
+    /** SR and economy of the average player, for the how-it-works sheet. */
+    strikeRate: base.runsPerBall * 100,
+    economy: base.givenPerBall * 6,
+    includeVisitorsAndJuniors: includeExtras,
+    rows,
+  };
+}
+
+export const mvp = query({
+  args: {
+    token: v.optional(v.string()),
+    orgId: v.id("orgs"),
+    seasonId: v.optional(v.id("seasons")),
+  },
+  handler: async (ctx, { token, ...args }) => {
+    try {
+      await requireOrgViewer(ctx, token, args.orgId);
+    } catch {
+      return null;
+    }
+    return mvpBoardFor(ctx, args, Date.now());
   },
 });
 

@@ -1,6 +1,10 @@
 "use client";
 
-import { GroundChips, usePlayableGrounds } from "@/components/ground/GroundChips";
+import {
+  GroundChips,
+  usePlayableGrounds,
+} from "@/components/ground/GroundChips";
+import { MvpBoardView, mvpShareRows } from "@/components/leaderboard/MvpBoard";
 import { RankedList, type RankRow } from "@/components/leaderboard/RankedList";
 import {
   RECORD_MIN_BALLS,
@@ -14,10 +18,7 @@ import { ShareButton } from "@/components/share/ShareButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import {
-  economyQualifies,
-  rankEconomy,
-} from "@/convex/lib/awards";
+import { economyQualifies, rankEconomy } from "@/convex/lib/awards";
 import { PLAYER_TAG_COPY, type PlayerTag } from "@/lib/playerLabel";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
@@ -34,7 +35,8 @@ type BowlRow = Board["bowling"][number];
 function allRoundMeta(r: Board["allRound"][number]): string {
   const parts: string[] = [];
   if (r.runs > 0) parts.push(`${r.runs} run${r.runs === 1 ? "" : "s"}`);
-  if (r.wickets > 0) parts.push(`${r.wickets} wkt${r.wickets === 1 ? "" : "s"}`);
+  if (r.wickets > 0)
+    parts.push(`${r.wickets} wkt${r.wickets === 1 ? "" : "s"}`);
   if (r.catches > 0)
     parts.push(`${r.catches} catch${r.catches === 1 ? "" : "es"}`);
   return parts.join(" · ");
@@ -49,12 +51,13 @@ const inns = (n: number) => `${n} inn${n === 1 ? "" : "s"}`;
  * tab bar at four on a phone. Folding it into Batting's chips restores one
  * consistent model and leaves room for nine boards without a scrolling rail.
  */
-const TABS = ["batting", "bowling", "players"] as const;
+const TABS = ["batting", "bowling", "players", "mvp"] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABEL: Record<Tab, string> = {
   batting: "Batting",
   bowling: "Bowling",
   players: "All-round",
+  mvp: "MVP",
 };
 
 type MeasureKey =
@@ -294,8 +297,7 @@ const MEASURES: Measure[] = [
         userId: r.userId,
         displayName: r.displayName,
         value: r.matches,
-        meta:
-          d.matchCount > 0 ? `${r.matches} of ${d.matchCount}` : "",
+        meta: d.matchCount > 0 ? `${r.matches} of ${d.matchCount}` : "",
         qualified: true,
       })),
   },
@@ -341,10 +343,12 @@ const MEASURES: Measure[] = [
   },
 ];
 
+// MVP is its own table with no chips; its entry is never read as a measure.
 const DEFAULT_MEASURE: Record<Tab, MeasureKey> = {
   batting: "runs",
   bowling: "wickets",
   players: "points",
+  mvp: "points",
 };
 
 type FormatScope = "all" | "test" | "limited";
@@ -456,7 +460,10 @@ function ScopeMenu({
                   onSelect({ seasonId: s._id });
                   setOpen(false);
                 }}
-                className={cn(SCOPE_ROW, on && "font-semibold text-accent-deep")}
+                className={cn(
+                  SCOPE_ROW,
+                  on && "font-semibold text-accent-deep",
+                )}
               >
                 <span className="truncate" title={s.name}>
                   {s.name}
@@ -517,8 +524,9 @@ function emptyCopy(format: FormatScope, season: Season | null) {
 export default function LeaderboardPage() {
   const { token, activeOrgId, user, activeOrg, features } = useAuth();
   const cap = useSearchParams().get("cap");
+  const tabParam = useSearchParams().get("tab");
   const [tab, setTab] = useState<Tab>(
-    cap === "purple" ? "bowling" : "batting",
+    cap === "purple" ? "bowling" : tabParam === "mvp" ? "mvp" : "batting",
   );
   const [measureKey, setMeasureKey] = useState<MeasureKey>(
     cap === "purple" ? "wickets" : "runs",
@@ -555,6 +563,19 @@ export default function LeaderboardPage() {
     grounds.length >= 2
       ? (grounds.find((g) => g._id === groundPick) ?? null)
       : null;
+  const isMvp = tab === "mvp";
+  // Season or all time only: the MVP board settles "who is best", so the
+  // format and ground slices do not apply to it.
+  const mvp = useQuery(
+    api.stats.mvp,
+    isMvp && token && activeOrgId && seasons !== undefined
+      ? {
+          token,
+          orgId: activeOrgId,
+          ...(selectedSeason ? { seasonId: selectedSeason._id } : {}),
+        }
+      : "skip",
+  );
   const data = useQuery(
     api.stats.leaderboard,
     token && activeOrgId && seasons !== undefined
@@ -582,7 +603,9 @@ export default function LeaderboardPage() {
 
   const chips = useMemo(() => MEASURES.filter((m) => m.tab === tab), [tab]);
   const measure =
-    MEASURES.find((m) => m.key === measureKey && m.tab === tab) ?? chips[0];
+    MEASURES.find((m) => m.key === measureKey && m.tab === tab) ??
+    chips[0] ??
+    MEASURES[0];
 
   const selectTab = (t: Tab) => {
     setTab(t);
@@ -629,18 +652,8 @@ export default function LeaderboardPage() {
     const org = activeOrg?.orgName ?? "Gully";
     const count = `${data.matchCount} match${data.matchCount === 1 ? "" : "es"}`;
     const formatBit =
-      format === "test"
-        ? "Tests"
-        : format === "limited"
-          ? "ODI"
-          : null;
-    const subtitle = [
-      org,
-      selectedSeason?.name,
-      ground?.name,
-      formatBit,
-      count,
-    ]
+      format === "test" ? "Tests" : format === "limited" ? "ODI" : null;
+    const subtitle = [org, selectedSeason?.name, ground?.name, formatBit, count]
       .filter(Boolean)
       .join(" · ");
     return {
@@ -657,6 +670,21 @@ export default function LeaderboardPage() {
         })),
     };
   }, [data, rows, measure, activeOrg, selectedSeason, format, ground]);
+
+  const mvpShare: LeaderboardShareData | null = useMemo(() => {
+    if (!mvp) return null;
+    const rows = mvpShareRows(mvp);
+    if (rows.length === 0) return null;
+    const count = `${mvp.matchCount} match${mvp.matchCount === 1 ? "" : "es"}`;
+    return {
+      kind: "leaderboard" as const,
+      title: "MVP",
+      subtitle: [activeOrg?.orgName ?? "Gully", selectedSeason?.name, count]
+        .filter(Boolean)
+        .join(" · "),
+      rows,
+    };
+  }, [mvp, activeOrg, selectedSeason]);
 
   const [scrolled, setScrolled] = useState(false);
   const [chipsOpen, setChipsOpen] = useState(false);
@@ -726,7 +754,15 @@ export default function LeaderboardPage() {
             >
               Records
             </Link>
-            {hasData && shareData ? (
+            {isMvp ? (
+              mvpShare ? (
+                <ShareButton
+                  data={mvpShare}
+                  filename="gully-leaders-mvp.png"
+                  tone="light"
+                />
+              ) : null
+            ) : hasData && shareData ? (
               <ShareButton
                 data={shareData}
                 filename={`gully-leaders-${measure.key}.png`}
@@ -738,99 +774,133 @@ export default function LeaderboardPage() {
         below={disciplineTabs}
       />
       <main className="mx-auto max-w-md px-5 py-3">
-        {/* Gold underline = sort, not a second tab set. */}
-        {compactChips ? (
-          <button
-            type="button"
-            aria-expanded={false}
-            onClick={() => setChipsOpen(true)}
-            className="flex min-h-11 w-full items-center justify-between rounded-lg border-b-2 border-accent px-1 text-[13px] font-semibold text-ink active:bg-bg"
-          >
-            {measure.label}
-            <ChevronDown className="h-4 w-4 text-muted" />
-          </button>
-        ) : (
-          <div role="tablist" aria-label="Rank by" className="flex items-stretch gap-1">
-            {chips.map((m) => {
-              const on = m.key === measure.key;
-              return (
-                <button
-                  key={m.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={on}
-                  onClick={() => {
-                    setMeasureKey(m.key);
-                    setChipsOpen(false);
-                  }}
-                  className={cn(
-                    "min-h-11 flex-1 rounded-lg border-b-2 px-1 text-[13px] font-semibold leading-tight transition",
-                    on
-                      ? "border-accent text-ink"
-                      : "border-transparent text-faint active:bg-line/50",
-                  )}
-                >
-                  {m.label}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {!scrolled && bothFormats ? (
-          <div className="mt-1 flex items-center justify-center">
-            <WordToggle
-              ariaLabel="Test or ODI"
-              value={format}
-              onChange={setFormat}
-              options={[
-                { id: "test", label: "Tests" },
-                { id: "limited", label: "ODI" },
-                { id: "all", label: "All" },
-              ]}
-            />
-          </div>
-        ) : null}
-
-        {!scrolled ? (
-          <GroundChips
-            grounds={grounds}
-            value={ground?._id ?? null}
-            onChange={setGroundPick}
-            className="mt-1"
-          />
-        ) : null}
-
-        {data === undefined ? (
-          <div className="mt-3 space-y-2">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="h-12 animate-pulse rounded-2xl bg-line" />
-            ))}
-          </div>
-        ) : data === null ? (
-          // Null is a membership we could not read, not a board with nothing
-          // on it — "No completed matches yet" would be a false empty state.
-          <div className="mt-3">
+        {isMvp ? (
+          mvp === undefined ? (
+            <div className="space-y-2">
+              {[0, 1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="h-12 animate-pulse rounded-2xl bg-line"
+                />
+              ))}
+            </div>
+          ) : mvp === null ? (
             <EmptyState
               title="Leaders unavailable"
               body="Sign in to this community to see its boards."
             />
-          </div>
-        ) : !hasData ? (
-          <div className="mt-3">
+          ) : mvp.rows.length === 0 ? (
             <EmptyState title={empty.title} body={empty.body} />
-          </div>
-        ) : (
-          <div className="mt-3">
-            <RankedList
-              rows={rows}
-              youId={user?._id}
-              showMovement={showMovement}
-              lowerIsBetter={measure.lowerIsBetter}
-              cutLabel={measure.cutLabel}
-              capLabel={capLabel}
+          ) : (
+            <MvpBoardView
+              board={mvp}
+              youId={user?._id ? String(user._id) : undefined}
             />
-          </div>
+          )
+        ) : (
+          <>
+            {/* Gold underline = sort, not a second tab set. */}
+            {compactChips ? (
+              <button
+                type="button"
+                aria-expanded={false}
+                onClick={() => setChipsOpen(true)}
+                className="flex min-h-11 w-full items-center justify-between rounded-lg border-b-2 border-accent px-1 text-[13px] font-semibold text-ink active:bg-bg"
+              >
+                {measure.label}
+                <ChevronDown className="h-4 w-4 text-muted" />
+              </button>
+            ) : (
+              <div
+                role="tablist"
+                aria-label="Rank by"
+                className="flex items-stretch gap-1"
+              >
+                {chips.map((m) => {
+                  const on = m.key === measure.key;
+                  return (
+                    <button
+                      key={m.key}
+                      type="button"
+                      role="tab"
+                      aria-selected={on}
+                      onClick={() => {
+                        setMeasureKey(m.key);
+                        setChipsOpen(false);
+                      }}
+                      className={cn(
+                        "min-h-11 flex-1 rounded-lg border-b-2 px-1 text-[13px] font-semibold leading-tight transition",
+                        on
+                          ? "border-accent text-ink"
+                          : "border-transparent text-faint active:bg-line/50",
+                      )}
+                    >
+                      {m.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {!scrolled && bothFormats ? (
+              <div className="mt-1 flex items-center justify-center">
+                <WordToggle
+                  ariaLabel="Test or ODI"
+                  value={format}
+                  onChange={setFormat}
+                  options={[
+                    { id: "test", label: "Tests" },
+                    { id: "limited", label: "ODI" },
+                    { id: "all", label: "All" },
+                  ]}
+                />
+              </div>
+            ) : null}
+
+            {!scrolled ? (
+              <GroundChips
+                grounds={grounds}
+                value={ground?._id ?? null}
+                onChange={setGroundPick}
+                className="mt-1"
+              />
+            ) : null}
+
+            {data === undefined ? (
+              <div className="mt-3 space-y-2">
+                {[0, 1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="h-12 animate-pulse rounded-2xl bg-line"
+                  />
+                ))}
+              </div>
+            ) : data === null ? (
+              // Null is a membership we could not read, not a board with nothing
+              // on it — "No completed matches yet" would be a false empty state.
+              <div className="mt-3">
+                <EmptyState
+                  title="Leaders unavailable"
+                  body="Sign in to this community to see its boards."
+                />
+              </div>
+            ) : !hasData ? (
+              <div className="mt-3">
+                <EmptyState title={empty.title} body={empty.body} />
+              </div>
+            ) : (
+              <div className="mt-3">
+                <RankedList
+                  rows={rows}
+                  youId={user?._id}
+                  showMovement={showMovement}
+                  lowerIsBetter={measure.lowerIsBetter}
+                  cutLabel={measure.cutLabel}
+                  capLabel={capLabel}
+                />
+              </div>
+            )}
+          </>
         )}
       </main>
     </div>

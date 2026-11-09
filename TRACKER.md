@@ -14,6 +14,7 @@ Status checked against the code on 2026-10-11 only where it says "checked". The 
 - [x] Update bar: open apps on an old build show "Gully has an update · Tap to reload" (2026-11-03, PR #45)
 - [x] All communities list on `/admin` for the platform owner, and the 13 waiting join requests rejected on prod (2026-11-03, PR #46)
 - [x] Browser tests ignore the Safari preload error ("due to access control checks") in the page-error checks (2026-11-03, PR #45)
+- [x] MVP tab on Leaders: impact per match against the average player, season or all time, with a how-it-works sheet (2026-11-09)
 
 ## Next
 - [ ] UX, community and sign-up build. Phase 1, 1b and 2 live (2026-10-31). Phase 3 live (2026-11-02, PR #40). Phase 4 (Visitors and juniors) and the screen sweep live (2026-11-02, PR #41). Batch 3: series squads, Records, copy live (2026-11-03, PR #42). Phase 6 reworked as open sign-up, Community tab and live counter, live (2026-11-03, PR #44). Update bar (PR #45) and All communities (PR #46) live 2026-11-03. Phase 7 cleanup (polls, `pendingCount`, `requestJoin`, `submitRequest`) from 2026-11-10. Phases and results: `../implementation/ux-community-signup-2026-10-31.md`

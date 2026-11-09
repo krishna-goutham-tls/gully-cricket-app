@@ -88,3 +88,30 @@ test("the Bowling card on a profile adds up", async ({ page }, info) => {
   await page.screenshot({ path: `e2e/out/shots/${info.project.name}-player-bowling.png`, fullPage: true });
   expect(errors).toEqual([]);
 });
+
+test("Leaders has an MVP tab: a table, and the how-it-works sheet on the i", async ({ page }, info) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => {
+    if (!/_rsc=.*access control checks/.test(e.message)) errors.push(e.message);
+  });
+  const { token, orgId } = await loginAs(page, "organiser", ORG_A);
+  const shots = `e2e/out/shots/${info.project.name}`;
+  const board = await client().query(api.stats.mvp, { token, orgId });
+  await open(page, "/leaderboard");
+  await page.getByRole("button", { name: "MVP", exact: true }).click();
+  if (board.rows.some((r) => r.qualified)) {
+    await expect(page.getByText("Bowl", { exact: true })).toBeVisible();
+  }
+  const noScroll = await page.evaluate(
+    () => document.documentElement.scrollWidth <= window.innerWidth,
+  );
+  expect(noScroll).toBe(true);
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${shots}-leaders-mvp.png` });
+  await page.getByText("Runs per match vs the average player").click();
+  await expect(page.getByRole("dialog", { name: "How MVP works" })).toBeVisible();
+  await page.screenshot({ path: `${shots}-leaders-mvp-info.png` });
+  await page.getByRole("button", { name: "Got it" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
