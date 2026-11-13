@@ -53,16 +53,25 @@ function HowItWorks({
   board: ImpactBoard;
   onClose: () => void;
 }) {
+  const w = Math.round(board.wicketValue);
+  const c = Math.round(board.catchValue);
   const lines: [string, string][] = [
     [
       "Bat",
-      "Runs above an average batter off the same balls. Getting out more often than average costs a wicket each time.",
+      `We compare you with an average batter in this community who faced the same number of balls. You get a point for every run you made above what that batter would make. Getting out also counts. If you got out more times than that batter would, you lose ${w} runs for each extra time. If you got out fewer times, you gain ${w} runs for each.`,
     ],
     [
       "Bowl",
-      "Runs saved against average economy. Taking wickets more often than average earns a wicket each time.",
+      `We compare you with an average bowler who bowled the same number of balls. You get a point for every run you gave away below what that bowler would give. If you took more wickets than that bowler would, you gain ${w} runs for each extra wicket. If you took fewer, you lose ${w} runs for each.`,
     ],
-    ["Field", "Half a wicket per catch. The same off per drop."],
+    [
+      "Field",
+      `Each catch adds ${c} runs, which is half a wicket. The bowler gets the other half. Each dropped catch takes ${c} runs away.`,
+    ],
+    [
+      `Why ${w} runs?`,
+      `An average innings in this community is ${w} runs. A wicket ends an innings, so one wicket is worth ${w} runs here. Each community gets its own number.`,
+    ],
     [
       "Impact",
       "100 is the average player. Each point is one run per match above or below it.",
@@ -86,16 +95,16 @@ function HowItWorks({
             Runs per match, against the average player in this community. Only
             strengths show a number. Average or below shows a dash.
           </p>
-          <dl className="mt-4 space-y-2.5">
+          <div className="mt-4 space-y-3">
             {lines.map(([k, v]) => (
-              <div key={k} className="flex gap-3">
-                <dt className="w-12 shrink-0 text-[13px] font-semibold text-ink">
-                  {k}
-                </dt>
-                <dd className="text-[13px] leading-relaxed text-muted">{v}</dd>
-              </div>
+              <p key={k} className="text-[13px] leading-relaxed text-muted">
+                <span className="font-semibold text-ink">
+                  {k.endsWith("?") ? k : `${k}.`}
+                </span>{" "}
+                {v}
+              </p>
             ))}
-          </dl>
+          </div>
           <div className="mt-4 space-y-1 border-t border-line pt-3 text-[13px] leading-relaxed text-muted">
             <p>
               Average player:{" "}
@@ -106,13 +115,6 @@ function HowItWorks({
               <span className="tabular font-semibold text-ink">
                 econ {board.economy.toFixed(1)}
               </span>
-            </p>
-            <p>
-              A wicket here is worth{" "}
-              <span className="tabular font-semibold text-ink">
-                {Math.round(board.wicketValue)} runs
-              </span>
-              , the average innings in this community.
             </p>
             <p>
               Play {board.minMatches} of {board.matchCount} matches to rank.
