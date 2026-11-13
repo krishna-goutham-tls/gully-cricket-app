@@ -114,7 +114,7 @@ test("Leaders has an Impact tab: a table, and the how-it-works sheet on the i", 
   await expect(page.getByRole("dialog", { name: "How Impact works" })).toBeVisible();
   // The sheet fits the screen: its title is not cut off on a small phone.
   await expect(page.getByText("How Impact works", { exact: true })).toBeInViewport();
-  await expect(page.getByText(/A wicket here is worth/)).toBeVisible();
+  await expect(page.getByText(/one wicket is worth \d+ runs here/)).toBeVisible();
   await page.screenshot({ path: `${shots}-leaders-impact-info.png` });
   await page.getByRole("button", { name: "Got it" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
