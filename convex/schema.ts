@@ -89,6 +89,13 @@ export const wicketType = v.union(
 
 export const matchFormat = v.union(v.literal("limited"), v.literal("test"));
 
+/**
+ * How a match is played. Absent = teams (two sides). "individuals" = every
+ * player on their own: one innings, one batter at a time, everyone else
+ * fields, the most points wins (convex/lib/individuals.ts).
+ */
+export const playMode = v.literal("individuals");
+
 export const pollStatus = v.union(
   v.literal("open"),
   v.literal("closed"),
@@ -114,6 +121,8 @@ export const tournamentStatus = v.union(
  */
 export const rulesObject = v.object({
   format: v.optional(matchFormat),
+  /** Absent = teams. Individuals: `maxBallsPerBatsman` absent = Unlimited. */
+  play: v.optional(playMode),
   /** 1 (limited) or 2 (test). Absent = 1. */
   inningsPerSide: v.optional(v.number()),
   maxOversInnings: v.number(),
@@ -378,6 +387,8 @@ export default defineSchema({
     clock: v.optional(matchClock),
     resultText: v.optional(v.string()),
     winnerSide: v.optional(side),
+    /** Individuals only: the most points. More than one = a shared win. */
+    winnerUserIds: v.optional(v.array(v.id("users"))),
     /**
      * Juniors in this match, frozen when it first completes. Points read
      * this, not live tags, so retagging never moves an old match
@@ -517,9 +528,13 @@ export default defineSchema({
     date: v.number(),
     matchOrder: v.number(),
     format: matchFormat,
+    /** Absent = teams. Individuals stamps never count as team results. */
+    play: v.optional(playMode),
     /** The match's groundId as stamped. Absent = Home, resolved at read time. */
     groundId: v.optional(v.id("grounds")),
     winnerSide: v.optional(side),
+    /** Individuals only, as on the match. */
+    winnerUserIds: v.optional(v.array(v.id("users"))),
     sideAName: v.string(),
     sideBName: v.string(),
     /** Index 0 of each side — resolves "Team A" to "Team {captain}". */
@@ -583,6 +598,8 @@ export default defineSchema({
     date: v.number(),
     matchOrder: v.number(),
     format: matchFormat,
+    /** Absent = teams. */
+    play: v.optional(playMode),
     groundId: v.optional(v.id("grounds")),
     winnerSide: v.optional(side),
     /** Named in either XI — turnout. */
@@ -738,6 +755,8 @@ export default defineSchema({
     date: v.number(),
     matchOrder: v.number(),
     format: matchFormat,
+    /** Absent = teams. */
+    play: v.optional(playMode),
     dismissalTypes: v.array(v.object({ type: v.string(), count: v.number() })),
     wicketTypes: v.array(v.object({ type: v.string(), count: v.number() })),
     byBowler: v.array(headToHead),

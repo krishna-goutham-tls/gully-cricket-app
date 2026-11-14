@@ -3,6 +3,19 @@ type BattingMode = "double" | "single";
 
 export type RuleSnapshot =
   | {
+      /** Individuals: everyone on their own (convex/lib/individuals.ts). */
+      format: "limited";
+      play: "individuals";
+      inningsPerSide: 1;
+      maxOversInnings: number;
+      maxOversPerBowler: number;
+      /** Absent = Unlimited: bat till out or retired. */
+      maxBallsPerBatsman?: number;
+      ballsPerOver: 6;
+      battingModeDefault: "single";
+      lastBatsmanAlone: boolean;
+    }
+  | {
       format: "limited";
       inningsPerSide: 1;
       maxOversInnings: number;
@@ -32,6 +45,49 @@ export type RuleSnapshot =
  * can never drift. Validates overs and (for limited) the even overs-per-player
  * knob that drives all four caps; common players get half.
  */
+/**
+ * Individuals has no innings or bowler limit of its own: the innings ends when
+ * every player is out or has used their balls, or when the scorer taps End.
+ * 200 overs is the engine's ceiling for any innings, far above a real day.
+ */
+export const INDIVIDUALS_INNINGS_OVERS = 200;
+/** Overs each batter gets in Individuals Limited. */
+export const MIN_OVERS_EACH = 1;
+export const MAX_OVERS_EACH = 20;
+export const DEFAULT_OVERS_EACH = 2;
+
+/**
+ * Individuals rule snapshot. `oversEach` absent = Unlimited. One batter at a
+ * time; no common-player halves (everyone is on both sides here); no bowler
+ * cap, because whoever is not batting bowls.
+ */
+export function buildIndividualsSnapshot(opts: {
+  oversEach?: number;
+}): RuleSnapshot {
+  const { oversEach } = opts;
+  if (
+    oversEach !== undefined &&
+    (!Number.isInteger(oversEach) ||
+      oversEach < MIN_OVERS_EACH ||
+      oversEach > MAX_OVERS_EACH)
+  ) {
+    throw new Error(
+      `Overs each must be between ${MIN_OVERS_EACH} and ${MAX_OVERS_EACH}`,
+    );
+  }
+  return {
+    format: "limited",
+    play: "individuals",
+    inningsPerSide: 1,
+    maxOversInnings: INDIVIDUALS_INNINGS_OVERS,
+    maxOversPerBowler: INDIVIDUALS_INNINGS_OVERS,
+    ...(oversEach !== undefined ? { maxBallsPerBatsman: oversEach * 6 } : {}),
+    ballsPerOver: 6,
+    battingModeDefault: "single",
+    lastBatsmanAlone: true,
+  };
+}
+
 export function buildRuleSnapshot(opts: {
   format?: Format;
   overs: number;

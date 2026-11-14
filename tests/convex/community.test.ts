@@ -80,6 +80,7 @@ describe("community switches", () => {
       juniorRule: true,
       visitorsOnLeaders: false,
       impactPlayers: true,
+      individuals: true,
     });
     const s = await t.query(api.orgs.settings, { token: admin.token, orgId });
     expect(s!.features).toEqual({
@@ -90,6 +91,7 @@ describe("community switches", () => {
       juniorRule: true,
       visitorsOnLeaders: false,
       impactPlayers: true,
+      individuals: true,
     });
     expect(s!.admins).toEqual(["Asha"]);
     expect(s!.juniorBoardTitle).toBe("Playground Bullies");

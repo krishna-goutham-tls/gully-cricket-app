@@ -32,6 +32,12 @@ export const FEATURE_DEFAULTS = {
   visitorsOnLeaders: false,
   /** The Impact tab on Leaders: value per match against the average player. */
   impactPlayers: true,
+  /**
+   * Teams | Individuals at match setup. Individuals: every player on their
+   * own, the most points wins. Off: every match is teams. Old individuals
+   * matches and their stats stay.
+   */
+  individuals: true,
 } as const;
 
 export type FeatureKey = keyof typeof FEATURE_DEFAULTS;
