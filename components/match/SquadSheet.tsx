@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, X } from "lucide-react";
+import { TruncText } from "@/components/ui/TruncText";
 import { Button } from "@/components/ui/Button";
 import { PlayerSideRow } from "@/components/match/PlayerSideRow";
 import { type SideValue } from "@/components/match/SideChoice";
@@ -39,7 +40,10 @@ export function SquadSheet({
   onAssign,
   onAddGuest,
   onDone,
+  individuals = false,
 }: {
+  /** Individuals: no sides, a player is in the match or not. */
+  individuals?: boolean;
   rows: SquadSheetRow[];
   nameA: string;
   nameB: string;
@@ -96,8 +100,11 @@ export function SquadSheet({
     const ok = await onAssign(userId, sides);
     if (!ok) return;
     const name = rows.find((r) => r.userId === userId)?.displayName ?? "Player";
-    const where =
-      sides.length === 2
+    const where = individuals
+      ? sides.length > 0
+        ? "In"
+        : "Out"
+      : sides.length === 2
         ? "Both"
         : sides[0] === "A"
           ? "A"
@@ -109,7 +116,47 @@ export function SquadSheet({
     savedTimer.current = setTimeout(() => setSaved(null), 2000);
   }
 
+  const soloRow = (row: SquadSheetRow) => {
+    const isIn = row.sides.length > 0;
+    return (
+      <div key={row.userId} className="py-1.5">
+        <div className="flex items-center gap-2">
+          {isIn ? (
+            <button
+              type="button"
+              aria-label={`Take ${row.displayName} out of the match`}
+              disabled={busyId !== null}
+              onClick={() => void assign(row.userId, [])}
+              className="-ml-3 flex h-11 w-11 shrink-0 items-center justify-center text-faint active:text-danger disabled:opacity-40"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          ) : null}
+          <span className="flex min-h-12 min-w-0 flex-1 items-center">
+            <TruncText lines={2} className="text-[15px] font-semibold text-ink">
+              {row.displayName}
+            </TruncText>
+          </span>
+          {isIn ? null : (
+            <button
+              type="button"
+              disabled={busyId !== null}
+              onClick={() => void assign(row.userId, ["A", "B"])}
+              className="min-h-11 shrink-0 rounded-lg border border-line px-4 text-[13px] font-semibold text-ink active:bg-bg disabled:opacity-40"
+            >
+              Add
+            </button>
+          )}
+        </div>
+        {error?.userId === row.userId ? (
+          <p className="mt-1 text-[13px] text-danger">{error.message}</p>
+        ) : null}
+      </div>
+    );
+  };
+
   const playerRow = (row: SquadSheetRow) => {
+    if (individuals) return soloRow(row);
     const leads = {
       A: captainA === row.userId,
       B: captainB === row.userId,
@@ -161,14 +208,16 @@ export function SquadSheet({
               ) : null}
             </p>
           </div>
-          <p className="flex gap-3 text-[13px] text-muted">
-            <span className="min-w-0 flex-1 truncate">
-              <span className="font-semibold text-accent-deep">A</span> {nameA}
-            </span>
-            <span className="min-w-0 flex-1 truncate">
-              <span className="font-semibold text-accent-deep">B</span> {nameB}
-            </span>
-          </p>
+          {individuals ? null : (
+            <p className="flex gap-3 text-[13px] text-muted">
+              <span className="min-w-0 flex-1 truncate">
+                <span className="font-semibold text-accent-deep">A</span> {nameA}
+              </span>
+              <span className="min-w-0 flex-1 truncate">
+                <span className="font-semibold text-accent-deep">B</span> {nameB}
+              </span>
+            </p>
+          )}
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}

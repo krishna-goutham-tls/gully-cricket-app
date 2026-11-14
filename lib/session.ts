@@ -222,3 +222,33 @@ export function getLastDurationMinutes(): number {
 export function setLastDurationMinutes(minutes: number) {
   localStorage.setItem(LAST_DURATION_KEY, String(minutes));
 }
+
+const LAST_PLAY_KEY = "boundary_last_play";
+const LAST_OVERS_EACH_KEY = "boundary_last_overs_each";
+
+/** Teams or Individuals, as last started on this phone. */
+export function getLastPlay(): "teams" | "individuals" {
+  if (typeof window === "undefined") return "teams";
+  return localStorage.getItem(LAST_PLAY_KEY) === "individuals"
+    ? "individuals"
+    : "teams";
+}
+
+export function setLastPlay(play: "teams" | "individuals") {
+  localStorage.setItem(LAST_PLAY_KEY, play);
+}
+
+/**
+ * Individuals overs each as last started on this phone. 0 = Unlimited.
+ * Whole numbers 1–20; default 2.
+ */
+export function getLastOversEach(): number {
+  if (typeof window === "undefined") return 2;
+  const raw = localStorage.getItem(LAST_OVERS_EACH_KEY);
+  const n = raw ? parseInt(raw, 10) : NaN;
+  return Number.isInteger(n) && n >= 0 && n <= 20 ? n : 2;
+}
+
+export function setLastOversEach(overs: number) {
+  localStorage.setItem(LAST_OVERS_EACH_KEY, String(overs));
+}

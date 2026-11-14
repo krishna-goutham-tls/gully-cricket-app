@@ -20,22 +20,28 @@ import {
   getLastDurationMinutes,
   getLastFormat,
   getLastOvers,
+  getLastOversEach,
   getLastOversPerPlayer,
+  getLastPlay,
   setLastDurationMinutes,
   setLastFormat,
   setLastOvers,
+  setLastOversEach,
   setLastOversPerPlayer,
+  setLastPlay,
 } from "@/lib/session";
+import { MAX_OVERS_EACH, MIN_OVERS_EACH } from "@/convex/lib/rules";
 import { balanceTeams } from "@/lib/autoTeams";
 import { cn, errorMessage } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { NumberField } from "@/components/ui/NumberField";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ChevronDown, History, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, History, Shuffle, X } from "lucide-react";
 
 type Step = "who" | "teams" | "start";
 type Side = "A" | "B";
+type Play = "teams" | "individuals";
 
 function firstName(full: string) {
   return full.trim().split(/\s+/)[0] ?? full;
@@ -120,6 +126,12 @@ export default function NewMatchPage() {
     getLastDurationMinutes(),
   );
   const [battingMode, setBattingMode] = useState<"double" | "single">("double");
+  // Teams or Individuals. Individuals skips the Teams step and the toss: one
+  // list, in batting order, and a first bowler.
+  const [play, setPlay] = useState<Play>(() => getLastPlay());
+  /** Individuals overs each. 0 = Unlimited (bat till out or retired). */
+  const [oversEach, setOversEach] = useState(() => getLastOversEach());
+  const [order, setOrder] = useState<string[]>([]);
   // Gully default: the last batter bats on alone. Off = proper cricket.
   const [lastBatsmanAlone, setLastBatsmanAlone] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -138,6 +150,13 @@ export default function NewMatchPage() {
     setFormat("limited");
     setOvers(getLastOvers("limited"));
   }, [featuresLive, testsOn, format]);
+  // Individuals off: every match is teams.
+  const individualsOn = features.individuals;
+  const individuals = individualsOn && play === "individuals";
+  useEffect(() => {
+    if (!featuresLive || individualsOn || play !== "individuals") return;
+    setPlay("teams");
+  }, [featuresLive, individualsOn, play]);
 
   // The community's last match sets the defaults, so every phone starts the
   // same. The values saved on this phone only cover a community's first match.
@@ -145,6 +164,13 @@ export default function NewMatchPage() {
   useEffect(() => {
     if (defaultsApplied.current || !lastMatch || !featuresLive) return;
     defaultsApplied.current = true;
+    if (lastMatch.individuals) {
+      if (!features.individuals) return;
+      setPlay("individuals");
+      setOversEach(lastMatch.individuals.oversEach ?? 0);
+      return;
+    }
+    setPlay("teams");
     if (lastMatch.format === "test" && !features.testMatches) return;
     setFormat(lastMatch.format);
     setOvers(lastMatch.overs);
@@ -172,7 +198,7 @@ export default function NewMatchPage() {
           : DEFAULT_TEST_MINUTES,
       );
     }
-  }, [lastMatch, features.testMatches, featuresLive]);
+  }, [lastMatch, features.testMatches, features.individuals, featuresLive]);
 
   const nameOf = useMemo(() => {
     const m = new Map(players.map((p) => [String(p.userId), p.displayName]));
@@ -370,14 +396,51 @@ export default function NewMatchPage() {
     setRowOrder([...nextA, ...nextCommon, ...nextB]);
     return true;
   }
-  reconcileRef.current = reconcileTeams;
+  /**
+   * Individuals: the batting order is the picks in the order they were
+   * tapped. Coming back keeps the order: someone who left drops out, someone
+   * new bats last.
+   */
+  function reconcileOrder(): boolean {
+    if (available.length < 2) return false;
+    const here = new Set(available);
+    const kept = order.filter((id) => here.has(id));
+    const next = [...kept, ...available.filter((id) => !kept.includes(id))];
+    setOrder(next);
+    if (!bowler || bowler === next[0] || !here.has(bowler)) {
+      setBowler(next[1] ?? null);
+    }
+    return true;
+  }
+  reconcileRef.current = individuals ? reconcileOrder : reconcileTeams;
 
   /** One tap, one step: a double tap must not fall through to the next screen. */
   const tooSoon = () => Date.now() - stepAt.current < 400;
 
   function goToTeams() {
     if (tooSoon()) return;
+    if (individuals) {
+      if (reconcileOrder()) enterStep("start");
+      return;
+    }
     if (reconcileTeams()) enterStep("teams");
+  }
+
+  /** Individuals: this player bats first. */
+  function batFirst(id: string) {
+    const next = [id, ...order.filter((x) => x !== id)];
+    setOrder(next);
+    if (bowler === id) setBowler(next[1] ?? null);
+  }
+
+  function shuffleOrder() {
+    const next = order.slice();
+    for (let i = next.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [next[i], next[j]] = [next[j], next[i]];
+    }
+    setOrder(next);
+    if (!bowler || bowler === next[0]) setBowler(next[1] ?? null);
   }
 
   function sideOf(id: string): SideValue {
@@ -445,6 +508,18 @@ export default function NewMatchPage() {
     if (!lastMatch || !pool || tooSoon()) return;
     // Someone who has left the community cannot play again.
     const inCommunity = new Set(pool.map((p) => String(p.userId)));
+    if (individuals) {
+      // Same players, same batting order; no teams to carry.
+      const ids = lastMatch.sideAPlayers
+        .map((p) => String(p.userId))
+        .filter((id) => inCommunity.has(id));
+      if (ids.length < 2) return;
+      setAvailable(ids);
+      setOrder(ids);
+      setBowler(ids[1] ?? null);
+      enterStart();
+      return;
+    }
     const sideA = lastMatch.sideAPlayers
       .map((p) => String(p.userId))
       .filter((id) => inCommunity.has(id));
@@ -500,6 +575,42 @@ export default function NewMatchPage() {
     enterStart();
   }
 
+  async function onStartIndividuals() {
+    if (!token || !activeOrgId || order.length < 2 || !bowler) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await createMatch({
+        token,
+        orgId: activeOrgId,
+        play: "individuals",
+        sideAPlayerIds: order as Id<"users">[],
+        sideBPlayerIds: [],
+        overs: 1,
+        ...(oversEach > 0 ? { oversEach } : {}),
+        ...(chosenGround ? { groundId: chosenGround._id } : {}),
+      });
+      setLastPlay("individuals");
+      setLastOversEach(oversEach);
+      try {
+        await startInnings({
+          token,
+          matchId: res.matchId,
+          strikerId: order[0] as Id<"users">,
+          openingBowlerId: bowler as Id<"users">,
+        });
+      } catch {
+        // Handled by the score page.
+      }
+      await dropStepEntries();
+      router.replace(`/matches/${res.matchId}/score`);
+    } catch (e) {
+      leavingRef.current = false;
+      setError(errorMessage(e, "Could not start match"));
+      setBusy(false);
+    }
+  }
+
   async function onStart() {
     if (!token || !activeOrgId || !battingSide || !striker || !bowler) return;
     setBusy(true);
@@ -526,6 +637,7 @@ export default function NewMatchPage() {
             : undefined,
         ...(chosenGround ? { groundId: chosenGround._id } : {}),
       });
+      setLastPlay("teams");
       setLastOvers(Math.min(200, Math.max(1, overs)), format);
       setLastFormat(format);
       if (format === "limited") setLastOversPerPlayer(oversPerPlayer);
@@ -599,12 +711,43 @@ export default function NewMatchPage() {
 
   // ── Screen 1: who's here ──
   if (step === "who") {
-    const enough = available.length >= 4;
+    const need = individuals ? 2 : 4;
+    const enough = available.length >= need;
+    // Reuse only offers a match of the same kind.
+    const canReuse =
+      !!lastMatch && !!pool && Boolean(lastMatch.individuals) === individuals;
     return (
       <div className="flex min-h-dvh flex-col bg-bg">
         {header}
         <main className="mx-auto w-full max-w-md flex-1 space-y-4 px-5 py-4 pb-32">
-          {lastMatch && pool ? (
+          {individualsOn ? (
+            <div className="grid grid-cols-2 gap-1 rounded-xl border border-line bg-surface p-1">
+              {(
+                [
+                  { value: "teams", label: "Teams" },
+                  { value: "individuals", label: "Individuals" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  aria-pressed={play === opt.value}
+                  onClick={() => {
+                    // The scorer's pick wins over defaults that load late.
+                    defaultsApplied.current = true;
+                    setPlay(opt.value);
+                  }}
+                  className={cn(
+                    "min-h-11 rounded-lg text-[13px] font-semibold",
+                    play === opt.value ? "bg-ink text-bg" : "text-muted",
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {canReuse && lastMatch ? (
             <button
               type="button"
               onClick={reuseLastTeams}
@@ -613,11 +756,13 @@ export default function NewMatchPage() {
               <History className="h-5 w-5 shrink-0 text-accent-deep" />
               <span className="min-w-0">
                 <span className="block text-[15px] font-semibold text-accent-deep">
-                  Reuse last teams
+                  {individuals ? "Reuse last players" : "Reuse last teams"}
                 </span>
                 <span className="block truncate text-[13px] text-muted">
-                  {lastMatch.sideAName} vs {lastMatch.sideBName} ·{" "}
-                  {whenLabel(lastMatch.createdAt)}
+                  {individuals
+                    ? `${lastMatch.sideAPlayers.length} players`
+                    : `${lastMatch.sideAName} vs ${lastMatch.sideBName}`}{" "}
+                  · {whenLabel(lastMatch.createdAt)}
                 </span>
               </span>
             </button>
@@ -640,12 +785,12 @@ export default function NewMatchPage() {
             type="button"
             fullWidth
             size="lg"
-            disabled={!enough || !levelsReady}
+            disabled={!enough || (!individuals && !levelsReady)}
             onClick={goToTeams}
           >
             {!enough
-              ? "Pick at least 4"
-              : levelsReady
+              ? `Pick at least ${need}`
+              : individuals || levelsReady
                 ? `Next · ${available.length} playing`
                 : "Loading…"}
           </Button>,
@@ -722,6 +867,192 @@ export default function NewMatchPage() {
             onClick={enterStart}
           >
             {ready ? `Next · ${countA} v ${countB}` : "Each team needs 2"}
+          </Button>,
+        )}
+      </div>
+    );
+  }
+
+  // ── Screen 3 (Individuals): order, overs each, first bowler ──
+  if (individuals) {
+    const first = order[0] ?? null;
+    const bowlerOptions = order.filter((id) => id !== first);
+    const line = oversEach > 0 ? `Limited · ${oversEach} overs each` : "Unlimited";
+    const canStartSolo = order.length >= 2 && !!bowler && bowler !== first;
+    return (
+      <div className="flex min-h-dvh flex-col bg-bg">
+        {header}
+        <main className="mx-auto w-full max-w-md flex-1 space-y-3 px-5 py-4 pb-32">
+          <section className="divide-y divide-line rounded-2xl border border-line bg-surface">
+            <button
+              type="button"
+              onClick={goBack}
+              className="flex min-h-11 w-full items-center gap-2 px-4 py-2.5 text-left"
+            >
+              <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
+                Individuals · {order.length} players
+              </span>
+              <span className="shrink-0 text-[13px] font-semibold text-muted">
+                Change
+              </span>
+            </button>
+            <div>
+              <button
+                type="button"
+                aria-expanded={settingsOpen}
+                onClick={() => {
+                  defaultsApplied.current = true;
+                  setSettingsOpen((v) => !v);
+                }}
+                className="flex min-h-11 w-full items-center gap-2 px-4 py-2.5 text-left"
+              >
+                <span className="min-w-0 flex-1 text-[13px] text-muted">{line}</span>
+                <span className="shrink-0 text-[13px] font-semibold text-muted">
+                  {settingsOpen ? "Done" : "Change"}
+                </span>
+              </button>
+              {settingsOpen ? (
+                <div className="space-y-3 px-4 pb-4 pt-1">
+                  <Choice
+                    options={[
+                      { value: "limited", label: "Limited" },
+                      { value: "unlimited", label: "Unlimited" },
+                    ]}
+                    value={oversEach > 0 ? "limited" : "unlimited"}
+                    onChange={(v) => setOversEach(v === "limited" ? 2 : 0)}
+                  />
+                  {oversEach > 0 ? (
+                    <SettingRow label="Overs each">
+                      <Stepper
+                        value={oversEach}
+                        decLabel="Fewer overs each"
+                        incLabel="More overs each"
+                        onDec={() =>
+                          setOversEach((o) => Math.max(MIN_OVERS_EACH, o - 1))
+                        }
+                        onInc={() =>
+                          setOversEach((o) => Math.min(MAX_OVERS_EACH, o + 1))
+                        }
+                      />
+                    </SettingRow>
+                  ) : null}
+                  {grounds.length >= 2 && chosenGround ? (
+                    <div className="flex flex-wrap gap-2">
+                      {grounds.map((g) => (
+                        <button
+                          key={g._id}
+                          type="button"
+                          aria-pressed={g._id === chosenGround._id}
+                          onClick={() => setGroundId(g._id)}
+                          className={cn(
+                            "min-h-11 rounded-lg border px-3 text-[13px] font-semibold",
+                            g._id === chosenGround._id
+                              ? "border-accent bg-accent-soft text-accent-deep"
+                              : "border-line text-muted active:bg-bg",
+                          )}
+                        >
+                          {g.name}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-line bg-surface">
+            <div className="flex items-center justify-between gap-2 px-4 pt-3">
+              <p className="text-[15px] font-semibold text-ink">Batting order</p>
+              <button
+                type="button"
+                onClick={shuffleOrder}
+                className="-my-2 flex min-h-11 items-center gap-1.5 px-2 text-[13px] font-semibold text-muted"
+              >
+                <Shuffle aria-hidden className="h-4 w-4" />
+                Shuffle
+              </button>
+            </div>
+            <ol className="divide-y divide-line px-1 pb-1">
+              {order.map((id, i) => (
+                <li key={id}>
+                  <button
+                    type="button"
+                    onClick={() => batFirst(id)}
+                    aria-label={i === 0 ? `${nameOf(id)} bats first` : `${nameOf(id)}: bat first`}
+                    className="flex min-h-12 w-full items-center gap-3 px-3 text-left active:bg-bg"
+                  >
+                    <span className="tabular w-6 shrink-0 text-[13px] font-semibold text-faint">
+                      {i + 1}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
+                      {nameOf(id)}
+                    </span>
+                    {i === 0 ? (
+                      <span className="shrink-0 text-[13px] font-semibold text-accent-deep">
+                        Bats first
+                      </span>
+                    ) : null}
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </section>
+
+          <section className="divide-y divide-line rounded-2xl border border-line bg-surface">
+            <button
+              type="button"
+              aria-expanded={openPick === "bowler"}
+              onClick={() => setOpenPick(openPick === "bowler" ? null : "bowler")}
+              className="flex min-h-11 w-full items-center gap-2 px-4 py-2 text-left"
+            >
+              <span className="w-24 shrink-0 text-[13px] text-muted">Bowler</span>
+              <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">
+                {bowler ? nameOf(bowler) : "—"}
+              </span>
+              <ChevronDown
+                aria-hidden
+                className={cn(
+                  "h-4 w-4 shrink-0 text-faint transition-transform",
+                  openPick === "bowler" && "rotate-180",
+                )}
+              />
+            </button>
+            {openPick === "bowler" ? (
+              <div className="flex flex-wrap gap-2 px-4 py-3">
+                {bowlerOptions.map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={id === bowler}
+                    onClick={() => {
+                      setBowler(id);
+                      setOpenPick(null);
+                    }}
+                    className={cn(
+                      "min-h-11 rounded-lg border px-4 text-[13px] font-semibold",
+                      id === bowler
+                        ? "border-ink bg-ink text-bg"
+                        : "border-line text-ink active:bg-bg",
+                    )}
+                  >
+                    {nameOf(id)}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </section>
+          {errorBanner}
+        </main>
+        {footer(
+          <Button
+            type="button"
+            fullWidth
+            size="lg"
+            disabled={!canStartSolo || busy}
+            onClick={() => void onStartIndividuals()}
+          >
+            {busy ? "Starting…" : "Start scoring"}
           </Button>,
         )}
       </div>
