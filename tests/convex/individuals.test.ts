@@ -188,6 +188,38 @@ describe("individuals", () => {
   });
 });
 
+describe("individuals and series", () => {
+  test("an individuals match cannot count toward a series", async () => {
+    const { t, people, orgId } = await setup(["Asha", "Ravi", "Teja", "Kiran"]);
+    const [asha, ravi, teja, kiran] = people;
+    const tok = asha.token;
+    await t.mutation(api.orgs.setFeature, { token: tok, orgId, key: "series", on: true });
+    const { tournamentId } = (await t.mutation(api.tournaments.create, {
+      token: tok,
+      orgId,
+      name: "Cup",
+      format: "limited",
+      oversPerInnings: 1,
+      sideAName: "Reds",
+      sideBName: "Blues",
+      sideASquadIds: [asha.userId, ravi.userId],
+      sideACoreIds: [asha.userId],
+      sideBSquadIds: [teja.userId, kiran.userId],
+      sideBCoreIds: [teja.userId],
+      matchCount: 3,
+    })) as { tournamentId: Id<"tournaments"> };
+    const matchId = await create(t, asha, orgId, people);
+    await ball(t, tok, matchId, 4);
+    await t.mutation(api.scoring.endInnings, { token: tok, matchId });
+
+    const linkable = await t.query(api.tournaments.linkableMatches, { token: tok, tournamentId });
+    expect(linkable.map((m) => m._id)).not.toContain(matchId);
+    await expect(
+      t.mutation(api.tournaments.linkMatch, { token: tok, tournamentId, matchId }),
+    ).rejects.toThrow(/individuals match cannot count/);
+  });
+});
+
 describe("individuals winner rules", () => {
   const row = (id: string, points: number, runs: number, balls: number, boundaries: number): StandingRow => ({
     userId: id as Id<"users">,

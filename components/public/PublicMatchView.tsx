@@ -1,6 +1,7 @@
 "use client";
 
 import { OverTracker } from "@/components/match/OverTracker";
+import { StandingsTable } from "@/components/match/StandingsTable";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { PublicFooter, PublicMark } from "@/components/public/PublicChrome";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -42,6 +43,12 @@ export function PublicMatchView({ matchId }: { matchId: string }) {
   const done = state.phase === "completed";
   const live = state.live;
   const isTest = state.inningsPerSide === 2;
+  const ind = state.individuals;
+  const indTag = ind
+    ? ind.oversEach !== undefined
+      ? `Individuals · ${ind.oversEach} ${ind.oversEach === 1 ? "over" : "overs"} each`
+      : "Individuals · Unlimited"
+    : null;
   const battingName =
     live?.battingSide === "A" ? state.sideA.name : state.sideB.name;
   const board = live
@@ -93,12 +100,64 @@ export function PublicMatchView({ matchId }: { matchId: string }) {
         </div>
 
         <p className="mt-3 text-center text-[13px] font-medium text-bg/70">
-          {live
-            ? `Innings ${live.inningsNo}${isTest ? " of 4" : ""} · ${battingName}`
-            : `${state.sideA.name} vs ${state.sideB.name}`}
+          {indTag
+            ? indTag
+            : live
+              ? `Innings ${live.inningsNo}${isTest ? " of 4" : ""} · ${battingName}`
+              : `${state.sideA.name} vs ${state.sideB.name}`}
         </p>
 
-        {live ? (
+        {live && ind ? (
+          <>
+            {/* Individuals: the batter's own score is the big number. */}
+            <div className="mt-2 text-center">
+              <p className="tabular text-[4.75rem] font-semibold leading-none tracking-tight text-bg">
+                {live.figures.striker?.runs ?? 0}
+              </p>
+              <p className="tabular mt-2 text-[13px] text-bg/70">
+                {live.figures.striker?.balls ?? 0}
+                {ind.oversEach !== undefined
+                  ? ` of ${ind.oversEach * state.ballsPerOver}`
+                  : ""}{" "}
+                balls
+              </p>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-2 text-center text-[11px]">
+              <div className="rounded-2xl bg-accent/20 px-2 py-2 ring-1 ring-accent/60">
+                <p className="font-semibold uppercase tracking-wide text-accent">
+                  Batting
+                </p>
+                <p
+                  className="mt-0.5 line-clamp-2 text-[15px] font-semibold text-bg [overflow-wrap:anywhere]"
+                  title={live.striker ?? undefined}
+                >
+                  {live.striker ?? "—"}
+                </p>
+              </div>
+              <div className="rounded-2xl bg-white/[0.05] px-2 py-2">
+                <p className="font-semibold uppercase tracking-wide text-bg/70">
+                  Bowling
+                </p>
+                <p
+                  className="mt-0.5 line-clamp-2 text-[15px] font-semibold text-bg [overflow-wrap:anywhere]"
+                  title={live.bowler ?? undefined}
+                >
+                  {live.bowler ?? "—"}
+                </p>
+                {live.figures.bowler ? (
+                  <p className="tabular mt-0.5 text-[13px] text-bg/70">
+                    {live.figures.bowler.wickets}-{live.figures.bowler.runs}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            <OverTracker
+              current={live.currentOverBalls}
+              prev={live.prevOverBalls}
+              ballsPerOver={state.ballsPerOver}
+            />
+          </>
+        ) : live ? (
           <>
             <div className="mt-2 text-center">
               <p className="tabular text-[4.75rem] font-semibold leading-none tracking-tight text-bg">
@@ -216,7 +275,11 @@ export function PublicMatchView({ matchId }: { matchId: string }) {
           </p>
         ) : null}
 
-        {state.innings.length > (live ? 1 : 0) ? (
+        {ind ? (
+          <StandingsTable rows={ind.standings} className="mb-5" />
+        ) : null}
+
+        {!ind && state.innings.length > (live ? 1 : 0) ? (
           <div className="mb-5 rounded-2xl border border-line bg-surface p-4 shadow-card">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">
               Innings

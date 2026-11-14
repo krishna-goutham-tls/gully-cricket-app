@@ -8,6 +8,7 @@ import {
   TestClockStatus,
 } from "@/components/match/TestClock";
 import { OverTracker } from "@/components/match/OverTracker";
+import { StandingsTable } from "@/components/match/StandingsTable";
 import { ShareLinkButton } from "@/components/share/ShareLinkButton";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -63,6 +64,11 @@ export default function WatchPage() {
     done || state.phase === "innings_break" ? null : state.live;
   const solo = state.ruleSnapshot.battingModeDefault === "single";
   const isTest = state.ruleSnapshot.inningsPerSide === 2;
+  // Individuals: one list, the batter's own score, a standings table.
+  const ind = state.individuals;
+  const matchTitle = ind
+    ? "Individuals"
+    : `${state.sideA.name} vs ${state.sideB.name}`;
 
   const battingName =
     live?.battingSide === "A" ? state.sideA.name : state.sideB.name;
@@ -115,9 +121,15 @@ export default function WatchPage() {
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <p className="min-w-0 truncate text-[13px] font-medium text-bg/70">
-            {live
-              ? `Innings ${live.inningsNo}${isTest ? " of 4" : ""} · ${battingName}`
-              : `${state.sideA.name} vs ${state.sideB.name}`}
+            {ind
+              ? `Individuals · ${
+                  ind.oversEach !== undefined
+                    ? `${ind.oversEach} overs each`
+                    : "Unlimited"
+                }`
+              : live
+                ? `Innings ${live.inningsNo}${isTest ? " of 4" : ""} · ${battingName}`
+                : matchTitle}
           </p>
           <div className="flex shrink-0 items-center gap-0.5">
             {done ? (
@@ -135,7 +147,7 @@ export default function WatchPage() {
             {isSandbox ? null : (
               <ShareLinkButton
                 url={() => publicMatchUrl(matchId)}
-                text={`${state.sideA.name} vs ${state.sideB.name} — ${
+                text={`${matchTitle} — ${
                   done ? (state.resultText ?? "full score") : "live score"
                 }`}
                 className="-mr-2"
@@ -148,15 +160,30 @@ export default function WatchPage() {
         {live ? (
           <>
             <div className="mt-2 text-center">
-              <p className="tabular text-[4.75rem] font-semibold leading-none tracking-tight text-bg">
-                {live.totalRuns}
-                <span className="text-bg/70">/</span>
-                {live.wickets}
-              </p>
-              <p className="tabular mt-2 text-[13px] text-bg/70">
-                {live.oversText} ov
-                {live.runRate > 0 ? ` · RR ${live.runRate.toFixed(1)}` : ""}
-              </p>
+              {ind ? (
+                <>
+                  <p className="tabular text-[4.75rem] font-semibold leading-none tracking-tight text-bg">
+                    {live.figures.striker?.runs ?? 0}
+                  </p>
+                  <p className="tabular mt-2 text-[13px] text-bg/70">
+                    {live.strikerQuota
+                      ? `${live.strikerQuota.faced} of ${live.strikerQuota.cap} balls`
+                      : `${live.figures.striker?.balls ?? 0} balls`}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="tabular text-[4.75rem] font-semibold leading-none tracking-tight text-bg">
+                    {live.totalRuns}
+                    <span className="text-bg/70">/</span>
+                    {live.wickets}
+                  </p>
+                  <p className="tabular mt-2 text-[13px] text-bg/70">
+                    {live.oversText} ov
+                    {live.runRate > 0 ? ` · RR ${live.runRate.toFixed(1)}` : ""}
+                  </p>
+                </>
+              )}
               {board?.kind === "target" ? (
                 <p className="tabular mt-1.5 inline-block rounded-full bg-accent/15 px-3 py-1 text-[13px] font-medium text-accent">
                   {matchBoardLabel(board)}
@@ -282,6 +309,13 @@ export default function WatchPage() {
           <ClipboardList className="h-[18px] w-[18px]" strokeWidth={2.2} />
           Full scorecard
         </Button>
+
+        {ind ? (
+          <StandingsTable
+            className="mt-6"
+            rows={ind.standings.map((r) => ({ ...r, userId: String(r.userId) }))}
+          />
+        ) : null}
 
         {state.innings.length > 1 ? (
           <div className="mt-6 rounded-2xl border border-line bg-surface p-4">

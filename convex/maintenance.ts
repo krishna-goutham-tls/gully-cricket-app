@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { assertSeriesSides } from "./lib/tournamentLineup";
+import { isIndividuals } from "./lib/individuals";
 import { buildRuleSnapshot } from "./lib/rules";
 import { legalBallToOverText } from "./lib/scoring";
 import { restampMatch } from "./lib/matchStats";
@@ -175,6 +176,8 @@ export const linkMatchToTournament = internalMutation({
     const t = await ctx.db.get(tournamentId);
     if (!t) throw new Error("Tournament not found");
     if (match.orgId !== t.orgId) throw new Error("Org mismatch");
+    if (isIndividuals(match))
+      throw new Error("An individuals match cannot count toward a series");
     if (match.ruleSnapshot?.format !== t.format)
       throw new Error(
         `Format mismatch: match=${match.ruleSnapshot?.format} tournament=${t.format}`,

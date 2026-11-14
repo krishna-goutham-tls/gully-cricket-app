@@ -536,11 +536,12 @@ const DISCIPLINE_LABEL: Record<Discipline, string> = {
   field: "Fielding",
 };
 
-type FormatPick = "all" | "test" | "limited";
+type FormatPick = "all" | "test" | "limited" | "individuals";
 const FORMAT_LABEL: Record<FormatPick, string> = {
   all: "All",
   test: "Test",
   limited: "Limited",
+  individuals: "Individuals",
 };
 
 export default function PlayerDetailPage() {
@@ -659,7 +660,17 @@ export default function PlayerDetailPage() {
     discipline && disciplines.includes(discipline)
       ? discipline
       : defaultDiscipline(stats);
-  const showFormats = stats.formats.test > 0 && stats.formats.limited > 0;
+  // Only the kinds this player has played get a button, plus All. The switch
+  // shows when there are two or more kinds.
+  const formatCounts = stats.formats as {
+    test: number;
+    limited: number;
+    individuals?: number;
+  };
+  const playedKinds = (["test", "limited", "individuals"] as const).filter(
+    (k) => (formatCounts[k] ?? 0) > 0 || format === k,
+  );
+  const showFormats = playedKinds.length >= 2;
   const scopeLabel =
     [selectedSeason?.name, format === "all" ? null : FORMAT_LABEL[format]]
       .filter(Boolean)
@@ -749,7 +760,7 @@ export default function PlayerDetailPage() {
               )}
               {showFormats || format !== "all" ? (
                 <div className="flex shrink-0 rounded-xl bg-white/10 p-1">
-                  {(["all", "test", "limited"] as const).map((k) => (
+                  {(["all", ...playedKinds] as const).map((k) => (
                     <button
                       key={k}
                       type="button"

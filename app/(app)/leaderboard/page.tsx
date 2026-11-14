@@ -354,7 +354,7 @@ const DEFAULT_MEASURE: Record<Tab, MeasureKey> = {
   impact: "points",
 };
 
-type FormatScope = "all" | "test" | "limited";
+type FormatScope = "all" | "test" | "limited" | "individuals";
 
 function WordToggle<T extends string>({
   value,
@@ -501,13 +501,21 @@ function ScopeMenu({
 /** Empty board reads differently for a season that is over than one under way. */
 function emptyCopy(format: FormatScope, season: Season | null) {
   const noun =
-    format === "test" ? "Tests" : format === "limited" ? "ODIs" : null;
+    format === "test"
+      ? "Tests"
+      : format === "limited"
+        ? "ODIs"
+        : format === "individuals"
+          ? "individuals matches"
+          : null;
   const play =
     format === "test"
       ? "Play a Test. The board starts at zero."
       : format === "limited"
         ? "Play an ODI. The board starts at zero."
-        : "Play a match. The board starts at zero.";
+        : format === "individuals"
+          ? "Play an individuals match. The board starts at zero."
+          : "Play a match. The board starts at zero.";
   if (!season)
     return {
       title: noun ? `No ${noun} yet` : "No completed matches yet",
@@ -595,17 +603,24 @@ export default function LeaderboardPage() {
       : "skip",
   );
 
-  // The Test/ODI filter shows only with Test matches on and both formats in
-  // this window. The last known counts carry over while the next board loads,
+  // The format filter shows only when two or more kinds (Tests, ODI,
+  // Individuals) were played in this window. Tests count only with Test
+  // matches on. The last known kinds carry over while the next board loads,
   // so it does not flicker. When it hides, the board goes back to All.
-  const [bothFormats, setBothFormats] = useState(false);
+  const [kinds, setKinds] = useState<Array<"test" | "limited" | "individuals">>(
+    [],
+  );
   const testsOn = features.testMatches;
   useEffect(() => {
     if (!data) return;
-    const both = testsOn && data.formats.test > 0 && data.formats.limited > 0;
-    setBothFormats(both);
-    if (!both) setFormat("all");
+    const f = data.formats as { test: number; limited: number; individuals?: number };
+    const next = (["test", "limited", "individuals"] as const).filter(
+      (k) => (k !== "test" || testsOn) && (f[k] ?? 0) > 0,
+    );
+    setKinds(next);
+    if (next.length < 2) setFormat("all");
   }, [data, testsOn]);
+  const bothFormats = kinds.length >= 2;
 
   const chips = useMemo(() => MEASURES.filter((m) => m.tab === tab), [tab]);
   const measure =
@@ -665,7 +680,13 @@ export default function LeaderboardPage() {
     const org = activeOrg?.orgName ?? "Gully";
     const count = `${data.matchCount} match${data.matchCount === 1 ? "" : "es"}`;
     const formatBit =
-      format === "test" ? "Tests" : format === "limited" ? "ODI" : null;
+      format === "test"
+        ? "Tests"
+        : format === "limited"
+          ? "ODI"
+          : format === "individuals"
+            ? "Individuals"
+            : null;
     const subtitle = [org, selectedSeason?.name, ground?.name, formatBit, count]
       .filter(Boolean)
       .join(" · ");
@@ -858,13 +879,16 @@ export default function LeaderboardPage() {
             {!scrolled && bothFormats ? (
               <div className="mt-1 flex items-center justify-center">
                 <WordToggle
-                  ariaLabel="Test or ODI"
+                  ariaLabel="Match format"
                   value={format}
                   onChange={setFormat}
                   options={[
-                    { id: "test", label: "Tests" },
-                    { id: "limited", label: "ODI" },
-                    { id: "all", label: "All" },
+                    ...kinds.map((k) => ({
+                      id: k,
+                      label:
+                        k === "test" ? "Tests" : k === "limited" ? "ODI" : "Individuals",
+                    })),
+                    { id: "all" as const, label: "All" },
                   ]}
                 />
               </div>

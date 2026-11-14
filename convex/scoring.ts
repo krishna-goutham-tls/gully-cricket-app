@@ -2551,6 +2551,16 @@ export const scorecard = query({
       maxOversInnings: rules.maxOversInnings,
       sideA: { side: "A" as const, name: labelA },
       sideB: { side: "B" as const, name: labelB },
+      /** Individuals only: overs each (absent = Unlimited) and the table. */
+      individuals: isIndividuals(match)
+        ? {
+            oversEach:
+              rules.maxBallsPerBatsman !== undefined
+                ? rules.maxBallsPerBatsman / rules.ballsPerOver
+                : undefined,
+            standings: (await individualsStandings(ctx, match)) ?? [],
+          }
+        : null,
       innings: cards,
     };
   },

@@ -10,6 +10,8 @@ import {
   totalInningsOf,
 } from "./scoring";
 import { pollView } from "./polls";
+import { individualsStandings } from "./lib/matchStats";
+import { isIndividuals } from "./lib/individuals";
 
 /**
  * What a link shared on WhatsApp shows to anyone who opens it — no session.
@@ -217,9 +219,36 @@ export const match = query({
       };
     }
 
+    // Individuals: the ranked list, names and numbers only. The row key is
+    // its place in the list, so no user id reaches a stranger.
+    const individuals = isIndividuals(match)
+      ? {
+          oversEach:
+            rules.maxBallsPerBatsman !== undefined
+              ? rules.maxBallsPerBatsman / rules.ballsPerOver
+              : undefined,
+          standings: ((await individualsStandings(ctx, match)) ?? []).map(
+            (r, i) => ({
+              userId: `p${i}`,
+              displayName: r.displayName,
+              points: r.points,
+              runs: r.runs,
+              balls: r.balls,
+              boundaries: r.boundaries,
+              wickets: r.wickets,
+              batted: r.batted,
+              out: r.out,
+              rank: r.rank,
+              winner: r.winner,
+            }),
+          ),
+        }
+      : null;
+
     return {
       status: match.status,
       phase,
+      individuals,
       sideA: { name: nameA },
       sideB: { name: nameB },
       winnerSide: match.winnerSide,

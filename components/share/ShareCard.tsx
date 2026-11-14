@@ -51,6 +51,15 @@ export type MatchShareData = {
   resultText: string | null;
   format: "limited" | "test";
   potm?: { name: string; line: string } | null;
+  /**
+   * Individuals: the top of the standings instead of two teams. The tag reads
+   * "Individuals · 2 overs each" or "Individuals · Unlimited". The winner is
+   * Player of the Match, so no POTM line.
+   */
+  individuals?: {
+    tag: string;
+    rows: Array<{ name: string; score: string; winner: boolean }>;
+  } | null;
 };
 
 export type LeaderboardShareRow = {
@@ -466,10 +475,25 @@ function PlayerFooterLeft({ data }: { data: PlayerShareData }) {
 
 function MatchLayout({ data }: { data: MatchShareData }) {
   const { teamA, teamB, winner, resultText, format, potm } = data;
-  const rows: Array<{ side: "A" | "B"; team: MatchShareTeam }> = [
-    { side: "A", team: teamA },
-    { side: "B", team: teamB },
-  ];
+  const solo = data.individuals ?? null;
+  const rows: Array<{
+    side: string;
+    team: MatchShareTeam;
+    won: boolean;
+    lost: boolean;
+  }> = solo
+    ? solo.rows.slice(0, 3).map((r, i) => ({
+        side: String(i),
+        team: { name: `${i + 1}. ${r.name}`, score: r.score },
+        won: r.winner,
+        lost: false,
+      }))
+    : (["A", "B"] as const).map((side) => ({
+        side,
+        team: side === "A" ? teamA : teamB,
+        won: winner === side,
+        lost: winner !== null && winner !== side,
+      }));
 
   return (
     <>
@@ -488,15 +512,13 @@ function MatchLayout({ data }: { data: MatchShareData }) {
             background: LINE_ON_INK,
           }}
         >
-          {format === "test" ? "Test" : "Limited overs"}
+          {solo ? solo.tag : format === "test" ? "Test" : "Limited overs"}
         </span>
       </div>
 
       {/* Team rows */}
       <div style={{ marginTop: 56, display: "flex", flexDirection: "column", gap: 28 }}>
-        {rows.map(({ side, team }) => {
-          const won = winner === side;
-          const lost = winner !== null && winner !== side;
+        {rows.map(({ side, team, won, lost }) => {
           return (
             <div
               key={side}
@@ -555,7 +577,7 @@ function MatchLayout({ data }: { data: MatchShareData }) {
             fontSize: 34,
             fontWeight: 600,
             lineHeight: 1.3,
-            color: winner ? ACCENT : BG_60,
+            color: winner || solo?.rows.some((r) => r.winner) ? ACCENT : BG_60,
           }}
         >
           {resultText}
@@ -563,7 +585,7 @@ function MatchLayout({ data }: { data: MatchShareData }) {
       ) : null}
 
       {/* POTM, pinned above the footer */}
-      {potm ? (
+      {potm && !solo ? (
         <div
           style={{
             marginTop: "auto",

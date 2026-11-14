@@ -27,6 +27,19 @@ export default async function Image({ params }: { params: { id: string } }) {
   const teams = matchTeams(m);
   const corner = m.groundName ? `At ${m.groundName}` : undefined;
 
+  if (m.individuals) {
+    const top = m.individuals.standings[0];
+    const done = m.phase === "completed";
+    return ogImage({
+      label: done ? (m.status === "abandoned" ? "ENDED" : "RESULT") : "LIVE",
+      live: !done,
+      corner,
+      kicker: teams,
+      headline: matchLine(m),
+      footer: top && !done ? `Top · ${top.displayName} ${top.points} pts` : undefined,
+    });
+  }
+
   if (m.phase === "completed") {
     const a = sideTotals(m, "A");
     const b = sideTotals(m, "B");

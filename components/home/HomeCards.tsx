@@ -27,7 +27,12 @@ import Link from "next/link";
 export type MatchRow = FunctionReturnType<typeof api.matches.list>[number];
 export type SeriesRow = FunctionReturnType<typeof api.tournaments.list>[number];
 
-export function matchType(m: Pick<MatchRow, "format" | "overs">) {
+export function matchType(
+  m: Pick<MatchRow, "format" | "overs"> & {
+    individuals?: { players: number; oversEach?: number } | null;
+  },
+) {
+  if (m.individuals) return "Individuals";
   return m.format === "test" ? "Test" : `${m.overs} ov`;
 }
 
@@ -231,10 +236,12 @@ export function LiveHero({
   onEnd: (matchId: string, label: string) => void;
   onDelete: (matchId: string, label: string) => void;
 }) {
-  const label = `${match.sideAName} vs ${match.sideBName}`;
+  const ind = match.individuals;
+  const label = ind ? "Individuals" : `${match.sideAName} vs ${match.sideBName}`;
   // Mid-break the score belongs to the innings that just ended while
   // battingSide already points at whoever is next — don't pin one to the other.
-  const scoring = match.live && !match.live.inBreak;
+  // Individuals: the total of everyone's runs means nothing, so no score.
+  const scoring = !ind && match.live && !match.live.inBreak;
   const battingName =
     match.live?.battingSide === "A" ? match.sideAName : match.sideBName;
   const otherName =
@@ -287,14 +294,16 @@ export function LiveHero({
               lines={2}
               className="mt-3 text-[15px] font-semibold text-bg"
             >
-              {match.sideAName}
+              {ind ? `${ind.players} players` : match.sideAName}
             </TruncText>
-            <TruncText
-              lines={2}
-              className="mt-0.5 text-[15px] font-semibold text-bg/70"
-            >
-              {match.sideBName}
-            </TruncText>
+            {ind ? null : (
+              <TruncText
+                lines={2}
+                className="mt-0.5 text-[15px] font-semibold text-bg/70"
+              >
+                {match.sideBName}
+              </TruncText>
+            )}
             <p className="mt-2 text-[13px] text-bg/70">
               {match.live?.inBreak ? "Innings break" : "Match in progress"}
             </p>
@@ -341,7 +350,8 @@ export function MatchCard({
     : match.status === "scheduled" && !isObserver
       ? `/matches/${match._id}/score`
       : `/matches/${match._id}`;
-  const label = `${match.sideAName} vs ${match.sideBName}`;
+  const ind = match.individuals;
+  const label = ind ? "Individuals" : `${match.sideAName} vs ${match.sideBName}`;
 
   // A finished match leads with whoever won: the trophy and the running order
   // answer "who won" before you read a word of the result.
@@ -353,7 +363,17 @@ export function MatchCard({
         ? match.sideBName
         : undefined;
   const [first, second] = (
-    decided && match.winnerSide === "B"
+    ind
+      ? [
+          {
+            name: `${ind.players} players · ${
+              ind.oversEach !== undefined ? `${ind.oversEach} overs each` : "Unlimited"
+            }`,
+            score: null,
+          },
+          { name: "", score: null },
+        ]
+      : decided && match.winnerSide === "B"
       ? [
           { name: match.sideBName, score: match.scoreB },
           { name: match.sideAName, score: match.scoreA },
@@ -368,7 +388,9 @@ export function MatchCard({
     match.live?.battingSide === "A" ? match.sideAName : match.sideBName;
 
   const meta =
-    isLive && match.live && !match.live.inBreak
+    ind && isLive
+      ? "In progress"
+      : isLive && match.live && !match.live.inBreak
       ? `${battingName} ${match.live.totalRuns}/${match.live.wickets} (${match.live.oversText})`
       : isLive && match.live?.inBreak
         ? "Innings break"
@@ -380,7 +402,10 @@ export function MatchCard({
               ? (match.resultText ?? "No result")
               : (marginText(match.resultText, winnerName) ?? "Result pending");
 
-  const potm = match.potm ?? [];
+  // Individuals: the winner is Player of the Match and already leads the
+  // result line, so no second footer.
+  const potm = ind ? [] : (match.potm ?? []);
+  const indWon = !!ind && match.status === "completed";
 
   return (
     <div
@@ -427,7 +452,7 @@ export function MatchCard({
                   </span>
                 ) : null}
               </div>
-              <div className="flex items-baseline gap-2">
+              <div className={cn("flex items-baseline gap-2", ind && "hidden")}>
                 <TruncText lines={2} className="flex-1 text-[15px] text-muted">
                   {second.name}
                 </TruncText>
@@ -445,7 +470,7 @@ export function MatchCard({
                 <span
                   className={cn(
                     "tabular min-w-0 flex-1 text-[13px]",
-                    decided ? "font-medium text-ink" : "text-muted",
+                    decided || indWon ? "font-medium text-ink" : "text-muted",
                   )}
                 >
                   {sentenceCase(meta)}
