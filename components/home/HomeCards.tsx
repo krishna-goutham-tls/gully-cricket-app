@@ -105,20 +105,16 @@ function TournamentChip({ name, dark }: { name: string; dark?: boolean }) {
   );
 }
 
-function ResumeOrWatch({
-  matchId,
-  dark,
-}: {
-  matchId: string;
-  dark?: boolean;
-}) {
+function ResumeOrWatch({ matchId, dark }: { matchId: string; dark?: boolean }) {
   const { isObserver } = useAuth();
   if (isObserver) {
     return (
       <Button
         href={`/matches/${matchId}/watch`}
         fullWidth
-        className={dark ? "bg-bg text-ink shadow-none active:bg-bg/90" : undefined}
+        className={
+          dark ? "bg-bg text-ink shadow-none active:bg-bg/90" : undefined
+        }
       >
         <Eye className="h-[18px] w-[18px]" strokeWidth={2.4} />
         Watch live
@@ -129,7 +125,9 @@ function ResumeOrWatch({
     <Button
       href={`/matches/${matchId}/score`}
       fullWidth
-      className={dark ? "bg-bg text-ink shadow-none active:bg-bg/90" : undefined}
+      className={
+        dark ? "bg-bg text-ink shadow-none active:bg-bg/90" : undefined
+      }
     >
       <Pencil className="h-[18px] w-[18px]" strokeWidth={2.4} />
       Resume scoring
@@ -237,7 +235,9 @@ export function LiveHero({
   onDelete: (matchId: string, label: string) => void;
 }) {
   const ind = match.individuals;
-  const label = ind ? "Individuals" : `${match.sideAName} vs ${match.sideBName}`;
+  const label = ind
+    ? "Individuals"
+    : `${match.sideAName} vs ${match.sideBName}`;
   // Mid-break the score belongs to the innings that just ended while
   // battingSide already points at whoever is next — don't pin one to the other.
   // Individuals: the total of everyone's runs means nothing, so no score.
@@ -351,11 +351,14 @@ export function MatchCard({
       ? `/matches/${match._id}/score`
       : `/matches/${match._id}`;
   const ind = match.individuals;
-  const label = ind ? "Individuals" : `${match.sideAName} vs ${match.sideBName}`;
+  const label = ind
+    ? "Individuals"
+    : `${match.sideAName} vs ${match.sideBName}`;
 
   // A finished match leads with whoever won: the trophy and the running order
   // answer "who won" before you read a word of the result.
-  const decided = match.status === "completed" && match.winnerSide !== undefined;
+  const decided =
+    match.status === "completed" && match.winnerSide !== undefined;
   const winnerName =
     match.winnerSide === "A"
       ? match.sideAName
@@ -366,22 +369,20 @@ export function MatchCard({
     ind
       ? [
           {
-            name: `${ind.players} players · ${
-              ind.oversEach !== undefined ? `${ind.oversEach} overs each` : "Unlimited"
-            }`,
+            name: individualsLine(ind),
             score: null,
           },
           { name: "", score: null },
         ]
       : decided && match.winnerSide === "B"
-      ? [
-          { name: match.sideBName, score: match.scoreB },
-          { name: match.sideAName, score: match.scoreA },
-        ]
-      : [
-          { name: match.sideAName, score: match.scoreA },
-          { name: match.sideBName, score: match.scoreB },
-        ]
+        ? [
+            { name: match.sideBName, score: match.scoreB },
+            { name: match.sideAName, score: match.scoreA },
+          ]
+        : [
+            { name: match.sideAName, score: match.scoreA },
+            { name: match.sideBName, score: match.scoreB },
+          ]
   ) as Array<{ name: string; score: string | null }>;
 
   const battingName =
@@ -391,16 +392,17 @@ export function MatchCard({
     ind && isLive
       ? "In progress"
       : isLive && match.live && !match.live.inBreak
-      ? `${battingName} ${match.live.totalRuns}/${match.live.wickets} (${match.live.oversText})`
-      : isLive && match.live?.inBreak
-        ? "Innings break"
-        : match.status === "live"
-          ? "In progress"
-          : match.status === "scheduled"
-            ? "Tap to continue setup"
-            : match.status === "abandoned"
-              ? (match.resultText ?? "No result")
-              : (marginText(match.resultText, winnerName) ?? "Result pending");
+        ? `${battingName} ${match.live.totalRuns}/${match.live.wickets} (${match.live.oversText})`
+        : isLive && match.live?.inBreak
+          ? "Innings break"
+          : match.status === "live"
+            ? "In progress"
+            : match.status === "scheduled"
+              ? "Tap to continue setup"
+              : match.status === "abandoned"
+                ? (match.resultText ?? "No result")
+                : (marginText(match.resultText, winnerName) ??
+                  "Result pending");
 
   // Individuals: the winner is Player of the Match and already leads the
   // result line, so no second footer.
@@ -536,7 +538,10 @@ export function SeriesCard({ series }: { series: SeriesRow }) {
     >
       <div className="flex items-center gap-2">
         <Trophy className="h-4 w-4 shrink-0 text-accent-deep" />
-        <TruncText lines={2} className="flex-1 text-[15px] font-semibold text-ink">
+        <TruncText
+          lines={2}
+          className="flex-1 text-[15px] font-semibold text-ink"
+        >
           {series.name}
         </TruncText>
         <span className="shrink-0 rounded-full bg-ink/[0.06] px-2 py-0.5 text-[11px] font-semibold text-muted">
@@ -589,12 +594,25 @@ export function SeriesCard({ series }: { series: SeriesRow }) {
   );
 }
 
+/** "3 players · 2 overs each", or "3 players · Unlimited". */
+function individualsLine(ind: { players: number; oversEach?: number }) {
+  const overs =
+    ind.oversEach === undefined
+      ? "Unlimited"
+      : `${ind.oversEach} ${ind.oversEach === 1 ? "over" : "overs"} each`;
+  return `${ind.players} players · ${overs}`;
+}
+
 /**
  * Home's last result, larger than a list card: both scores, who won and by
  * how much, and the Player of the Match. The whole card opens the scorecard.
  */
 export function ResultCard({ match }: { match: MatchRow }) {
-  const potm = match.potm ?? [];
+  const ind = match.individuals;
+  // Individuals: the winner is the Player of the Match and the result line
+  // already names them, so the card skips the sides and the POTM block.
+  const potm = ind ? [] : (match.potm ?? []);
+  const indWon = !!ind && !!match.resultText && match.status === "completed";
   const sides = [
     { side: "A" as const, name: match.sideAName, score: match.scoreA },
     { side: "B" as const, name: match.sideBName, score: match.scoreB },
@@ -608,46 +626,58 @@ export function ResultCard({ match }: { match: MatchRow }) {
         <span className="min-w-0 flex-1 text-[11px] font-semibold uppercase tracking-wide text-faint">
           Last result
         </span>
-        {match.tournamentName ? <TournamentChip name={match.tournamentName} /> : null}
+        {match.tournamentName ? (
+          <TournamentChip name={match.tournamentName} />
+        ) : null}
         <span className="tabular shrink-0 text-[13px] text-muted">
           {matchDate(match.createdAt)} · {matchType(match)}
         </span>
         <ChevronRight className="h-4 w-4 shrink-0 text-faint" />
       </div>
-      <div className="mt-2 space-y-1">
-        {sides.map((s) => {
-          const won = match.winnerSide === s.side;
-          return (
-            <div key={s.side} className="flex items-baseline gap-2">
-              <TruncText
-                lines={2}
-                className={cn(
-                  "flex-1 text-[15px] font-semibold",
-                  won ? "text-ink" : "text-muted",
-                )}
-              >
-                {s.name}
-              </TruncText>
-              {/* A side that never faced a ball still gets a line, so the
-                  card never shows one team with a score and one without. */}
-              {s.score ? (
-                <span
+      {ind ? (
+        <p className="mt-2 text-[15px] font-semibold text-muted">
+          {individualsLine(ind)}
+        </p>
+      ) : (
+        <div className="mt-2 space-y-1">
+          {sides.map((s) => {
+            const won = match.winnerSide === s.side;
+            return (
+              <div key={s.side} className="flex items-baseline gap-2">
+                <TruncText
+                  lines={2}
                   className={cn(
-                    "tabular shrink-0 text-2xl font-semibold tracking-tight",
+                    "flex-1 text-[15px] font-semibold",
                     won ? "text-ink" : "text-muted",
                   )}
                 >
-                  {s.score}
-                </span>
-              ) : (
-                <span className="shrink-0 text-[13px] text-muted">Did not bat</span>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                  {s.name}
+                </TruncText>
+                {/* A side that never faced a ball still gets a line, so the
+                  card never shows one team with a score and one without. */}
+                {s.score ? (
+                  <span
+                    className={cn(
+                      "tabular shrink-0 text-2xl font-semibold tracking-tight",
+                      won ? "text-ink" : "text-muted",
+                    )}
+                  >
+                    {s.score}
+                  </span>
+                ) : (
+                  <span className="shrink-0 text-[13px] text-muted">
+                    Did not bat
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
       <p className="mt-2 flex items-center gap-1.5 text-[15px] font-semibold text-ink">
-        {match.winnerSide ? <Trophy className="h-4 w-4 shrink-0 text-accent-deep" /> : null}
+        {match.winnerSide || (indWon && match.resultText !== "No winner") ? (
+          <Trophy className="h-4 w-4 shrink-0 text-accent-deep" />
+        ) : null}
         <span className="min-w-0">{match.resultText ?? "Result pending"}</span>
       </p>
       {potm.length > 0 ? (
@@ -660,7 +690,9 @@ export function ResultCard({ match }: { match: MatchRow }) {
               {potm.map((p) => p.name).join(" & ")}
             </span>
             {potm.length === 1 ? (
-              <span className="tabular text-[13px] text-muted">{potmFigures(potm[0])}</span>
+              <span className="tabular text-[13px] text-muted">
+                {potmFigures(potm[0])}
+              </span>
             ) : null}
           </p>
         </div>

@@ -23,6 +23,7 @@ import type * as lib_crypto from "../lib/crypto.js";
 import type * as lib_features from "../lib/features.js";
 import type * as lib_grounds from "../lib/grounds.js";
 import type * as lib_impact from "../lib/impact.js";
+import type * as lib_individuals from "../lib/individuals.js";
 import type * as lib_invite from "../lib/invite.js";
 import type * as lib_matchStats from "../lib/matchStats.js";
 import type * as lib_matches from "../lib/matches.js";
@@ -73,6 +74,7 @@ declare const fullApi: ApiFromModules<{
   "lib/features": typeof lib_features;
   "lib/grounds": typeof lib_grounds;
   "lib/impact": typeof lib_impact;
+  "lib/individuals": typeof lib_individuals;
   "lib/invite": typeof lib_invite;
   "lib/matchStats": typeof lib_matchStats;
   "lib/matches": typeof lib_matches;

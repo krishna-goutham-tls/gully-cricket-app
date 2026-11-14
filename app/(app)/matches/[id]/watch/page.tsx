@@ -124,7 +124,7 @@ export default function WatchPage() {
             {ind
               ? `Individuals · ${
                   ind.oversEach !== undefined
-                    ? `${ind.oversEach} overs each`
+                    ? `${ind.oversEach} ${ind.oversEach === 1 ? "over" : "overs"} each`
                     : "Unlimited"
                 }`
               : live

@@ -877,7 +877,7 @@ export default function NewMatchPage() {
   if (individuals) {
     const first = order[0] ?? null;
     const bowlerOptions = order.filter((id) => id !== first);
-    const line = oversEach > 0 ? `Limited · ${oversEach} overs each` : "Unlimited";
+    const line = oversEach > 0 ? `Limited · ${oversEach} ${oversEach === 1 ? "over" : "overs"} each` : "Unlimited";
     const canStartSolo = order.length >= 2 && !!bowler && bowler !== first;
     return (
       <div className="flex min-h-dvh flex-col bg-bg">

@@ -146,7 +146,7 @@ export default function MatchDetailPage() {
   const ind = card.individuals;
   const indTag = ind
     ? `Individuals · ${
-        ind.oversEach !== undefined ? `${ind.oversEach} overs each` : "Unlimited"
+        ind.oversEach !== undefined ? `${ind.oversEach} ${ind.oversEach === 1 ? "over" : "overs"} each` : "Unlimited"
       }`
     : null;
   const shareData: MatchShareData = {
