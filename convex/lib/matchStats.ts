@@ -817,6 +817,9 @@ export function foldMatch(
       groundId: match.groundId,
       winnerSide: match.winnerSide,
       ...(winnerUserIds ? { winnerUserIds } : {}),
+      ...(individuals && match.ruleSnapshot.maxBallsPerBatsman === undefined
+        ? { unlimited: true }
+        : {}),
       sideAName: match.sideAName,
       sideBName: match.sideBName,
       sideACaptainId: match.sideAPlayerIds[0],

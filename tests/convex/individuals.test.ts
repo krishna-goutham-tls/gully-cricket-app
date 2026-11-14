@@ -213,3 +213,45 @@ describe("individuals winner rules", () => {
     );
   });
 });
+
+describe("individuals on the boards", () => {
+  test("Impact: individuals play has its own average, team values do not move", async () => {
+    const { playMatch } = await import("./fixtures");
+    const { t, people, orgId } = await setup(["Asha", "Ravi", "Teja", "Kiran", "Mani"]);
+    const [asha, ravi, teja, kiran, mani] = people;
+    const tok = asha.token;
+    await playMatch(
+      t,
+      asha,
+      orgId,
+      [asha, ravi],
+      [teja, kiran],
+      { striker: asha, other: ravi, bowler: teja, balls: [{ runsBat: 4 }, { runsBat: 1 }, { out: asha.userId }, {}, { runsBat: 2 }, { runsBat: 6 }] },
+      { striker: teja, other: kiran, bowler: asha, balls: [{ runsBat: 1 }, {}, { out: kiran.userId }, { runsBat: 4 }, {}, { runsBat: 1 }] },
+    );
+    const before = await t.query(api.stats.impact, { token: tok, orgId });
+    const ashaBefore = before!.rows.find((r) => r.displayName === "Asha")!;
+
+    // Ravi, Teja and Mani play individuals; big unlimited scores.
+    const matchId = await create(t, asha, orgId, [ravi, teja, mani]);
+    for (const r of [6, 6, 6, 6, 6]) await ball(t, tok, matchId, r);
+    await t.mutation(api.scoring.endInnings, { token: tok, matchId });
+
+    const after = await t.query(api.stats.impact, { token: tok, orgId });
+    const ashaAfter = after!.rows.find((r) => r.displayName === "Asha")!;
+    expect(ashaAfter.total).toBeCloseTo(ashaBefore.total, 9);
+    expect(after!.rows.find((r) => r.displayName === "Mani")!.matches).toBe(1);
+    // Ravi played both kinds: two matches on the board.
+    expect(after!.rows.find((r) => r.displayName === "Ravi")!.matches).toBe(2);
+
+    // Leaders: individuals runs count on the default board; team wins skip it.
+    const board = await t.query(api.stats.leaderboard, { token: tok, orgId });
+    expect(board!.batting.find((r) => r.displayName === "Ravi")!.runs).toBeGreaterThanOrEqual(30);
+    expect(board!.formats.individuals).toBe(1);
+    expect(board!.teams.some((r) => r.name === "Individuals")).toBe(false);
+    const solo = await t.query(api.stats.leaderboard, { token: tok, orgId, format: "individuals" });
+    expect(solo!.matchCount).toBe(1);
+    const teamsLimited = await t.query(api.stats.leaderboard, { token: tok, orgId, format: "limited" });
+    expect(teamsLimited!.matchCount).toBe(1);
+  });
+});

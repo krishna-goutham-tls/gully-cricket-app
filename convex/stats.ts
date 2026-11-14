@@ -28,7 +28,10 @@ import {
   emptyImpactTotals,
   impactBaseline,
   impactMinMatches,
-  impactScore,
+  combinedImpact,
+  impactKindOf,
+  type ImpactBaseline,
+  type ImpactKind,
   type ImpactTotals,
 } from "./lib/impact";
 import { Doc, Id } from "./_generated/dataModel";
@@ -42,6 +45,7 @@ import {
 import { legalBallToOverText } from "./lib/scoring";
 import { captainTeamLabel } from "./lib/teams";
 import { matchFormat } from "./schema";
+import { isIndividuals, isIndividualsStamp } from "./lib/individuals";
 import {
   basePoints,
   battingMilestoneBonus,
@@ -71,6 +75,22 @@ import {
 } from "./lib/awards";
 
 type Format = "limited" | "test";
+/**
+ * The Leaders and profile filter. "limited" is teams limited overs only;
+ * "individuals" is every individuals match (convex/lib/individuals.ts).
+ * No filter = everything, individuals included (Krishna, 2026-11-14).
+ */
+type BoardFormat = Format | "individuals";
+const boardFormat = v.union(matchFormat, v.literal("individuals"));
+
+function kindOf(row: { format: Format; play?: "individuals" }): BoardFormat {
+  return isIndividualsStamp(row) ? "individuals" : row.format;
+}
+
+/** Matches of each kind, for the filters that show only when two were played. */
+function emptyFormats(): Record<BoardFormat, number> {
+  return { test: 0, limited: 0, individuals: 0 };
+}
 
 type BatAgg = {
   userId: Id<"users">;
@@ -258,12 +278,17 @@ function emptyFocus(): Focus {
 
 /** afterTs inclusive, beforeTs exclusive — the same rule the replay used. */
 function inWindow(
-  row: { date: number; format: Format; groundId?: Id<"grounds"> },
-  opts: Window & { format?: Format; ground?: GroundFilter },
+  row: {
+    date: number;
+    format: Format;
+    play?: "individuals";
+    groundId?: Id<"grounds">;
+  },
+  opts: Window & { format?: BoardFormat; ground?: GroundFilter },
 ) {
   if (opts.afterTs !== undefined && row.date < opts.afterTs) return false;
   if (opts.beforeTs !== undefined && row.date >= opts.beforeTs) return false;
-  if (opts.format !== undefined && row.format !== opts.format) return false;
+  if (opts.format !== undefined && kindOf(row) !== opts.format) return false;
   if (opts.ground !== undefined) {
     const at = row.groundId ?? opts.ground.homeId;
     if (String(at) !== String(opts.ground.groundId)) return false;
@@ -336,7 +361,7 @@ function dateBounds({ afterTs, beforeTs }: Window): [number, number] {
  */
 function aggregateStamps(
   set: StampSet,
-  opts: Window & { format?: Format; ground?: GroundFilter },
+  opts: Window & { format?: BoardFormat; ground?: GroundFilter },
 ): OrgSnapshot {
   const snap: OrgSnapshot = {
     points: new Map(),
@@ -662,7 +687,7 @@ async function stampFocus(
   set: StampSet,
   orgId: Id<"orgs">,
   userId: Id<"users">,
-  opts: Window & { format?: Format },
+  opts: Window & { format?: BoardFormat },
 ): Promise<Focus> {
   const focus = emptyFocus();
   const key = String(userId);
@@ -1363,7 +1388,7 @@ type LeaderboardArgs = {
   orgId: Id<"orgs">;
   includeVisitorsAndJuniors?: boolean;
   seasonId?: Id<"seasons">;
-  format?: Format;
+  format?: BoardFormat;
   /** One ground only. */
   groundId?: Id<"grounds">;
 };
@@ -1411,8 +1436,9 @@ async function leaderboardFor(
   const set = await loadStampSet(ctx, args.orgId, { afterTs, beforeTs });
   const current = aggregateStamps(set, currentWindow);
   const previous = aggregateStamps(set, previousWindow);
+  // Individuals have no teams, so they never reach the team-wins board.
   const teamResults = set.matches
-    .filter((m) => inWindow(m, currentWindow))
+    .filter((m) => !isIndividualsStamp(m) && inWindow(m, currentWindow))
     .sort((a, b) => a.matchOrder - b.matchOrder);
 
   // One name map for both snapshots — a week-ago player is always a subset of
@@ -1480,9 +1506,9 @@ async function leaderboardFor(
 
   // Matches per format in this time window, across every ground. Leaders
   // shows its Test/ODI filter only when both formats were played.
-  const formats = { test: 0, limited: 0 };
+  const formats = emptyFormats();
   for (const m of set.matches) {
-    if (inWindow(m, { afterTs, beforeTs })) formats[m.format] += 1;
+    if (inWindow(m, { afterTs, beforeTs })) formats[kindOf(m)] += 1;
   }
 
   return {
@@ -1519,8 +1545,8 @@ const boardArgs = {
    */
   includeVisitorsAndJuniors: v.optional(v.boolean()),
   seasonId: v.optional(v.id("seasons")),
-  /** Tests or limited only. Omit for the mixed board (the default). */
-  format: v.optional(matchFormat),
+  /** Tests, teams limited or individuals only. Omit for the mixed board (the default). */
+  format: v.optional(boardFormat),
 };
 
 const leaderboardArgs = {
@@ -1565,10 +1591,22 @@ export async function impactBoardFor(
   const set = await loadStampSet(ctx, args.orgId, window);
   const matchCount = set.matches.filter((m) => inWindow(m, window)).length;
 
-  const totals = new Map<string, ImpactTotals>();
+  // Each player's totals per kind of play (`lib/impact.ts`), so each kind is
+  // measured against its own average player.
+  const kindOfMatch = new Map<string, ImpactKind>();
+  for (const m of set.matches) kindOfMatch.set(String(m.matchId), impactKindOf(m));
+  const byKind = new Map<ImpactKind, Map<string, ImpactTotals>>();
+  const keySet = new Set<string>();
   for (const r of set.players) {
     if (!inWindow(r, window)) continue;
     const key = String(r.userId);
+    keySet.add(key);
+    const kind = kindOfMatch.get(String(r.matchId)) ?? "teams";
+    let totals = byKind.get(kind);
+    if (!totals) {
+      totals = new Map();
+      byKind.set(kind, totals);
+    }
     let t = totals.get(key);
     if (!t) {
       t = emptyImpactTotals();
@@ -1595,11 +1633,27 @@ export async function impactBoardFor(
   }
 
   // The average is everyone's balls, visitors included: they bowled and
-  // faced those balls against the regulars being ranked.
-  const base = impactBaseline(totals.values());
+  // faced those balls against the regulars being ranked. One per kind.
+  const bases = new Map<ImpactKind, ImpactBaseline>();
+  for (const [kind, totals] of Array.from(byKind.entries())) {
+    bases.set(kind, impactBaseline(totals.values()));
+  }
+  // The how-it-works sheet shows the kind most played in the window.
+  let shown: ImpactKind = "teams";
+  let shownMatches = -1;
+  for (const kind of Array.from(byKind.keys())) {
+    const n = set.matches.filter(
+      (m) => inWindow(m, window) && impactKindOf(m) === kind,
+    ).length;
+    if (n > shownMatches) {
+      shown = kind;
+      shownMatches = n;
+    }
+  }
+  const base = bases.get(shown) ?? impactBaseline([]);
   const minMatches = impactMinMatches(matchCount);
   const includeExtras = await orgFeatureOn(ctx, args.orgId, "visitorsOnLeaders");
-  const keys = Array.from(totals.keys());
+  const keys = Array.from(keySet);
   const [names, tags] = await Promise.all([
     resolveNames(ctx, keys),
     tagsForUsers(ctx, args.orgId, keys),
@@ -1607,14 +1661,17 @@ export async function impactBoardFor(
 
   const rows = keys
     .map((key) => {
-      const t = totals.get(key)!;
-      const score = impactScore(t, base);
+      const parts = Array.from(byKind.entries()).flatMap(([kind, totals]) => {
+        const t = totals.get(key);
+        return t ? [{ totals: t, base: bases.get(kind)! }] : [];
+      });
+      const { matches, ...score } = combinedImpact(parts);
       return {
         userId: key as Id<"users">,
         displayName: names.get(key) ?? "Player",
         playerTags: tags.get(key) ?? [],
-        matches: t.matches,
-        qualified: t.matches >= minMatches,
+        matches,
+        qualified: matches >= minMatches,
         ...score,
       };
     })
@@ -1910,7 +1967,7 @@ async function playerStatsFor(
     orgId: Id<"orgs">;
     userId: Id<"users">;
     seasonId?: Id<"seasons">;
-    format?: Format;
+    format?: BoardFormat;
   },
 ) {
   const player = await ctx.db.get(args.userId);
@@ -1946,11 +2003,11 @@ async function playerStatsFor(
 
   // Matches of each format in the window, before the format filter, so the
   // profile only offers the Test / Limited switch to someone who played both.
-  const formats = { test: 0, limited: 0 };
+  const formats = emptyFormats();
   for (const r of set.players) {
     if (String(r.userId) !== key || !inWindow(r, window)) continue;
     if (!r.named && !r.bat && !r.bowl) continue;
-    formats[r.format] += 1;
+    formats[kindOf(r)] += 1;
   }
 
   let runOuts = 0;
@@ -2105,14 +2162,27 @@ async function playerStatsFor(
         sideLabel(m, "A"),
         sideLabel(m, "B"),
       ]);
+      // Individuals: no opponent and no team result — won means the most
+      // points that day.
+      const solo = isIndividuals(m);
       return {
         matchId: m._id,
         date: m.createdAt,
         format: m.ruleSnapshot.format,
-        opponent:
-          side === "A" ? labelB : side === "B" ? labelA : `${labelA} v ${labelB}`,
-        bothSides: side === undefined,
-        result: args
+        individuals: solo,
+        opponent: solo
+          ? "Individuals"
+          : side === "A"
+            ? labelB
+            : side === "B"
+              ? labelA
+              : `${labelA} v ${labelB}`,
+        bothSides: !solo && side === undefined,
+        result: solo
+          ? (m.winnerUserIds ?? []).some((id) => String(id) === key)
+            ? ("won" as const)
+            : ("none" as const)
+          : args
           ? matchResult(args)
           : side === undefined || m.winnerSide === undefined
             ? ("none" as const)
@@ -2308,8 +2378,8 @@ const playerStatsArgs = {
   userId: v.id("users"),
   /** Omit for the career numbers — the default every profile shows. */
   seasonId: v.optional(v.id("seasons")),
-  /** Tests or limited only. Omit for both. */
-  format: v.optional(matchFormat),
+  /** Tests, teams limited or individuals only. Omit for all. */
+  format: v.optional(boardFormat),
 };
 
 export const playerStats = query({

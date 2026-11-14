@@ -6,6 +6,7 @@ import { requireActiveMembership, requireOrgViewer } from "./lib/session";
 import { captainTeamLabel } from "./lib/teams";
 import { buildIndividualsSnapshot, buildRuleSnapshot } from "./lib/rules";
 import { orgFeatureOn } from "./lib/features";
+import { isIndividuals } from "./lib/individuals";
 import { clearMatchStamps } from "./lib/matchStats";
 import { matchPoints } from "./lib/points";
 import { resolvePlayableGround } from "./lib/grounds";
@@ -200,6 +201,19 @@ export const listPage = query({
   },
 });
 
+/**
+ * Individuals only: how many players and overs each (absent = Unlimited).
+ * Null for a teams match, so screens can branch on it.
+ */
+function individualsInfo(m: Doc<"matches">) {
+  if (!isIndividuals(m)) return null;
+  const balls = m.ruleSnapshot.maxBallsPerBatsman;
+  return {
+    players: m.sideAPlayerIds.length,
+    oversEach: balls !== undefined ? balls / m.ruleSnapshot.ballsPerOver : undefined,
+  };
+}
+
 /** One match card's row: names, scorelines, POTM and the live score. */
 async function listRow(ctx: QueryCtx, m: Doc<"matches">) {
   // First player of each side is its captain; resolve default "Team A/B"
@@ -320,6 +334,7 @@ async function listRow(ctx: QueryCtx, m: Doc<"matches">) {
     // game. Callers need the format to label it honestly.
     format: m.ruleSnapshot.format,
     overs: m.ruleSnapshot.maxOversInnings,
+    individuals: individualsInfo(m),
     resultText: m.resultText,
     winnerSide: m.winnerSide,
     tournamentId: m.tournamentId,
@@ -396,6 +411,7 @@ export const get = query({
         : 2,
       battingMode: match.ruleSnapshot.battingModeDefault,
       lastBatsmanAlone: match.ruleSnapshot.lastBatsmanAlone,
+      individuals: individualsInfo(match),
       clock: publicMatchClock(match.clock),
       resultText: match.resultText,
       winnerSide: match.winnerSide,
@@ -499,10 +515,14 @@ export const setPlayerSides = mutation({
       throw new Error("This match is already over");
     }
 
-    const wanted = new Set<Side>(args.sides as Side[]);
-    if (wanted.size !== args.sides.length) {
+    const solo = isIndividuals(match);
+    const asked = new Set<Side>(args.sides as Side[]);
+    if (asked.size !== args.sides.length) {
       throw new Error("Duplicate side");
     }
+    // Individuals: every player is on both sides, or out of the match.
+    const wanted: Set<Side> =
+      solo && asked.size > 0 ? new Set<Side>(["A", "B"]) : asked;
 
     const player = await ctx.db.get(args.userId);
     if (!player) throw new Error("Player not found");
@@ -568,12 +588,14 @@ export const setPlayerSides = mutation({
         // Append: index 0 is the captain and must not shift.
         list.push(args.userId);
       } else if (!shouldBeOn && isOn) {
-        if (played.has(s)) {
+        if (played.has(s) || (solo && played.size > 0)) {
           throw new Error(
-            `${player.displayName} has already played for ${nameOfSide(s)} — they can't be taken off that side now.`,
+            solo
+              ? `${player.displayName} has already played — they can't be taken out now.`
+              : `${player.displayName} has already played for ${nameOfSide(s)} — they can't be taken off that side now.`,
           );
         }
-        if (index === 0) {
+        if (index === 0 && !solo) {
           throw new Error(
             `${player.displayName} is ${nameOfSide(s)}'s captain and can't be taken off that side.`,
           );
@@ -583,7 +605,9 @@ export const setPlayerSides = mutation({
     }
 
     if (next.A.length < 2 || next.B.length < 2) {
-      throw new Error("Each team needs at least 2 players");
+      throw new Error(
+        solo ? "Individuals needs at least 2 players" : "Each team needs at least 2 players",
+      );
     }
 
     await ctx.db.patch(match._id, {

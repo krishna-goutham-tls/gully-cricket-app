@@ -23,6 +23,14 @@
  *
  * Counted numbers only: runs, balls, wickets and catches against juniors stay
  * out, the same rule as all-round points (`points.ts` `earnsPoints`).
+ *
+ * Kinds of play (Krishna, 2026-11-14). Teams, Individuals Limited and
+ * Individuals Unlimited score at different rates, so each kind has its own
+ * average player. A player's match in one kind is measured against that
+ * kind's average, then all their matches are added and divided by matches
+ * played. Bat and Bowl still add up to zero inside each kind, so no kind
+ * outweighs another. In every kind a wicket is worth the runs of an average
+ * batting innings, and in Individuals that is one batter's turn.
  */
 
 /** Share of the window's matches a player must play to be ranked. */
@@ -141,5 +149,45 @@ export function impactScore(
     bowl: per(bowl),
     field: per(field),
     total: per(bat + bowl + field),
+  };
+}
+
+/** The kinds of play Impact measures apart. */
+export type ImpactKind = "teams" | "individualsLimited" | "individualsUnlimited";
+
+export function impactKindOf(match: {
+  play?: "individuals";
+  unlimited?: boolean;
+}): ImpactKind {
+  if (match.play !== "individuals") return "teams";
+  return match.unlimited ? "individualsUnlimited" : "individualsLimited";
+}
+
+/**
+ * One player's Impact across kinds: each kind's part scored against its own
+ * average, weighted by the matches played in it, divided by all matches.
+ */
+export function combinedImpact(
+  parts: Array<{ totals: ImpactTotals; base: ImpactBaseline }>,
+): ImpactScore & { matches: number } {
+  let matches = 0;
+  let bat = 0;
+  let bowl = 0;
+  let field = 0;
+  for (const { totals, base } of parts) {
+    if (totals.matches <= 0) continue;
+    const s = impactScore(totals, base);
+    matches += totals.matches;
+    bat += s.bat * totals.matches;
+    bowl += s.bowl * totals.matches;
+    field += s.field * totals.matches;
+  }
+  if (matches === 0) return { bat: 0, bowl: 0, field: 0, total: 0, matches };
+  return {
+    bat: bat / matches,
+    bowl: bowl / matches,
+    field: field / matches,
+    total: (bat + bowl + field) / matches,
+    matches,
   };
 }

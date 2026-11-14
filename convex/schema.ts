@@ -535,6 +535,8 @@ export default defineSchema({
     winnerSide: v.optional(side),
     /** Individuals only, as on the match. */
     winnerUserIds: v.optional(v.array(v.id("users"))),
+    /** Individuals Unlimited: no balls limit per batter. Impact keeps its own average. */
+    unlimited: v.optional(v.boolean()),
     sideAName: v.string(),
     sideBName: v.string(),
     /** Index 0 of each side — resolves "Team A" to "Team {captain}". */
