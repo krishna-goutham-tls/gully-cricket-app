@@ -4,7 +4,9 @@ import { mutation, query, MutationCtx, QueryCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
 import { requireActiveMembership, requireOrgViewer } from "./lib/session";
 import { captainTeamLabel } from "./lib/teams";
-import { buildRuleSnapshot } from "./lib/rules";
+import { buildIndividualsSnapshot, buildRuleSnapshot } from "./lib/rules";
+import { orgFeatureOn } from "./lib/features";
+import { isIndividuals } from "./lib/individuals";
 import { clearMatchStamps } from "./lib/matchStats";
 import { matchPoints } from "./lib/points";
 import { resolvePlayableGround } from "./lib/grounds";
@@ -13,11 +15,13 @@ import {
   DEFAULT_TEST_MINUTES,
   publicMatchClock,
 } from "./lib/clock";
-import { battingMode, matchFormat, side } from "./schema";
+import { battingMode, matchFormat, playMode, side } from "./schema";
 
 type Side = "A" | "B";
 
 const MAX_LIST = 40;
+/** Both side names of an individuals match, so old screens read sensibly. */
+const INDIVIDUALS_NAME = "Individuals";
 
 export const create = mutation({
   args: {
@@ -40,9 +44,23 @@ export const create = mutation({
     groundId: v.optional(v.id("grounds")),
     /** Started from a "Who's in?" poll: the poll is linked and closed. */
     pollId: v.optional(v.id("polls")),
+    /**
+     * Individuals: every player on their own. `sideAPlayerIds` is the player
+     * list in batting order; `sideBPlayerIds` is ignored and stored equal to
+     * it. `overs` is ignored.
+     */
+    play: v.optional(playMode),
+    /** Individuals Limited: overs each batter faces. Absent = Unlimited. */
+    oversEach: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const { user } = await requireActiveMembership(ctx, args.token, args.orgId);
+    const individuals = args.play === "individuals";
+    if (individuals) {
+      if (!(await orgFeatureOn(ctx, args.orgId, "individuals"))) {
+        throw new Error("Individuals is switched off for this community");
+      }
+    }
     const groundId = await resolvePlayableGround(ctx, args.orgId, args.groundId);
     const poll = args.pollId ? await ctx.db.get(args.pollId) : null;
     if (args.pollId && (!poll || String(poll.orgId) !== String(args.orgId))) {
@@ -50,31 +68,41 @@ export const create = mutation({
     }
     if (poll?.status === "cancelled") throw new Error("That game was called off");
 
-    if (args.sideAPlayerIds.length < 2 || args.sideBPlayerIds.length < 2) {
+    // Individuals: one list, stored on both sides, so every player can bat
+    // and bowl (the engine's common-player path).
+    const sideAPlayerIds = args.sideAPlayerIds;
+    const sideBPlayerIds = individuals ? args.sideAPlayerIds : args.sideBPlayerIds;
+    if (individuals) {
+      if (sideAPlayerIds.length < 2) {
+        throw new Error("Individuals needs at least 2 players");
+      }
+    } else if (sideAPlayerIds.length < 2 || sideBPlayerIds.length < 2) {
       throw new Error("Each team needs at least 2 players");
     }
     // One knob drives all four caps: common players get half (they bat & bowl
     // on both sides, so half per side keeps their match total equal to a
     // regular player's). Even keeps the common bowler a whole number of overs.
-    const ruleSnapshot = buildRuleSnapshot({
-      format: args.format,
-      overs: args.overs,
-      oversPerPlayer: args.oversPerPlayer,
-      battingMode: args.battingMode,
-      lastBatsmanAlone: args.lastBatsmanAlone,
-    });
-    const dedupA = new Set(args.sideAPlayerIds.map(String));
-    const dedupB = new Set(args.sideBPlayerIds.map(String));
+    const ruleSnapshot = individuals
+      ? buildIndividualsSnapshot({ oversEach: args.oversEach })
+      : buildRuleSnapshot({
+          format: args.format,
+          overs: args.overs,
+          oversPerPlayer: args.oversPerPlayer,
+          battingMode: args.battingMode,
+          lastBatsmanAlone: args.lastBatsmanAlone,
+        });
+    const dedupA = new Set(sideAPlayerIds.map(String));
+    const dedupB = new Set(sideBPlayerIds.map(String));
     if (
-      dedupA.size !== args.sideAPlayerIds.length ||
-      dedupB.size !== args.sideBPlayerIds.length
+      dedupA.size !== sideAPlayerIds.length ||
+      dedupB.size !== sideBPlayerIds.length
     ) {
       throw new Error("Duplicate player in a team");
     }
 
     // Every picked player must be an active member of this org
     const uniqueIds = Array.from(
-      new Set([...args.sideAPlayerIds, ...args.sideBPlayerIds]),
+      new Set([...sideAPlayerIds, ...sideBPlayerIds]),
     );
     for (const pid of uniqueIds) {
       const membership = await ctx.db
@@ -94,17 +122,19 @@ export const create = mutation({
     };
 
     const clock =
-      (args.format ?? ruleSnapshot.format) === "test"
+      !individuals && (args.format ?? ruleSnapshot.format) === "test"
         ? buildMatchClock(args.durationMinutes ?? DEFAULT_TEST_MINUTES)
         : undefined;
 
     const matchId = await ctx.db.insert("matches", {
       orgId: args.orgId,
       status: "scheduled",
-      sideAName: cleanName(args.sideAName, "Team A"),
-      sideBName: cleanName(args.sideBName, "Team B"),
-      sideAPlayerIds: args.sideAPlayerIds,
-      sideBPlayerIds: args.sideBPlayerIds,
+      sideAName: individuals ? INDIVIDUALS_NAME : cleanName(args.sideAName, "Team A"),
+      sideBName: individuals ? INDIVIDUALS_NAME : cleanName(args.sideBName, "Team B"),
+      sideAPlayerIds,
+      sideBPlayerIds,
+      // One innings with every player in it: the list is the batting side.
+      ...(individuals ? { battingFirst: "A" as const } : {}),
       ruleSnapshot,
       ...(clock ? { clock } : {}),
       ...(groundId ? { groundId } : {}),
@@ -170,6 +200,19 @@ export const listPage = query({
     };
   },
 });
+
+/**
+ * Individuals only: how many players and overs each (absent = Unlimited).
+ * Null for a teams match, so screens can branch on it.
+ */
+function individualsInfo(m: Doc<"matches">) {
+  if (!isIndividuals(m)) return null;
+  const balls = m.ruleSnapshot.maxBallsPerBatsman;
+  return {
+    players: m.sideAPlayerIds.length,
+    oversEach: balls !== undefined ? balls / m.ruleSnapshot.ballsPerOver : undefined,
+  };
+}
 
 /** One match card's row: names, scorelines, POTM and the live score. */
 async function listRow(ctx: QueryCtx, m: Doc<"matches">) {
@@ -291,6 +334,7 @@ async function listRow(ctx: QueryCtx, m: Doc<"matches">) {
     // game. Callers need the format to label it honestly.
     format: m.ruleSnapshot.format,
     overs: m.ruleSnapshot.maxOversInnings,
+    individuals: individualsInfo(m),
     resultText: m.resultText,
     winnerSide: m.winnerSide,
     tournamentId: m.tournamentId,
@@ -367,6 +411,7 @@ export const get = query({
         : 2,
       battingMode: match.ruleSnapshot.battingModeDefault,
       lastBatsmanAlone: match.ruleSnapshot.lastBatsmanAlone,
+      individuals: individualsInfo(match),
       clock: publicMatchClock(match.clock),
       resultText: match.resultText,
       winnerSide: match.winnerSide,
@@ -470,10 +515,14 @@ export const setPlayerSides = mutation({
       throw new Error("This match is already over");
     }
 
-    const wanted = new Set<Side>(args.sides as Side[]);
-    if (wanted.size !== args.sides.length) {
+    const solo = isIndividuals(match);
+    const asked = new Set<Side>(args.sides as Side[]);
+    if (asked.size !== args.sides.length) {
       throw new Error("Duplicate side");
     }
+    // Individuals: every player is on both sides, or out of the match.
+    const wanted: Set<Side> =
+      solo && asked.size > 0 ? new Set<Side>(["A", "B"]) : asked;
 
     const player = await ctx.db.get(args.userId);
     if (!player) throw new Error("Player not found");
@@ -539,12 +588,14 @@ export const setPlayerSides = mutation({
         // Append: index 0 is the captain and must not shift.
         list.push(args.userId);
       } else if (!shouldBeOn && isOn) {
-        if (played.has(s)) {
+        if (played.has(s) || (solo && played.size > 0)) {
           throw new Error(
-            `${player.displayName} has already played for ${nameOfSide(s)} — they can't be taken off that side now.`,
+            solo
+              ? `${player.displayName} has already played — they can't be taken out now.`
+              : `${player.displayName} has already played for ${nameOfSide(s)} — they can't be taken off that side now.`,
           );
         }
-        if (index === 0) {
+        if (index === 0 && !solo) {
           throw new Error(
             `${player.displayName} is ${nameOfSide(s)}'s captain and can't be taken off that side.`,
           );
@@ -554,7 +605,9 @@ export const setPlayerSides = mutation({
     }
 
     if (next.A.length < 2 || next.B.length < 2) {
-      throw new Error("Each team needs at least 2 players");
+      throw new Error(
+        solo ? "Individuals needs at least 2 players" : "Each team needs at least 2 players",
+      );
     }
 
     await ctx.db.patch(match._id, {

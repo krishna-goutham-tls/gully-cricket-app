@@ -156,8 +156,12 @@ export function InningsPane({
     chasing && inn.status === "in_progress" && card.format === "limited";
 
   const segs = partnerships(inn);
+  // Individuals bats one at a time: a stand is just one turn, already in
+  // the standings, so the partnership bar stays off.
   const best =
-    inn.totalRuns > 0 ? segs.reduce((a, b) => (b.runs > a.runs ? b : a)) : null;
+    !card.individuals && inn.totalRuns > 0
+      ? segs.reduce((a, b) => (b.runs > a.runs ? b : a))
+      : null;
 
   return (
     <section
@@ -288,7 +292,7 @@ export function InningsPane({
 
         <div className="min-w-0 border-l border-line px-4 py-2.5">
           <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-faint">
-            Bowling · {bowlingTeamName}
+            {card.individuals ? "Bowling" : `Bowling · ${bowlingTeamName}`}
           </p>
           {/* Deliberately the same shape as a batting row — name, figure,
               workload in brackets. Symmetry keeps both columns one line tall,

@@ -15,9 +15,11 @@ Status checked against the code on 2026-10-11 only where it says "checked". The 
 - [x] All communities list on `/admin` for the platform owner, and the 13 waiting join requests rejected on prod (2026-11-03, PR #46)
 - [x] Browser tests ignore the Safari preload error ("due to access control checks") in the page-error checks (2026-11-03, PR #45)
 - [x] Impact tab on Leaders (was MVP): value per match against the average player, wicket and catch values from each community's own data, Impact players switch in Extra features (2026-11-09)
+- [x] Individuals mode on local `dev` and Convex dev (2026-11-14, not pushed, not on prod): Teams | Individuals at setup, Limited or Unlimited, winner by points, standings on pad, watch, result, public link and Home. Individuals switch in Extra features, on by default
 - [ ] Remove the `stats.mvp` alias after the Impact release has been live a few days
 
 ## Next
+- [ ] Individuals release: after Krishna's go, push `dev`, staging check, Convex prod deploy, `stats:backfillStamps` and `stats:checkStamps` per community (stamps gained `play`, `winnerUserIds`, `unlimited`), PR to `main`, `appVersion:set`
 - [ ] UX, community and sign-up build. Phase 1, 1b and 2 live (2026-10-31). Phase 3 live (2026-11-02, PR #40). Phase 4 (Visitors and juniors) and the screen sweep live (2026-11-02, PR #41). Batch 3: series squads, Records, copy live (2026-11-03, PR #42). Phase 6 reworked as open sign-up, Community tab and live counter, live (2026-11-03, PR #44). Update bar (PR #45) and All communities (PR #46) live 2026-11-03. Phase 7 cleanup (polls, `pendingCount`, `requestJoin`, `submitRequest`) from 2026-11-10. Phases and results: `../implementation/ux-community-signup-2026-10-31.md`
 - [ ] B7: Orange and Purple Caps on raw most runs and wickets. Named as next in the LOG on 2026-09-19
 - [ ] B8: one tie-break for Player of the Season on Leaders, the end stamp and the wrap

@@ -6,6 +6,7 @@ import {
   type Scorecard,
 } from "@/components/match/InningsPane";
 import { MatchStory } from "@/components/match/MatchStory";
+import { StandingsTable } from "@/components/match/StandingsTable";
 import { useAuth } from "@/components/providers/AuthProvider";
 import type { MatchShareData } from "@/components/share/ShareCard";
 import { ShareButton } from "@/components/share/ShareButton";
@@ -141,8 +142,25 @@ export default function MatchDetailPage() {
   const potm =
     savedPotm ??
     (potmBadge ? { name: potmBadge.playerName, line: potmBadge.stat } : null);
+  // Individuals: one list, ranked by points. Null for a teams match.
+  const ind = card.individuals;
+  const indTag = ind
+    ? `Individuals · ${
+        ind.oversEach !== undefined ? `${ind.oversEach} ${ind.oversEach === 1 ? "over" : "overs"} each` : "Unlimited"
+      }`
+    : null;
   const shareData: MatchShareData = {
     kind: "match",
+    individuals: ind
+      ? {
+          tag: indTag!,
+          rows: ind.standings.map((r) => ({
+            name: r.displayName,
+            score: `${r.points} pts`,
+            winner: r.winner,
+          })),
+        }
+      : null,
     teamA: { name: card.sideA.name, score: shareScore(card, "A") },
     teamB: { name: card.sideB.name, score: shareScore(card, "B") },
     winner: card.winnerSide ?? null,
@@ -198,14 +216,19 @@ export default function MatchDetailPage() {
                 // Before the result there is no poster — share the live page.
                 <ShareLinkButton
                   url={() => publicMatchUrl(matchId)}
-                  text={`${card.sideA.name} vs ${card.sideB.name} — live score`}
+                  text={`${ind ? "Individuals" : `${card.sideA.name} vs ${card.sideB.name}`} — live score`}
                 />
               ) : null}
             </div>
           </div>
 
+          {ind ? (
+            <p className="mt-2 text-[15px] font-semibold text-bg">
+              {indTag} · {ind.standings.length} players
+            </p>
+          ) : null}
           {/* The whole match in two rows: each side's total(s), winner lit. */}
-          <div className="mt-2 space-y-1">
+          <div className={cn("mt-2 space-y-1", ind && "hidden")}>
             {order.map((side) => {
               const name = side === "A" ? card.sideA.name : card.sideB.name;
               const score = sideScore(card, side);
@@ -255,7 +278,9 @@ export default function MatchDetailPage() {
             <p
               className={cn(
                 "mt-2.5 border-t border-white/10 pt-2.5 text-[13px] font-medium leading-snug",
-                card.winnerSide ? "text-accent" : "text-bg/70",
+                card.winnerSide || ind?.standings.some((r) => r.winner)
+                  ? "text-accent"
+                  : "text-bg/70",
               )}
             >
               {card.resultText}
@@ -333,12 +358,17 @@ export default function MatchDetailPage() {
           <InningsRail card={card} youId={user?._id} />
         ) : (
           <div className="mx-auto max-w-md space-y-3 px-4">
+            {ind ? (
+              <StandingsTable
+                rows={ind.standings.map((r) => ({ ...r, userId: String(r.userId) }))}
+              />
+            ) : null}
             {card.innings.map((inn) => (
               <InningsPane
                 key={inn.inningsNo}
                 inn={inn}
                 card={card}
-                label={inningsLabel(card, inn)}
+                label={ind ? "Scorecard" : inningsLabel(card, inn)}
                 youId={user?._id}
               />
             ))}

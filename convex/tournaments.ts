@@ -11,6 +11,7 @@ import { buildMatchClock, DEFAULT_TEST_MINUTES } from "./lib/clock";
 import { deleteMatchCascade } from "./lib/matches";
 import { captainTeamLabel, firstName } from "./lib/teams";
 import { assertSeriesSides } from "./lib/tournamentLineup";
+import { isIndividuals } from "./lib/individuals";
 import { battingMode, matchFormat, side } from "./schema";
 import { orgFeatureOn } from "./lib/features";
 
@@ -441,6 +442,7 @@ export const linkableMatches = query({
     const rows = [];
     for (const m of matches) {
       if (m.tournamentId) continue;
+      if (isIndividuals(m)) continue;
       if (m.ruleSnapshot?.format !== t.format) continue;
       try {
         assertSeriesSides({
@@ -502,6 +504,9 @@ async function attachMatchToTournament(
   const t = await ctx.db.get(tournamentId);
   if (!t) throw new Error("Tournament not found");
   if (match.orgId !== t.orgId) throw new Error("Org mismatch");
+  if (isIndividuals(match)) {
+    throw new Error("An individuals match cannot count toward a series");
+  }
   if (match.ruleSnapshot?.format !== t.format) {
     throw new Error(
       `Format mismatch: match=${match.ruleSnapshot?.format} tournament=${t.format}`,

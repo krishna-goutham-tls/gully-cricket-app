@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { isIndividuals } from "./lib/individuals";
 import { query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { legalBallToOverText, type WicketType } from "./lib/scoring";
@@ -307,7 +308,12 @@ export const matchStory = query({
       a.inningsScores.reduce((sum, s) => sum + battingMilestoneBonus(s), 0) +
       // One match here by construction, so match wickets = a.pts.wickets.
       bowlingHaulBonus(a.pts.wickets);
-    const potm = byDesc(players, potmPoints)[0];
+    // Individuals: the winner is Player of the Match, tie-breaks and all.
+    const solo = isIndividuals(match);
+    const soloWinners = new Set((match.winnerUserIds ?? []).map(String));
+    const potm = solo
+      ? players.find((a) => soloWinners.has(String(a.id)))
+      : byDesc(players, potmPoints)[0];
 
     // The successful chase's top scorer — only when the match was won
     // batting second (a wickets-margin result).
@@ -338,11 +344,14 @@ export const matchStory = query({
       });
 
     if (potm) {
-      const runner = byDesc(players, potmPoints)[1];
+      const runner = byDesc(
+        players.filter((a) => a !== potm),
+        potmPoints,
+      )[0];
       push(
         "potm",
         "shine",
-        "Player of the Match",
+        solo ? "Winner" : "Player of the Match",
         potm,
         potmLine(potm.runs, potm.wickets, potm.catches),
         `${plural(potmPoints(potm), "point", "points")} — ${pointsReceipt(juniorRule)}.` +
@@ -548,7 +557,7 @@ export const matchStory = query({
         const gone = `${burstNames.slice(0, -1).join(", ")} and ${burstNames[burstNames.length - 1]}`;
         const count = burst === 2 ? "Two" : String(burst);
         turningPoint = {
-          title: `${ordinalWord(timeline[b].inn)} innings`,
+          title: solo ? "The match" : `${ordinalWord(timeline[b].inn)} innings`,
           text: `${count} wickets in ${b - wicketIdx[start] + 1} balls — ${gone} gone in a blink.`,
           meta: `Overs ${burstStart.over}.${burstStart.ballInOver} to ${last.over}.${last.ballInOver}`,
           ballIndex: b,
@@ -575,7 +584,7 @@ export const matchStory = query({
       });
       const b = timeline[bigIdx];
       turningPoint = {
-        title: `${ordinalWord(b.inn)} innings`,
+        title: solo ? "The match" : `${ordinalWord(b.inn)} innings`,
         text: `A ${bigRuns}-run over off ${b.bowlerName} blew the match open.`,
         meta: `Biggest over of the match · over ${b.over + 1}`,
         ballIndex: bigIdx,
@@ -615,6 +624,7 @@ export const matchStory = query({
       matchId: match._id,
       resultText: match.resultText,
       winnerSide: match.winnerSide,
+      individuals: solo,
       format: rules.format,
       battingFirst,
       sideAName: await sideLabel(ctx, match, "A"),
@@ -666,7 +676,11 @@ export const matchPotm = query({
         r.order.catch ?? Infinity,
       );
     let best: (typeof rows)[number] | null = null;
-    for (const r of rows) {
+    // Individuals: the winner, as the result line names them.
+    const soloWinners = isIndividuals(access.match)
+      ? new Set((access.match.winnerUserIds ?? []).map(String))
+      : null;
+    for (const r of soloWinners ? [] : rows) {
       const p = matchPoints(r);
       if (p <= 0) continue;
       if (
@@ -676,6 +690,9 @@ export const matchPotm = query({
       ) {
         best = r;
       }
+    }
+    if (soloWinners) {
+      best = rows.find((r) => soloWinners.has(String(r.userId))) ?? null;
     }
     if (!best) return null;
     const user = await ctx.db.get(best.userId);

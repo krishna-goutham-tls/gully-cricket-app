@@ -13,7 +13,18 @@ import {
   type WicketType,
 } from "./lib/scoring";
 import { captainTeamLabel } from "./lib/teams";
-import { clearMatchStamps, restampMatch } from "./lib/matchStats";
+import {
+  clearMatchStamps,
+  foldStoredMatch,
+  individualsStandings,
+  restampMatch,
+} from "./lib/matchStats";
+import {
+  individualsResultText,
+  isIndividuals,
+  standingOf,
+  winnersOf,
+} from "./lib/individuals";
 import {
   pauseMatchClock,
   publicMatchClock,
@@ -161,7 +172,8 @@ function battingQuota(
     if (faced > cap) spent += faced - cap;
     else if (out.has(pid)) forfeited += cap - faced;
   }
-  const pot = Math.max(0, forfeited - spent);
+  // Individuals: an out ends that batter's turn and nothing passes on.
+  const pot = isIndividuals(match) ? 0 : Math.max(0, forfeited - spent);
 
   // Who could come in. `owed` still has his own quota (never batted, or retired
   // early and owed the rest); `spentOwn` has used his and needs the pot.
@@ -405,11 +417,22 @@ async function recomputeAndPersist(
   if (needBowler && innings.currentBowlerId) {
     const lastBowler =
       balls.length > 0 ? balls[balls.length - 1].bowlerId : undefined;
+    // Individuals with nobody else free (two players): the same bowler
+    // carries on, as setBowler allows.
+    const onlyBowler =
+      isIndividuals(match) &&
+      !sidePlayers(match, otherSide(innings.battingSide)).some(
+        (pid) =>
+          String(pid) !== String(lastBowler) &&
+          String(pid) !== String(strikerId) &&
+          String(pid) !== String(nonStrikerId),
+      );
     // Accept stored bowler only if it's a fresh pick (not the one who just finished)
     if (
       !lastBowler ||
       String(innings.currentBowlerId) !== String(lastBowler) ||
-      balls.length === 0
+      balls.length === 0 ||
+      onlyBowler
     ) {
       bowlerId = innings.currentBowlerId;
       needBowler = false;
@@ -477,7 +500,39 @@ async function recomputeAndPersist(
     }
   }
 
-  if (result.inningsComplete) {
+  // Individuals: the innings is over once nobody is left to bat — the batter
+  // in is out or has used their balls, and nobody else may still come in.
+  // A batter who just retired cannot be sent straight back, so they do not
+  // count as waiting. Unlimited retirees may return, so they do.
+  let inningsComplete = result.inningsComplete;
+  let completeReason = result.completeReason;
+  if (!inningsComplete && isIndividuals(match)) {
+    const quota = battingQuota(
+      match,
+      {
+        ...innings,
+        outPlayerIds: result.outPlayerIds,
+        retiredNotOutIds: result.retiredNotOutIds,
+        currentStrikerId: strikerId,
+        currentNonStrikerId: nonStrikerId,
+      },
+      balls,
+    );
+    const strikerDone =
+      !strikerId ||
+      vacantSet.has(String(strikerId)) ||
+      !quota.canFace(strikerId);
+    const waiting = quota.eligible.filter(
+      (id) =>
+        id !== String(result.pendingRetireeId) && id !== String(strikerId),
+    );
+    if (strikerDone && waiting.length === 0) {
+      inningsComplete = true;
+      completeReason = "all_out";
+    }
+  }
+
+  if (inningsComplete) {
     needBowler = false;
     needBatsman = false;
   }
@@ -521,10 +576,14 @@ async function recomputeAndPersist(
     bowlerId,
     needBowler,
     needBatsman,
+    inningsComplete,
+    completeReason,
   };
 }
 
 export function totalInningsOf(match: Doc<"matches">): number {
+  // Individuals: one innings, with every player in it.
+  if (isIndividuals(match)) return 1;
   return (match.ruleSnapshot.inningsPerSide ?? 1) * 2;
 }
 
@@ -642,6 +701,10 @@ async function completeInningsAndMaybeMatch(
     return { phase: "innings_break" as const, target, reason };
   }
 
+  if (isIndividuals(match)) {
+    return completeIndividualsMatch(ctx, match, innings, reason);
+  }
+
   // Match over — decide the winner
   let winnerSide: Side | undefined;
   let resultText: string;
@@ -717,6 +780,86 @@ async function completeInningsAndMaybeMatch(
   await restampMatch(ctx, match._id);
 
   return { phase: "completed" as const, resultText, winnerSide, reason };
+}
+
+/**
+ * Individuals: the match ends with its one innings. The winner has the most
+ * points (convex/lib/individuals.ts), read off the same fold the boards
+ * stamp, so the result, Player of the Match and the boards cannot disagree.
+ */
+async function completeIndividualsMatch(
+  ctx: MutationCtx,
+  match: Doc<"matches">,
+  innings: Doc<"innings">,
+  reason: string,
+) {
+  await ctx.db.patch(match._id, { status: "completed" });
+  await restampMatch(ctx, match._id);
+  const stamp = await ctx.db
+    .query("matchStats")
+    .withIndex("by_match", (q) => q.eq("matchId", match._id))
+    .first();
+  // A practice match has no stamps; fold it here just for the result.
+  let winnerIds = stamp?.winnerUserIds;
+  let rows: Array<ReturnType<typeof standingOf>> = [];
+  if (stamp) {
+    const stamped = await ctx.db
+      .query("playerMatchStats")
+      .withIndex("by_match", (q) => q.eq("matchId", match._id))
+      .collect();
+    rows = stamped.map(standingOf);
+  } else {
+    const fresh = await ctx.db.get(match._id);
+    if (fresh) {
+      const folded = await foldStoredMatch(ctx, fresh);
+      rows = folded.players.map(standingOf);
+      winnerIds = winnersOf(rows).map((w) => w.userId);
+    }
+  }
+  const won = new Set((winnerIds ?? []).map(String));
+  const winners = await Promise.all(
+    rows
+      .filter((r) => won.has(String(r.userId)))
+      .map(async (r) => ({
+        name: (await nameOfUser(ctx, r.userId)) ?? "Player",
+        points: r.points,
+      })),
+  );
+  const resultText = individualsResultText(winners);
+
+  await ctx.db.patch(match._id, {
+    winnerUserIds: winnerIds ?? [],
+    resultText,
+  });
+
+  await upsertLiveState(ctx, match._id, {
+    currentInningsId: innings._id,
+    inningsNo: innings.inningsNo,
+    battingSide: innings.battingSide,
+    strikerId: innings.currentStrikerId,
+    nonStrikerId: innings.currentNonStrikerId,
+    bowlerId: innings.currentBowlerId,
+    needBowler: false,
+    needBatsman: false,
+    totalRuns: innings.totalRuns,
+    wickets: innings.wickets,
+    legalBalls: innings.legalBalls,
+    oversText: legalBallToOverText(
+      innings.legalBalls,
+      match.ruleSnapshot.ballsPerOver,
+    ),
+    ballsThisOver: innings.legalBalls % match.ruleSnapshot.ballsPerOver,
+    lastBallId: undefined,
+    target: undefined,
+    resultText,
+  });
+
+  return {
+    phase: "completed" as const,
+    resultText,
+    winnerSide: undefined,
+    reason,
+  };
 }
 
 // ─── Mutations ───────────────────────────────────────────────
@@ -1165,6 +1308,19 @@ export const retireBatsman = mutation({
     if (!wiped) throw new Error("Innings missing");
     const result = await recomputeAndPersist(ctx, match, wiped);
 
+    // Individuals: the last batter retiring ends the match.
+    if (result.inningsComplete) {
+      const fresh = await ctx.db.get(innings._id);
+      if (fresh) {
+        await completeInningsAndMaybeMatch(
+          ctx,
+          match,
+          fresh,
+          result.completeReason ?? "complete",
+        );
+      }
+    }
+
     return { ...result };
   },
 });
@@ -1284,7 +1440,19 @@ export const setBowler = mutation({
     const lastBowler =
       balls.length > 0 ? balls[balls.length - 1].bowlerId : undefined;
     if (lastBowler && String(lastBowler) === String(args.bowlerId)) {
-      throw new Error("Same bowler cannot bowl consecutive overs");
+      // Individuals with nobody else free to bowl (two players): the same
+      // bowler carries on rather than stall the game.
+      const crease = new Set(
+        [innings.currentStrikerId, innings.currentNonStrikerId]
+          .filter(Boolean)
+          .map(String),
+      );
+      const someoneElse = bowling.some(
+        (pid) => String(pid) !== String(lastBowler) && !crease.has(String(pid)),
+      );
+      if (!isIndividuals(match) || someoneElse) {
+        throw new Error("Same bowler cannot bowl consecutive overs");
+      }
     }
 
     // Bowling quota — enforced only while another eligible bowler exists
@@ -1476,6 +1644,7 @@ export const undoLastBall = mutation({
       await ctx.db.patch(match._id, {
         status: "live",
         winnerSide: undefined,
+        winnerUserIds: undefined,
         resultText: undefined,
       });
       // Back to live, so off the boards until it completes again.
@@ -1914,7 +2083,16 @@ export const liveState = query({
       const underCap = baseEligible.filter(
         (pid) => (bowledBy[String(pid)] ?? 0) < bowlingCapBalls(match, pid),
       );
-      const bowlerPool = underCap.length > 0 ? underCap : baseEligible;
+      // Individuals with two players: the only other player keeps bowling.
+      const fallback =
+        baseEligible.length === 0 && isIndividuals(match)
+          ? bowlingIds.filter(
+              (pid) =>
+                String(pid) !== String(live.strikerId) &&
+                String(pid) !== String(live.nonStrikerId),
+            )
+          : baseEligible;
+      const bowlerPool = underCap.length > 0 ? underCap : fallback;
       for (const pid of bowlerPool) {
         const u = await ctx.db.get(pid);
         if (u) {
@@ -2000,6 +2178,16 @@ export const liveState = query({
       breakInfo,
       resultText: match.resultText ?? live?.resultText,
       winnerSide: match.winnerSide,
+      /** Individuals only: overs each (absent = Unlimited) and the table. */
+      individuals: isIndividuals(match)
+        ? {
+            oversEach:
+              rules.maxBallsPerBatsman !== undefined
+                ? rules.maxBallsPerBatsman / rules.ballsPerOver
+                : undefined,
+            standings: (await individualsStandings(ctx, match)) ?? [],
+          }
+        : null,
       lastBallDrop,
       innings: inningsList
         .sort((a, b) => a.inningsNo - b.inningsNo)
@@ -2363,6 +2551,16 @@ export const scorecard = query({
       maxOversInnings: rules.maxOversInnings,
       sideA: { side: "A" as const, name: labelA },
       sideB: { side: "B" as const, name: labelB },
+      /** Individuals only: overs each (absent = Unlimited) and the table. */
+      individuals: isIndividuals(match)
+        ? {
+            oversEach:
+              rules.maxBallsPerBatsman !== undefined
+                ? rules.maxBallsPerBatsman / rules.ballsPerOver
+                : undefined,
+            standings: (await individualsStandings(ctx, match)) ?? [],
+          }
+        : null,
       innings: cards,
     };
   },

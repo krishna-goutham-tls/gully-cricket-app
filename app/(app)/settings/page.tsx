@@ -440,6 +440,13 @@ function AdminGroups() {
           onChange={(on) => flip("testMatches", on)}
         />
         <SwitchRow
+          label="Individuals"
+          line="Everyone on their own, most points wins"
+          checked={features.individuals}
+          disabled={busy !== null}
+          onChange={(on) => flip("individuals", on)}
+        />
+        <SwitchRow
           label="Impact players"
           line="A Leaders tab of who adds the most per match"
           checked={features.impactPlayers}

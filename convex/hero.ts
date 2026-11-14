@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { isIndividuals, isIndividualsStamp } from "./lib/individuals";
 import { query, QueryCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
 import { requireOrgViewer } from "./lib/session";
@@ -338,11 +339,18 @@ export const heroDay = query({
           winners.push(k);
         }
       }
-      if (bestPoints > 0 && winners.includes(playerKey)) potmCount += 1;
+      if (isIndividuals(match)) {
+        // Individuals: Player of the Match is the winner, tie-breaks and all.
+        if ((match.winnerUserIds ?? []).some((id) => String(id) === playerKey)) {
+          potmCount += 1;
+        }
+      } else if (bestPoints > 0 && winners.includes(playerKey)) potmCount += 1;
 
       const otherSide: Side = side === "A" ? "B" : "A";
-      const opponent =
-        side === undefined
+      const solo = isIndividuals(match);
+      const opponent = solo
+        ? "Individuals"
+        : side === undefined
           ? `${await sideLabel(ctx, match, "A")} v ${await sideLabel(ctx, match, "B")}`
           : await sideLabel(ctx, match, otherSide);
 
@@ -355,8 +363,11 @@ export const heroDay = query({
           mLegalBalls > 0
             ? `${mWickets}/${mRunsConceded} (${legalBallToOverText(mLegalBalls, STANDARD_BALLS_PER_OVER)})`
             : null,
-        result:
-          side === undefined || match.winnerSide === undefined
+        result: solo
+          ? (match.winnerUserIds ?? []).some((id) => String(id) === playerKey)
+            ? "won"
+            : "none"
+          : side === undefined || match.winnerSide === undefined
             ? "none"
             : match.winnerSide === side
               ? "won"
@@ -947,14 +958,23 @@ export const matchDay = query({
       const legal = r.bowl?.legalBalls ?? 0;
       miniLines.push({
         matchId: r.matchId,
-        opponent: side === "A" ? nameB : side === "B" ? nameA : `${nameA} v ${nameB}`,
+        opponent: isIndividualsStamp(m)
+          ? "Individuals"
+          : side === "A"
+            ? nameB
+            : side === "B"
+              ? nameA
+              : `${nameA} v ${nameB}`,
         battingFigure: r.bat ? `${mRuns}${mOut ? "" : "*"}(${mFaced})` : null,
         bowlingFigure:
           legal > 0
             ? `${mWkts}/${r.bowl!.runs} (${legalBallToOverText(legal, STANDARD_BALLS_PER_OVER)})`
             : null,
-        result:
-          side === undefined || m.winnerSide === undefined
+        result: isIndividualsStamp(m)
+          ? (m.winnerUserIds ?? []).some((id) => String(id) === String(playerId))
+            ? "won"
+            : "none"
+          : side === undefined || m.winnerSide === undefined
             ? "none"
             : m.winnerSide === side
               ? "won"

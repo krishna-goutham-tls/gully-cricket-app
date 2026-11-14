@@ -80,6 +80,7 @@ describe("community switches", () => {
       juniorRule: true,
       visitorsOnLeaders: false,
       impactPlayers: true,
+      individuals: true,
     });
     const s = await t.query(api.orgs.settings, { token: admin.token, orgId });
     expect(s!.features).toEqual({
@@ -90,6 +91,7 @@ describe("community switches", () => {
       juniorRule: true,
       visitorsOnLeaders: false,
       impactPlayers: true,
+      individuals: true,
     });
     expect(s!.admins).toEqual(["Asha"]);
     expect(s!.juniorBoardTitle).toBe("Playground Bullies");
@@ -306,7 +308,7 @@ describe("Leaders format filter", () => {
       { striker: b1, other: j1, bowler: admin, balls: runs(1) },
     ]);
     const board = await t.query(api.stats.leaderboard, { token: admin.token, orgId });
-    expect(board!.formats).toEqual({ test: 0, limited: 1 });
+    expect(board!.formats).toEqual({ test: 0, limited: 1, individuals: 0 });
   });
 });
 

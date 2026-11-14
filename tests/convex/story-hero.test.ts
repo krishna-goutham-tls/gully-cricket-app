@@ -291,6 +291,7 @@ test("story keeps the fields old phones read", async () => {
       "durationMin",
       "endedAt",
       "format",
+      "individuals",
       "innings",
       "matchId",
       "numbers",

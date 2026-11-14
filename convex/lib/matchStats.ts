@@ -1,10 +1,17 @@
-import { MutationCtx } from "../_generated/server";
+import { MutationCtx, QueryCtx } from "../_generated/server";
 import { Doc, Id } from "../_generated/dataModel";
 import { CATCH_POINTS, WICKET_POINTS, earnsPoints, matchPoints } from "./points";
 import type { Side } from "./contribution";
 import { tagsForUsers } from "./playerLabel";
 import { countedJuniors, orgFeatureOn } from "./features";
 import { moveMatchTotals, totalsOfBalls } from "./totals";
+import {
+  compareStanding,
+  isIndividuals,
+  standingOf,
+  winnersOf,
+  type StandingRow,
+} from "./individuals";
 
 /**
  * Stat stamps: one completed match's ball log, folded per player, written to
@@ -184,7 +191,17 @@ export function foldMatch(
   const date = match.createdAt;
   const matchOrder = match._creationTime;
   const format = matchFormatOf(match);
-  const base = { orgId: match.orgId, matchId: match._id, date, matchOrder, format };
+  // Individuals: every player is on both sides, so no team numbers are
+  // stamped (`work` stays off) and the boards never read a team result.
+  const individuals = isIndividuals(match);
+  const base = {
+    orgId: match.orgId,
+    matchId: match._id,
+    date,
+    matchOrder,
+    format,
+    ...(individuals ? { play: "individuals" as const } : {}),
+  };
 
   const players = new Map<string, Player>();
   // First-entry position per tally. The boards sort some rows with no final
@@ -732,7 +749,7 @@ export function foldMatch(
       offJuniors: p.offJuniors,
       real: p.real,
       runOuts: p.runOuts,
-      work: p.named
+      work: p.named && !individuals
         ? {
             onA,
             onB,
@@ -782,12 +799,27 @@ export function foldMatch(
       topRows.push(r);
     }
   }
+  // Individuals: the winner is Player of the Match. Same points, then the
+  // tie-breaks (runs, fewer balls, boundaries), so a tie on points alone does
+  // not share it.
+  let winnerUserIds: Id<"users">[] | undefined;
+  if (individuals) {
+    const won = new Set(
+      winnersOf(playerRows.map(standingOf)).map((w) => String(w.userId)),
+    );
+    topRows = playerRows.filter((r) => won.has(String(r.userId)));
+    winnerUserIds = topRows.map((r) => r.userId);
+  }
 
   return {
     match: {
       ...base,
       groundId: match.groundId,
       winnerSide: match.winnerSide,
+      ...(winnerUserIds ? { winnerUserIds } : {}),
+      ...(individuals && match.ruleSnapshot.maxBallsPerBatsman === undefined
+        ? { unlimited: true }
+        : {}),
       sideAName: match.sideAName,
       sideBName: match.sideBName,
       sideACaptainId: match.sideAPlayerIds[0],
@@ -829,6 +861,35 @@ export async function clearMatchStamps(
   }
 }
 
+async function foldStored(ctx: MutationCtx, match: Doc<"matches">) {
+  const innings = await ctx.db
+    .query("innings")
+    .withIndex("by_match", (q) => q.eq("matchId", match._id))
+    .collect();
+  const balls = await ctx.db
+    .query("balls")
+    .withIndex("by_match", (q) => q.eq("matchId", match._id))
+    .collect();
+  // Freeze the real juniors even when the rule is off, so a later change
+  // of rule has the list to fold against.
+  const juniors = countedJuniors(
+    await juniorsOf(ctx, match, balls),
+    await orgFeatureOn(ctx, match.orgId, "juniorRule"),
+  );
+  return { folded: foldMatch(match, innings, balls, juniors), balls };
+}
+
+/**
+ * One match folded from its ball log without writing a stamp. For a result
+ * that must be worked out even when the match is never stamped (practice).
+ */
+export async function foldStoredMatch(
+  ctx: MutationCtx,
+  match: Doc<"matches">,
+) {
+  return (await foldStored(ctx, match)).folded;
+}
+
 /**
  * Brings one match's stamps in line with its ball log: clears them, and if
  * the match is (still) completed and not practice, folds it again. Idempotent —
@@ -842,21 +903,7 @@ export async function restampMatch(
   await clearMatchStamps(ctx, matchId);
   const match = await ctx.db.get(matchId);
   if (!match || match.status !== "completed" || match.practice) return false;
-  const innings = await ctx.db
-    .query("innings")
-    .withIndex("by_match", (q) => q.eq("matchId", matchId))
-    .collect();
-  const balls = await ctx.db
-    .query("balls")
-    .withIndex("by_match", (q) => q.eq("matchId", matchId))
-    .collect();
-  // Freeze the real juniors even when the rule is off, so a later change
-  // of rule has the list to fold against.
-  const juniors = countedJuniors(
-    await juniorsOf(ctx, match, balls),
-    await orgFeatureOn(ctx, match.orgId, "juniorRule"),
-  );
-  const folded = foldMatch(match, innings, balls, juniors);
+  const { folded, balls } = await foldStored(ctx, match);
   const totals = totalsOfBalls(balls);
   await ctx.db.insert("matchStats", { ...folded.match, totals });
   await moveMatchTotals(ctx, match.orgId, totals, 1);
@@ -892,4 +939,95 @@ export async function juniorsOf(
     .map((id) => id as Id<"users">);
   await ctx.db.patch(match._id, { juniorIds });
   return new Set(juniorIds.map(String));
+}
+
+/** One row of an individuals match's standings table. */
+export type IndividualsStanding = StandingRow & {
+  displayName: string;
+  wickets: number;
+  catches: number;
+  /** Has had a turn: faced a ball or was out. False = did not bat. */
+  batted: boolean;
+  out: boolean;
+  /** 1-based. Level players share a rank. */
+  rank: number;
+  winner: boolean;
+};
+
+/**
+ * The standings of an individuals match, live or finished, folded from its
+ * ball log with the same rules as the stamps. Read-only: juniors come from
+ * the match once frozen, else from today's tags. Every player is listed, in
+ * batting order until the points split them. Null for a teams match.
+ */
+export async function individualsStandings(
+  ctx: QueryCtx | MutationCtx,
+  match: Doc<"matches">,
+): Promise<IndividualsStanding[] | null> {
+  if (!isIndividuals(match)) return null;
+  const innings = await ctx.db
+    .query("innings")
+    .withIndex("by_match", (q) => q.eq("matchId", match._id))
+    .collect();
+  const balls = await ctx.db
+    .query("balls")
+    .withIndex("by_match", (q) => q.eq("matchId", match._id))
+    .collect();
+  let juniorIds: Set<string>;
+  if (match.juniorIds) {
+    juniorIds = new Set(match.juniorIds.map(String));
+  } else {
+    const tags = await tagsForUsers(
+      ctx,
+      match.orgId,
+      match.sideAPlayerIds.map(String),
+    );
+    juniorIds = new Set(
+      match.sideAPlayerIds
+        .map(String)
+        .filter((id) => (tags.get(id) ?? []).includes("junior")),
+    );
+  }
+  const juniors = countedJuniors(
+    juniorIds,
+    await orgFeatureOn(ctx, match.orgId, "juniorRule"),
+  );
+  const folded = foldMatch(match, innings, balls, juniors);
+  const byId = new Map(folded.players.map((p) => [String(p.userId), p]));
+  const rows = match.sideAPlayerIds.map((userId) => {
+    const p = byId.get(String(userId));
+    const base: StandingRow = p
+      ? standingOf(p)
+      : { userId, points: 0, runs: 0, balls: 0, boundaries: 0 };
+    return {
+      ...base,
+      wickets:
+        p?.real?.wickets ?? (p?.bowl?.wickets ?? 0) + (p?.offJuniors?.wickets ?? 0),
+      catches: p?.real?.catches ?? p?.catches ?? 0,
+      batted: Boolean(p?.bat && (p.bat.balls > 0 || p.bat.dismissals > 0 || base.balls > 0)),
+      out: (p?.bat?.dismissals ?? 0) > 0,
+    };
+  });
+  const ranked = rows.slice().sort(compareStanding);
+  const winners = new Set(
+    (match.status === "completed"
+      ? (match.winnerUserIds ?? []).map(String)
+      : []),
+  );
+  const names = await Promise.all(
+    ranked.map(async (r) => {
+      const u = await ctx.db.get(r.userId);
+      return u && "displayName" in u ? (u.displayName as string) : "Player";
+    }),
+  );
+  let rank = 0;
+  return ranked.map((r, i) => {
+    if (i === 0 || compareStanding(ranked[i - 1], r) !== 0) rank = i + 1;
+    return {
+      ...r,
+      displayName: names[i],
+      rank,
+      winner: winners.has(String(r.userId)),
+    };
+  });
 }

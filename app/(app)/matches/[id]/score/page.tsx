@@ -449,6 +449,11 @@ export default function ScorePage() {
     );
   }
 
+  // Individuals: one list, nobody's team. Null for a teams match.
+  const ind = state.individuals;
+  const matchTitle = ind
+    ? "Individuals"
+    : `${state.sideA.name} vs ${state.sideB.name}`;
   const viewerInSquad = !!(
     user &&
     (state.sideA.players.some((p) => String(p.userId) === String(user._id)) ||
@@ -476,7 +481,7 @@ export default function ScorePage() {
             Live now
           </p>
           <h1 className="mt-2 text-2xl font-semibold text-ink">
-            {state.sideA.name} vs {state.sideB.name}
+            {matchTitle}
           </h1>
           <p className="mt-2 text-[13px] text-muted">
             You&apos;re not in today&apos;s squad — watch along instead.
@@ -709,7 +714,7 @@ export default function ScorePage() {
             {state.status === "abandoned" ? "Abandoned" : "Match complete"}
           </p>
           <h1 className="mt-3 text-2xl font-semibold text-ink">
-            {state.resultText ?? `${state.sideA.name} vs ${state.sideB.name}`}
+            {state.resultText ?? matchTitle}
           </h1>
           {state.status === "completed" && token ? (
             <Button
@@ -971,9 +976,20 @@ export default function ScorePage() {
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <p className="min-w-0 truncate px-1 text-[13px] font-medium text-bg/70">
-            Innings {live.inningsNo}
-            {isTest ? " of 4" : ""} · {battingName}
-            {isFollowOnInnings ? " · follow-on" : ""}
+            {ind ? (
+              <>
+                Individuals ·{" "}
+                {ind.oversEach !== undefined
+                  ? `${ind.oversEach} ${ind.oversEach === 1 ? "over" : "overs"} each`
+                  : "Unlimited"}
+              </>
+            ) : (
+              <>
+                Innings {live.inningsNo}
+                {isTest ? " of 4" : ""} · {battingName}
+                {isFollowOnInnings ? " · follow-on" : ""}
+              </>
+            )}
           </p>
           <div className="flex shrink-0 items-center gap-0.5">
             {/* Late arrivals are the norm — squads stay editable mid-match.
@@ -1004,6 +1020,30 @@ export default function ScorePage() {
               used to be a small caption below the score; now it's a stat in
               its own right, the same "big number, small label" pattern used
               everywhere else in the app. */}
+          {ind ? (
+            // Individuals: the batter's own score is the score. The total of
+            // everyone's runs means nothing here.
+            <div className="flex items-end justify-center gap-4">
+              <p
+                className={cn(
+                  "tabular text-[4.25rem] font-semibold leading-none tracking-tight transition",
+                  pulse ? "scale-[1.03] text-accent" : "text-bg",
+                )}
+              >
+                {live.figures.striker?.runs ?? 0}
+              </p>
+              <div className="pb-1 text-left">
+                <p className="tabular text-[2.25rem] font-semibold leading-none text-bg">
+                  {live.strikerQuota
+                    ? `${live.strikerQuota.faced}/${live.strikerQuota.cap}`
+                    : (live.figures.striker?.balls ?? 0)}
+                </p>
+                <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-bg/70">
+                  Balls
+                </p>
+              </div>
+            </div>
+          ) : (
           <div className="flex items-end justify-center gap-4">
             <p
               className={cn(
@@ -1024,7 +1064,18 @@ export default function ScorePage() {
               </p>
             </div>
           </div>
-          {live.runRate > 0 || live.potBalls > 0 ? (
+          )}
+          {ind ? (
+            (() => {
+              const top = ind.standings[0];
+              return top && top.points > 0 ? (
+                <p className="tabular mt-2 truncate text-[13px] text-bg/70">
+                  Top · <span className="font-semibold text-accent">{top.displayName}</span>{" "}
+                  {top.points} pts
+                </p>
+              ) : null;
+            })()
+          ) : live.runRate > 0 || live.potBalls > 0 ? (
             <p className="tabular mt-2 text-[13px] text-bg/70">
               {live.runRate > 0 ? `RR ${live.runRate.toFixed(1)}` : null}
               {/* Spare balls left behind by batters out inside their quota —
@@ -1248,6 +1299,7 @@ export default function ScorePage() {
 
       {activeSheet?.kind === "squad" ? (
         <SquadSheet
+          individuals={!!ind}
           rows={squadRows}
           nameA={state.sideA.name}
           nameB={state.sideB.name}
@@ -1782,8 +1834,14 @@ export default function ScorePage() {
 
       <ConfirmDialog
         open={confirmEndInnings}
-        title={declareMode ? "Declare the innings now?" : "End innings now?"}
-        confirmLabel={declareMode ? "Declare" : "End innings"}
+        title={
+          ind
+            ? "End the match now?"
+            : declareMode
+              ? "Declare the innings now?"
+              : "End innings now?"
+        }
+        confirmLabel={ind ? "End match" : declareMode ? "Declare" : "End innings"}
         busy={busy}
         onConfirm={() => {
           setConfirmEndInnings(false);

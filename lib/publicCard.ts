@@ -36,7 +36,18 @@ export async function fetchInvite(code: string) {
 }
 
 export function matchTeams(m: PublicMatch) {
+  if (m.individuals) {
+    const n = m.individuals.standings.length;
+    return `Individuals · ${n} players`;
+  }
   return `${m.sideA.name} vs ${m.sideB.name}`;
+}
+
+/** Individuals: "Teja 34 (20) · batting". Null for a team match. */
+function individualsLiveLine(m: PublicMatch) {
+  if (!m.individuals || !m.live) return null;
+  const f = m.live.figures.striker;
+  return `${m.live.striker ?? "Batter"} ${f?.runs ?? 0} (${f?.balls ?? 0}) · batting`;
 }
 
 function sideName(m: PublicMatch, side: "A" | "B") {
@@ -72,6 +83,8 @@ export function matchLine(m: PublicMatch) {
       (m.status === "abandoned" ? "Ended without a result" : "Result")
     );
   }
+  const ind = individualsLiveLine(m);
+  if (ind) return ind;
   if (m.live) {
     const chase = chaseText(m.live);
     return `${sideName(m, m.live.battingSide)} ${m.live.totalRuns}/${m.live.wickets} · ${m.live.oversText} ov${chase ? ` — ${chase}` : ""}`;
